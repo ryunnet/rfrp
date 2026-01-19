@@ -1,0 +1,188 @@
+mod server;
+mod config;
+mod handlers;
+mod entity;
+mod migration;
+mod auth;
+mod jwt;
+mod middleware;
+mod traffic;
+
+use crate::migration::init_sqlite;
+use crate::middleware::auth_middleware;
+use anyhow::Result;
+use axum::{
+    routing::{get, post, put, Router},
+    middleware::from_fn,
+};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, QueryFilter, Set};
+use sea_orm_migration::MigratorTrait;
+use std::path;
+use tower_http::cors::CorsLayer;
+use tower_http::services::{ServeDir, ServeFile};
+use tracing::info;
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+use chrono::Utc;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // 初始化 tracing 日志系统
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt::layer())
+        .init();
+
+    rustls::crypto::ring::default_provider().install_default().unwrap();
+
+    // 读取配置 - 从可执行文件所在目录查找
+    let exe_path = std::env::current_exe()?;
+    let exe_dir = exe_path.parent().unwrap_or(&exe_path);
+
+    // 尝试多个可能的配置文件位置
+    let config_path = std::iter::once(exe_dir.join("rfrps.toml"))
+        .chain(std::iter::once(path::PathBuf::from("rfrps.toml")))
+        .chain(std::iter::once(path::PathBuf::from("../rfrps.toml")))
+        .find(|p| p.exists())
+        .ok_or_else(|| anyhow::anyhow!("找不到配置文件 rfrps.toml"))?;
+
+    let cfg = config::Config::from_file(&config_path)?;
+
+    info!("📋 加载配置文件: {:?}", config_path.display());
+    info!("🌐 QUIC监听端口: {}", cfg.bind_port);
+    info!("🌐 Web管理端口: 3000");
+
+    // 初始化数据库
+    let db = init_sqlite().await;
+    // 运行数据库迁移
+    migration::Migrator::up(&db, None).await?;
+    info!("✅ 数据库初始化完成");
+
+    // 初始化 admin 用户（如果不存在）
+    initialize_admin_user().await;
+
+    // 启动 Web 服务器
+    tokio::spawn(async move {
+        // 构建 Web 应用
+        let api_routes = Router::new()
+            // 公开路由（无需认证）
+            .route("/auth/login", post(handlers::login))
+            // 认证路由（需要登录）
+            .route("/auth/me", get(handlers::me))
+            // 仪表板路由
+            .route("/dashboard/stats/{user_id}", get(handlers::get_user_dashboard_stats))
+            .route("/clients", get(handlers::list_clients).post(handlers::create_client))
+            .route("/clients/{id}", get(handlers::get_client).delete(handlers::delete_client))
+            .route("/proxies", get(handlers::list_proxies).post(handlers::create_proxy))
+            .route("/proxies/{id}", put(handlers::update_proxy).delete(handlers::delete_proxy))
+            .route("/clients/{id}/proxies", get(handlers::list_proxies_by_client))
+            // 流量统计路由
+            .route("/traffic/overview", get(handlers::get_traffic_overview_handler))
+            .route("/traffic/users/{id}", get(handlers::get_user_traffic_handler))
+            // 管理员路由（需要管理员权限）
+            .route("/users", get(handlers::list_users).post(handlers::create_user))
+            .route("/users/{id}", put(handlers::update_user).delete(handlers::delete_user))
+            .route("/users/{id}/clients", get(handlers::get_user_clients))
+            .route("/users/{id}/clients/{client_id}", post(handlers::assign_client_to_user).delete(handlers::remove_client_from_user))
+            // 应用认证中间件
+            .layer(from_fn(auth_middleware));
+
+        let app = Router::new()
+            // API 路由
+            .nest("/api", api_routes)
+            // 静态文件服务，带 SPA fallback
+            .fallback_service(
+                ServeDir::new("dist")
+                    .fallback(ServeFile::new("dist/index.html"))
+            )
+            .layer(CorsLayer::permissive());
+
+        let web_addr = String::from("0.0.0.0:3000");
+        match tokio::net::TcpListener::bind(web_addr.clone()).await {
+            Ok(listener) => {
+                match axum::serve(listener, app).await {
+                    Ok(_) => {
+                        info!("Web服务启动成功！");
+                        info!("🌐 Web管理界面: http://{}", web_addr);
+                    }
+                    Err(err) => {
+                        tracing::error!("Web服务启动失败：err => {}", err);
+                    }
+                }
+            }
+            Err(err) => {
+                tracing::error!("Web服务启动失败：err => {}", err);
+            }
+        }
+    });
+
+    // 启动 QUIC 代理服务器
+    tokio::spawn(async move {
+        let bind_addr = format!("0.0.0.0:{}", cfg.bind_port);
+        let srv = server::ProxyServer::new().unwrap();
+        srv.run(bind_addr).await.unwrap();
+    });
+
+    tokio::signal::ctrl_c().await?;
+    Ok(())
+}
+
+/// 初始化 admin 超级管理员用户
+async fn initialize_admin_user() {
+    use crate::entity::{user::ActiveModel as UserActiveModel, User};
+
+    let db = migration::get_connection().await;
+
+    // 检查 admin 用户是否已存在
+    match User::find()
+        .filter(crate::entity::user::Column::Username.eq("admin"))
+        .one(db)
+        .await
+    {
+        Ok(Some(_)) => {
+            info!("🔐 Admin 用户已存在");
+        }
+        Ok(None) => {
+            // 生成随机密码
+            let password = auth::generate_random_password(16);
+            let password_hash = match auth::hash_password(&password) {
+                Ok(hash) => hash,
+                Err(e) => {
+                    tracing::error!("Failed to hash admin password: {}", e);
+                    return;
+                }
+            };
+
+            let now = Utc::now().naive_utc();
+            let admin_user = UserActiveModel {
+                id: NotSet,
+                username: Set("admin".to_string()),
+                password_hash: Set(password_hash),
+                is_admin: Set(true),
+                total_bytes_sent: Set(0),
+                total_bytes_received: Set(0),
+                created_at: Set(now),
+                updated_at: Set(now),
+            };
+
+            match admin_user.insert(db).await {
+                Ok(_) => {
+                    info!("🔐 Admin 用户已创建");
+                    info!("═══════════════════════════════════════════════════════════════");
+                    info!("👤 Admin 用户名: admin");
+                    info!("🔑 Admin 密码: {}", password);
+                    info!("⚠️  请妥善保存此密码，仅在创建时显示一次！");
+                    info!("═══════════════════════════════════════════════════════════════");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to create admin user: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to check admin user: {}", e);
+        }
+    }
+}
