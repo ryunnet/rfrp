@@ -2,18 +2,61 @@ use anyhow::Result;
 use quinn::{Endpoint, ServerConfig, TransportConfig, VarInt};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::RwLock;
 use sea_orm::{EntityTrait, ColumnTrait, QueryFilter, Set, ActiveModelTrait};
 use tokio::task::JoinHandle;
 use tracing::{info, warn, error, debug};
+use serde::{Serialize, Deserialize};
 
 use crate::entity::{Proxy, Client, client, user_client, UserClient};
 use crate::migration::get_connection;
 use crate::traffic::TrafficManager;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ProxyProtocol {
+    Tcp,
+    Udp,
+}
+
+impl From<String> for ProxyProtocol {
+    fn from(s: String) -> Self {
+        match s.to_lowercase().as_str() {
+            "udp" => ProxyProtocol::Udp,
+            _ => ProxyProtocol::Tcp,
+        }
+    }
+}
+
+impl From<&str> for ProxyProtocol {
+    fn from(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "udp" => ProxyProtocol::Udp,
+            _ => ProxyProtocol::Tcp,
+        }
+    }
+}
+
+impl ProxyProtocol {
+    pub fn as_str(&self) -> &str {
+        match self {
+            ProxyProtocol::Tcp => "tcp",
+            ProxyProtocol::Udp => "udp",
+        }
+    }
+}
+
+// UDP会话信息
+#[allow(dead_code)]
+struct UdpSession {
+    target_addr: SocketAddr,
+    last_activity: tokio::time::Instant,
+}
 
 pub struct ProxyServer {
     cert: CertificateDer<'static>,
@@ -25,6 +68,8 @@ struct ProxyListenerManager {
     // client_id -> (proxy_id, JoinHandle)
     listeners: Arc<RwLock<HashMap<String, HashMap<i64, JoinHandle<()>>>>>,
     traffic_manager: Arc<TrafficManager>,
+    // UDP会话管理: (client_id, proxy_id) -> (source_addr -> UdpSession)
+    udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
 }
 
 impl ProxyListenerManager {
@@ -32,6 +77,7 @@ impl ProxyListenerManager {
         Self {
             listeners: Arc::new(RwLock::new(HashMap::new())),
             traffic_manager,
+            udp_sessions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -65,6 +111,8 @@ impl ProxyListenerManager {
             }
 
             let proxy_name = proxy.name.clone();
+            let proxy_protocol: ProxyProtocol = proxy.proxy_type.clone().into();
+            let proxy_protocol_str = proxy_protocol.as_str().to_uppercase();
             let client_id_clone = client_id.clone();
             let listen_addr = format!("0.0.0.0:{}", proxy.remote_port);
             let target_addr = format!("{}:{}", proxy.local_ip, proxy.local_port);
@@ -72,17 +120,37 @@ impl ProxyListenerManager {
             let connections_clone = connections.clone();
 
             let traffic_mgr = self.traffic_manager.clone();
+            let udp_sessions = self.udp_sessions.clone();
+
             let handle = tokio::spawn(async move {
                 loop {
-                    match run_proxy_listener(
-                        proxy_name.clone(),
-                        client_id_clone.clone(),
-                        listen_addr.clone(),
-                        target_addr.clone(),
-                        connections_clone.clone(),
-                        proxy_id,
-                        traffic_mgr.clone(),
-                    ).await {
+                    let result = match proxy_protocol {
+                        ProxyProtocol::Tcp => {
+                            run_tcp_proxy_listener(
+                                proxy_name.clone(),
+                                client_id_clone.clone(),
+                                listen_addr.clone(),
+                                target_addr.clone(),
+                                connections_clone.clone(),
+                                proxy_id,
+                                traffic_mgr.clone(),
+                            ).await
+                        }
+                        ProxyProtocol::Udp => {
+                            run_udp_proxy_listener(
+                                proxy_name.clone(),
+                                client_id_clone.clone(),
+                                listen_addr.clone(),
+                                target_addr.clone(),
+                                connections_clone.clone(),
+                                proxy_id,
+                                traffic_mgr.clone(),
+                                udp_sessions.clone(),
+                            ).await
+                        }
+                    };
+
+                    match result {
                         Ok(_) => {},
                         Err(e) => {
                             error!("[{}] 代理监听失败: {}", proxy_name, e);
@@ -102,7 +170,8 @@ impl ProxyListenerManager {
             });
 
             client_listeners.insert(proxy_id, handle);
-            info!("  [客户端 {}] 启动代理: {} 端口: {}", client_id, proxy.name, proxy.remote_port);
+            info!("  [客户端 {}] 启动{}代理: {} 端口: {}",
+                  client_id, proxy_protocol_str, proxy.name, proxy.remote_port);
         }
 
         Ok(())
@@ -283,7 +352,7 @@ async fn handle_client_auth(
     Ok(())
 }
 
-async fn run_proxy_listener(
+async fn run_tcp_proxy_listener(
     proxy_name: String,
     client_id: String,
     listen_addr: String,
@@ -293,7 +362,7 @@ async fn run_proxy_listener(
     traffic_manager: Arc<TrafficManager>,
 ) -> Result<()> {
     let listener = TcpListener::bind(&listen_addr).await?;
-    info!("[{}] 🔌 监听端口: {} -> {}", proxy_name, listen_addr, target_addr);
+    info!("[{}] 🔌 TCP监听端口: {} -> {}", proxy_name, listen_addr, target_addr);
 
     loop {
         match listener.accept().await {
@@ -317,6 +386,164 @@ async fn run_proxy_listener(
             }
         }
     }
+}
+
+// UDP代理监听器
+async fn run_udp_proxy_listener(
+    proxy_name: String,
+    client_id: String,
+    listen_addr: String,
+    target_addr: String,
+    connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+    proxy_id: i64,
+    traffic_manager: Arc<TrafficManager>,
+    udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
+) -> Result<()> {
+    let socket = Arc::new(UdpSocket::bind(&listen_addr).await?);
+    info!("[{}] 🔌 UDP监听端口: {} -> {}", proxy_name, listen_addr, target_addr);
+
+    let mut buf = vec![0u8; 65535];
+    let session_timeout = Duration::from_secs(300); // 5分钟超时
+
+    // 启动会话清理任务
+    let udp_sessions_cleanup = udp_sessions.clone();
+    let client_id_clone = client_id.clone();
+    let proxy_name_clone = proxy_name.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            let mut sessions = udp_sessions_cleanup.write().await;
+            let key = (client_id_clone.clone(), proxy_id);
+            if let Some(session_map) = sessions.get_mut(&key) {
+                let now = tokio::time::Instant::now();
+                session_map.retain(|addr, session| {
+                    if now.duration_since(session.last_activity) > session_timeout {
+                        debug!("[{}] UDP会话超时: {}", proxy_name_clone, addr);
+                        false
+                    } else {
+                        true
+                    }
+                });
+            }
+        }
+    });
+
+    loop {
+        match socket.recv_from(&mut buf).await {
+            Ok((len, src_addr)) => {
+                let data = buf[..len].to_vec();
+                let connections_clone = connections.clone();
+                let client_id = client_id.clone();
+                let target_addr = target_addr.clone();
+                let proxy_name = proxy_name.clone();
+                let traffic_mgr = traffic_manager.clone();
+                let udp_sessions = udp_sessions.clone();
+                let socket = socket.clone();
+
+                tokio::spawn(async move {
+                    if let Err(e) = handle_udp_to_quic(
+                        socket,
+                        src_addr,
+                        data,
+                        target_addr,
+                        proxy_name,
+                        client_id,
+                        connections_clone,
+                        proxy_id,
+                        traffic_mgr,
+                        udp_sessions,
+                    ).await {
+                        error!("❌ 处理UDP错误: {}", e);
+                    }
+                });
+            }
+            Err(e) => {
+                error!("[{}] ❌ 接收UDP数据失败: {}", proxy_name, e);
+            }
+        }
+    }
+}
+
+async fn handle_udp_to_quic(
+    socket: Arc<UdpSocket>,
+    src_addr: SocketAddr,
+    data: Vec<u8>,
+    target_addr: String,
+    proxy_name: String,
+    client_id: String,
+    connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+    proxy_id: i64,
+    traffic_manager: Arc<TrafficManager>,
+    _udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
+) -> Result<()> {
+    // 获取客户端连接
+    let conn = {
+        let conns = connections.read().await;
+        conns.get(&client_id).cloned()
+    };
+
+    let conn = match conn {
+        Some(c) => c,
+        None => {
+            error!("[{}] ❌ 客户端未连接", proxy_name);
+            return Ok(());
+        }
+    };
+
+    // 打开双向QUIC流
+    let (mut quic_send, mut quic_recv) = conn.open_bi().await?;
+
+    info!("[{}] 🔗 UDP QUIC流已打开: {}", proxy_name, src_addr);
+
+    // 发送协议类型和目标地址 (格式: 1字节协议类型 + 2字节长度 + 地址)
+    quic_send.write_all(&[b'u']).await?; // 'u' 表示UDP
+    let target_bytes = target_addr.as_bytes();
+    let len = target_bytes.len() as u16;
+    quic_send.write_all(&len.to_be_bytes()).await?;
+    quic_send.write_all(target_bytes).await?;
+    quic_send.write_all(&data).await?;
+    quic_send.flush().await?;
+
+    // 统计发送字节数
+    traffic_manager.record_traffic(
+        proxy_id,
+        client_id.parse::<i64>().unwrap_or(0),
+        None,
+        data.len() as i64,
+        0,
+    ).await;
+
+    // 读取响应并转发回源
+    let mut recv_buf = vec![0u8; 65535];
+    let mut bytes_received = 0i64;
+
+    loop {
+        match quic_recv.read(&mut recv_buf).await? {
+            Some(n) => {
+                if n == 0 {
+                    break;
+                }
+                bytes_received += n as i64;
+                socket.send_to(&recv_buf[..n], src_addr).await?;
+            }
+            None => break,
+        }
+    }
+
+    // 统计接收字节数
+    if bytes_received > 0 {
+        traffic_manager.record_traffic(
+            proxy_id,
+            client_id.parse::<i64>().unwrap_or(0),
+            None,
+            0,
+            bytes_received,
+        ).await;
+    }
+
+    quic_send.finish()?;
+    Ok(())
 }
 
 async fn handle_tcp_to_quic(
@@ -348,7 +575,8 @@ async fn handle_tcp_to_quic(
 
     info!("[{}] 🔗 QUIC流已打开: {}", proxy_name, addr);
 
-    // 发送目标地址
+    // 发送协议类型和目标地址 (格式: 1字节协议类型 + 2字节长度 + 地址)
+    quic_send.write_all(&[b't']).await?; // 't' 表示TCP
     let target_bytes = target_addr.as_bytes();
     let len = target_bytes.len() as u16;
 

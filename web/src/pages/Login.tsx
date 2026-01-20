@@ -1,24 +1,23 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Form, Input, Button, Alert, Card, ConfigProvider, Space } from 'antd';
+import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 
 export const Login = () => {
   const { t } = useTranslation();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const [form] = Form.useForm();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (values: { username: string; password: string }) => {
     setError('');
     setLoading(true);
 
     try {
-      await login(username, password);
-      // Navigation is handled by AuthContext state change
+      await login(values.username, values.password);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('auth.loginFailed'));
     } finally {
@@ -27,120 +26,85 @@ export const Login = () => {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      position: 'relative',
-    }}>
-      <div style={{
-        position: 'absolute',
-        top: '1rem',
-        right: '1rem',
-      }}>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-500 to-purple-600 relative p-4">
+      <div className="absolute top-4 right-4 z-10">
         <LanguageSwitcher />
       </div>
-      <div style={{
-        background: 'white',
-        padding: '2rem',
-        borderRadius: '8px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-        width: '100%',
-        maxWidth: '400px',
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>RFRP</h1>
-          <p style={{ color: '#666' }}>{t('auth.loginTitle')}</p>
-        </div>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '1rem' }}>
-            <label htmlFor="username" style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontWeight: '500',
-            }}>
-              {t('auth.username')}
-            </label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              placeholder={t('auth.username')}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '1rem',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label htmlFor="password" style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontWeight: '500',
-            }}>
-              {t('auth.password')}
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder={t('auth.password')}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '1rem',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          {error && (
-            <div style={{
-              padding: '0.75rem',
-              marginBottom: '1rem',
-              background: '#fee',
-              color: '#c33',
-              borderRadius: '4px',
-              fontSize: '0.875rem',
-            }}>
-              {error}
+      <ConfigProvider
+        theme={{
+          token: {
+            colorPrimary: '#667eea',
+            borderRadius: 8,
+          },
+        }}
+      >
+        <Card
+          className="w-full max-w-md shadow-2xl"
+          styles={{
+            body: { padding: '2rem' }
+          }}
+        >
+          <Space direction="vertical" size="large" className="w-full">
+            <div className="text-center">
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-primary-500 to-purple-600 bg-clip-text text-transparent mb-2">
+                RFRP
+              </h1>
+              <p className="text-gray-500">{t('auth.loginTitle')}</p>
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              background: loading ? '#999' : '#667eea',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              fontSize: '1rem',
-              fontWeight: '500',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'background 0.2s',
-            }}
-          >
-            {loading ? t('common.loading') : t('auth.loginButton')}
-          </button>
-        </form>
-      </div>
+            {error && (
+              <Alert
+                message={error}
+                type="error"
+                showIcon
+                closable
+                onClose={() => setError('')}
+              />
+            )}
+
+            <Form
+              form={form}
+              name="login"
+              onFinish={handleSubmit}
+              layout="vertical"
+              size="large"
+            >
+              <Form.Item
+                name="username"
+                rules={[{ required: true, message: t('auth.username') }]}
+              >
+                <Input
+                  prefix={<UserOutlined />}
+                  placeholder={t('auth.username')}
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="password"
+                rules={[{ required: true, message: t('auth.password') }]}
+              >
+                <Input.Password
+                  prefix={<LockOutlined />}
+                  placeholder={t('auth.password')}
+                />
+              </Form.Item>
+
+              <Form.Item>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={loading}
+                  block
+                  className="h-12 font-semibold"
+                >
+                  {loading ? t('common.loading') : t('auth.loginButton')}
+                </Button>
+              </Form.Item>
+            </Form>
+          </Space>
+        </Card>
+      </ConfigProvider>
     </div>
   );
 };

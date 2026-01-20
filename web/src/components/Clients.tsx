@@ -1,6 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  Table,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Tag,
+  Space,
+  Typography,
+  message,
+  Popconfirm,
+  Card,
+  Empty,
+  Spin
+} from 'antd';
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  CloudServerOutlined,
+  CopyOutlined
+} from '@ant-design/icons';
 import { clientApi, type Client } from '../api';
+
+const { Text, Paragraph } = Typography;
 
 interface ClientsProps {
   onRefresh?: () => void;
@@ -11,8 +34,7 @@ export function Clients({ onRefresh }: ClientsProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [newClientName, setNewClientName] = useState('');
-  const [newClientToken, setNewClientToken] = useState('');
+  const [form] = Form.useForm();
 
   const loadClients = async () => {
     setLoading(true);
@@ -21,7 +43,7 @@ export function Clients({ onRefresh }: ClientsProps) {
       setClients(data);
     } catch (error) {
       console.error('Failed to load clients:', error);
-      alert(t('clients.createSuccess'));
+      message.error('Failed to load clients');
     } finally {
       setLoading(false);
     }
@@ -29,139 +51,167 @@ export function Clients({ onRefresh }: ClientsProps) {
 
   useEffect(() => {
     loadClients();
-    // 定期刷新在线状态
     const interval = setInterval(loadClients, 5000);
     return () => clearInterval(interval);
-  }, [t]);
+  }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreate = async () => {
     try {
+      const values = await form.validateFields();
       await clientApi.create({
-        name: newClientName,
-        token: newClientToken || undefined,
+        name: values.name,
+        token: values.token || undefined,
       });
+      message.success('Client created successfully');
       setShowModal(false);
-      setNewClientName('');
-      setNewClientToken('');
+      form.resetFields();
       loadClients();
       onRefresh?.();
     } catch (error) {
       console.error('Failed to create client:', error);
-      alert(t('clients.createSuccess'));
+      message.error('Failed to create client');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t('clients.deleteConfirm'))) return;
-
     try {
       await clientApi.delete(id);
+      message.success('Client deleted successfully');
       loadClients();
       onRefresh?.();
     } catch (error) {
       console.error('Failed to delete client:', error);
-      alert(t('clients.deleteSuccess'));
+      message.error('Failed to delete client');
     }
   };
 
+  const copyToken = (token: string) => {
+    navigator.clipboard.writeText(token);
+    message.success('Token copied to clipboard');
+  };
+
+  const columns = [
+    {
+      title: t('clients.clientName'),
+      dataIndex: 'name',
+      key: 'name',
+      render: (text: string) => <Text strong>{text}</Text>,
+    },
+    {
+      title: 'Token',
+      dataIndex: 'token',
+      key: 'token',
+      render: (token: string) => (
+        <Space>
+          <Paragraph code copyable={{ text: token, tooltips: ['Copy token', 'Copied!'] }}>
+            {token.slice(0, 12)}...
+          </Paragraph>
+          <Button
+            type="text"
+            icon={<CopyOutlined />}
+            onClick={() => copyToken(token)}
+          />
+        </Space>
+      ),
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'is_online',
+      key: 'is_online',
+      render: (isOnline: boolean) => (
+        <Tag
+          color={isOnline ? 'success' : 'default'}
+          icon={isOnline ? <CloudServerOutlined /> : undefined}
+        >
+          {isOnline ? t('common.online') : t('common.offline')}
+        </Tag>
+      ),
+    },
+    {
+      title: t('clients.created_at'),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => new Date(date).toLocaleString(),
+    },
+    {
+      title: t('common.actions'),
+      key: 'actions',
+      render: (_: any, record: Client) => (
+        <Popconfirm
+          title={t('clients.deleteConfirm')}
+          onConfirm={() => handleDelete(record.id)}
+          okText="Yes"
+          cancelText="No"
+        >
+          <Button danger icon={<DeleteOutlined />} size="small">
+            {t('common.delete')}
+          </Button>
+        </Popconfirm>
+      ),
+    },
+  ];
+
   if (loading) {
-    return <div className="loading">{t('common.loading')}</div>;
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Spin size="large" tip={t('common.loading')} />
+      </div>
+    );
   }
 
   return (
     <>
-      <div className="section">
-        <div className="section-header">
-          <h2>{t('clients.title')}</h2>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-            + {t('clients.createClient')}
-          </button>
-        </div>
-
+      <Card
+        title={t('clients.title')}
+        extra={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setShowModal(true)}
+          >
+            {t('clients.createClient')}
+          </Button>
+        }
+      >
         {clients.length === 0 ? (
-          <div className="empty-state">{t('clients.noClients')}</div>
+          <Empty description={t('clients.noClients')} />
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>{t('clients.clientName')}</th>
-                <th>Token</th>
-                <th>{t('common.status')}</th>
-                <th>{t('clients.created_at')}</th>
-                <th>{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clients.map((client) => (
-                <tr key={client.id}>
-                  <td>{client.name}</td>
-                  <td>
-                    <code className="token">{client.token}</code>
-                  </td>
-                  <td>
-                    <span className={`status ${client.is_online ? 'online' : 'offline'}`}>
-                      <span className={`online-dot ${client.is_online ? 'online' : 'offline'}`}></span>
-                      {client.is_online ? t('common.online') : t('common.offline')}
-                    </span>
-                  </td>
-                  <td>{new Date(client.created_at).toLocaleString()}</td>
-                  <td>
-                    <button
-                      className="btn btn-danger btn-small"
-                      onClick={() => handleDelete(client.id)}
-                    >
-                      {t('common.delete')}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Table
+            dataSource={clients}
+            columns={columns}
+            rowKey="id"
+            pagination={false}
+          />
         )}
-      </div>
+      </Card>
 
-      {showModal && (
-        <div className="modal active" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{t('clients.modalTitle')}</h3>
-              <button className="close" onClick={() => setShowModal(false)}>
-                ×
-              </button>
-            </div>
-            <form onSubmit={handleCreate}>
-              <div className="form-group">
-                <label>{t('clients.clientName')}</label>
-                <input
-                  type="text"
-                  value={newClientName}
-                  onChange={(e) => setNewClientName(e.target.value)}
-                  required
-                  placeholder={t('clients.namePlaceholder')}
-                />
-              </div>
-              <div className="form-group">
-                <label>Token ({t('clients.namePlaceholder')})</label>
-                <input
-                  type="text"
-                  value={newClientToken}
-                  onChange={(e) => setNewClientToken(e.target.value)}
-                  placeholder={t('clients.namePlaceholder')}
-                />
-              </div>
-              <div className="form-actions">
-                <button type="button" className="btn" onClick={() => setShowModal(false)}>
-                  {t('common.cancel')}
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  {t('common.create')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        title={t('clients.modalTitle')}
+        open={showModal}
+        onOk={handleCreate}
+        onCancel={() => {
+          setShowModal(false);
+          form.resetFields();
+        }}
+        okText={t('common.create')}
+        cancelText={t('common.cancel')}
+      >
+        <Form form={form} layout="vertical">
+          <Form.Item
+            name="name"
+            label={t('clients.clientName')}
+            rules={[{ required: true, message: 'Please enter client name' }]}
+          >
+            <Input placeholder={t('clients.namePlaceholder')} />
+          </Form.Item>
+          <Form.Item
+            name="token"
+            label="Token (Optional)"
+          >
+            <Input placeholder="Leave empty to auto-generate" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   );
 }

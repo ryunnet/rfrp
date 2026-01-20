@@ -1,10 +1,10 @@
 use anyhow::Result;
-use quinn::{ClientConfig, Endpoint, crypto::rustls::QuicClientConfig, TransportConfig, SendStream, ConnectionError};
+use quinn::{ClientConfig, Endpoint, crypto::rustls::QuicClientConfig, TransportConfig};
 use rustls::pki_types::ServerName;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, UdpSocket};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{info, error, warn, debug};
 
@@ -104,10 +104,15 @@ async fn connect_to_server(
 }
 
 async fn handle_proxy_stream(
-    mut quic_send: quinn::SendStream,
+    quic_send: quinn::SendStream,
     mut quic_recv: quinn::RecvStream,
 ) -> Result<()> {
-    // 首先读取目标地址（格式：2字节长度 + 内容）
+    // 读取协议类型（1字节）
+    let mut proto_buf = [0u8; 1];
+    quic_recv.read_exact(&mut proto_buf).await?;
+    let protocol_type = proto_buf[0];
+
+    // 读取目标地址（格式：2字节长度 + 内容）
     let mut len_buf = [0u8; 2];
     quic_recv.read_exact(&mut len_buf).await?;
     let len = u16::from_be_bytes(len_buf) as usize;
@@ -116,10 +121,35 @@ async fn handle_proxy_stream(
     quic_recv.read_exact(&mut addr_buf).await?;
     let target_addr = String::from_utf8(addr_buf)?;
 
-    info!("🎯 目标地址: {}", target_addr);
+    info!("🎯 目标地址: {}, 协议: {}", target_addr,
+          if protocol_type == b'u' { "UDP" } else { "TCP" });
 
+    // 根据协议类型连接到目标服务
+    match protocol_type {
+        b't' => {
+            // TCP连接
+            handle_tcp_proxy(quic_send, quic_recv, &target_addr).await?;
+        }
+        b'u' => {
+            // UDP连接
+            handle_udp_proxy(quic_send, quic_recv, &target_addr).await?;
+        }
+        _ => {
+            error!("❌ 未知的协议类型: {}", protocol_type);
+            return Err(anyhow::anyhow!("Unknown protocol type: {}", protocol_type));
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_tcp_proxy(
+    mut quic_send: quinn::SendStream,
+    mut quic_recv: quinn::RecvStream,
+    target_addr: &str,
+) -> Result<()> {
     // 连接到目标服务
-    let mut tcp_stream = TcpStream::connect(&target_addr).await?;
+    let mut tcp_stream = TcpStream::connect(target_addr).await?;
 
     info!("🔗 已连接到目标服务");
 
@@ -164,6 +194,75 @@ async fn handle_proxy_stream(
         res = tcp_to_quic => {
             if let Err(e) = res {
                 error!("TCP->QUIC错误: {}", e);
+            }
+        }
+    }
+
+    // 关闭QUIC流
+    quic_send.finish()?;
+
+    Ok(())
+}
+
+async fn handle_udp_proxy(
+    mut quic_send: quinn::SendStream,
+    mut quic_recv: quinn::RecvStream,
+    target_addr: &str,
+) -> Result<()> {
+    // 绑定一个UDP socket
+    let socket = UdpSocket::bind("0.0.0.0:0").await?;
+    let local_addr = socket.local_addr()?;
+    info!("🔗 UDP Socket已绑定: {}", local_addr);
+
+    // 读取来自服务器的初始UDP数据
+    let mut recv_buf = vec![0u8; 65535];
+    let initial_len = match quic_recv.read(&mut recv_buf).await? {
+        Some(n) => n,
+        None => {
+            error!("❌ 未收到初始UDP数据");
+            return Ok(());
+        }
+    };
+
+    // 将数据发送到目标地址
+    socket.send_to(&recv_buf[..initial_len], target_addr).await?;
+    debug!("📤 已发送 {} 字节UDP数据到 {}", initial_len, target_addr);
+
+    // 设置TTL
+    socket.set_ttl(64)?;
+
+    // 循环接收来自目标的响应并转发回服务器
+    loop {
+        let mut response_buf = vec![0u8; 65535];
+        tokio::select! {
+            // 从QUIC读取数据（来自服务器的更多UDP数据包）
+            result = quic_recv.read(&mut recv_buf) => {
+                match result? {
+                    Some(n) => {
+                        if n > 0 {
+                            // 转发到目标
+                            socket.send_to(&recv_buf[..n], target_addr).await?;
+                            debug!("📤 转发UDP数据包: {} 字节", n);
+                        } else {
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
+            // 从目标读取UDP响应
+            result = socket.recv_from(&mut response_buf) => {
+                match result {
+                    Ok((len, _from)) => {
+                        // 发送回服务器
+                        quic_send.write_all(&response_buf[..len]).await?;
+                        debug!("📥 转发UDP响应: {} 字节", len);
+                    }
+                    Err(e) => {
+                        error!("❌ UDP接收错误: {}", e);
+                        break;
+                    }
+                }
             }
         }
     }

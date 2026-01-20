@@ -15,7 +15,7 @@ use axum::{
     routing::{get, post, put, Router},
     middleware::from_fn,
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, NotSet, QueryFilter, Set};
 use sea_orm_migration::MigratorTrait;
 use std::path;
 use tower_http::cors::CorsLayer;
@@ -120,6 +120,12 @@ async fn main() -> Result<()> {
 
     // 启动 QUIC 代理服务器
     tokio::spawn(async move {
+        // 重置所有客户端为离线状态（服务端重启后清理僵尸状态）
+        let db = init_sqlite().await;
+        if let Err(e) = reset_all_clients_offline(db).await {
+            tracing::warn!("重置客户端状态失败: {}", e);
+        }
+
         let bind_addr = format!("0.0.0.0:{}", cfg.bind_port);
         let srv = server::ProxyServer::new().unwrap();
         srv.run(bind_addr).await.unwrap();
@@ -185,4 +191,28 @@ async fn initialize_admin_user() {
             tracing::error!("Failed to check admin user: {}", e);
         }
     }
+}
+
+/// 重置所有客户端为离线状态
+async fn reset_all_clients_offline(db: DatabaseConnection) -> Result<(), sea_orm::DbErr> {
+    use crate::entity::{Client, client};
+
+    // 查询所有在线的客户端
+    let online_clients = Client::find()
+        .filter(client::Column::IsOnline.eq(true))
+        .all(&db)
+        .await?;
+
+    if !online_clients.is_empty() {
+        info!("🔄 服务端重启，重置 {} 个客户端状态为离线", online_clients.len());
+        for client in online_clients {
+            let mut client_active: client::ActiveModel = client.into();
+            client_active.is_online = Set(false);
+            if let Err(e) = client_active.update(&db).await {
+                tracing::error!("Failed to reset client status: {}", e);
+            }
+        }
+    }
+
+    Ok(())
 }

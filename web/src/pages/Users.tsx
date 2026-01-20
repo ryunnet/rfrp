@@ -1,5 +1,30 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  Table,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Checkbox,
+  Tag,
+  Space,
+  message,
+  Popconfirm,
+  Card,
+  Empty,
+  Spin,
+  List,
+  Switch
+} from 'antd';
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  UserOutlined,
+  SafetyOutlined,
+  TeamOutlined
+} from '@ant-design/icons';
 import { userApi, clientApi, type User, type Client } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -15,10 +40,7 @@ export const Users = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithClients | null>(null);
-  const [newUsername, setNewUsername] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [newIsAdmin, setNewIsAdmin] = useState(false);
-  const [_generatedPassword, setGeneratedPassword] = useState('');
+  const [createForm] = Form.useForm();
   const [allClients, setAllClients] = useState<Client[]>([]);
   const [assignedClients, setAssignedClients] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -35,7 +57,7 @@ export const Users = () => {
       const data = await userApi.list();
       setUsers(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('users.createSuccess'));
+      setError(err instanceof Error ? err.message : 'Failed to fetch users');
     } finally {
       setLoading(false);
     }
@@ -47,39 +69,45 @@ export const Users = () => {
       setSelectedUser({ ...user, clients });
       setAssignedClients(clients.map(c => c.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('users.assignFailed'));
+      message.error('Failed to fetch user clients');
     }
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateUser = async () => {
     try {
+      const values = await createForm.validateFields();
       const result = await userApi.create({
-        username: newUsername,
-        password: newPassword || undefined,
-        is_admin: newIsAdmin,
+        username: values.username,
+        password: values.password || undefined,
+        is_admin: values.is_admin,
       });
       if (result.generated_password) {
-        setGeneratedPassword(result.generated_password);
-        alert(`${t('users.userCreated')}\n\n${t('auth.username')}: ${result.username}\n${t('users.generatedPassword')}: ${result.generated_password}\n\n${t('users.savePasswordWarning')}`);
+        Modal.success({
+          title: t('users.userCreated'),
+          content: (
+            <div>
+              <p><strong>{t('auth.username')}:</strong> {result.username}</p>
+              <p><strong>{t('users.generatedPassword')}:</strong> {result.generated_password}</p>
+              <p className="text-orange-500 mt-2">{t('users.savePasswordWarning')}</p>
+            </div>
+          ),
+        });
       }
-      setNewUsername('');
-      setNewPassword('');
-      setNewIsAdmin(false);
+      createForm.resetFields();
       setShowCreateModal(false);
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('users.createSuccess'));
+      setError(err instanceof Error ? err.message : 'Failed to create user');
     }
   };
 
   const handleDeleteUser = async (userId: number) => {
-    if (!confirm(t('users.deleteConfirm'))) return;
     try {
       await userApi.delete(userId);
+      message.success('User deleted successfully');
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('users.deleteSuccess'));
+      message.error('Failed to delete user');
     }
   };
 
@@ -88,7 +116,7 @@ export const Users = () => {
       await userApi.update(user.id, { is_admin: !user.is_admin });
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('users.updateSuccess'));
+      message.error('Failed to update user');
     }
   };
 
@@ -99,7 +127,7 @@ export const Users = () => {
       setAllClients(clients);
       setShowClientModal(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('clients.noClients'));
+      message.error('Failed to fetch clients');
     }
   };
 
@@ -116,327 +144,238 @@ export const Users = () => {
       }
       await fetchUserClients(selectedUser);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('users.assignFailed'));
+      message.error('Failed to update client assignment');
     }
   };
 
+  const columns = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
+    },
+    {
+      title: t('users.username'),
+      dataIndex: 'username',
+      key: 'username',
+      render: (text: string) => (
+        <Space>
+          <UserOutlined />
+          <span className="font-medium">{text}</span>
+        </Space>
+      ),
+    },
+    {
+      title: t('users.role'),
+      dataIndex: 'is_admin',
+      key: 'is_admin',
+      render: (isAdmin: boolean) => (
+        <Tag
+          color={isAdmin ? 'blue' : 'default'}
+          icon={isAdmin ? <SafetyOutlined /> : <UserOutlined />}
+        >
+          {isAdmin ? t('users.admin') : t('users.user')}
+        </Tag>
+      ),
+    },
+    {
+      title: t('users.clients'),
+      dataIndex: 'client_count',
+      key: 'client_count',
+      render: (count: number) => (
+        <Tag color="green" icon={<TeamOutlined />}>
+          {count || 0}
+        </Tag>
+      ),
+    },
+    {
+      title: t('users.created'),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => new Date(date).toLocaleDateString(),
+    },
+    {
+      title: t('common.actions'),
+      key: 'actions',
+      render: (_: any, record: User) => (
+        <Space size="small">
+          <Button
+            icon={<EditOutlined />}
+            size="small"
+            onClick={() => handleManageClients(record)}
+          >
+            {t('users.manageClients')}
+          </Button>
+          <Button
+            icon={<SafetyOutlined />}
+            size="small"
+            onClick={() => handleToggleAdmin(record)}
+            disabled={record.username === 'admin'}
+          >
+            {record.is_admin ? t('users.makeUser') : t('users.makeAdmin')}
+          </Button>
+          <Popconfirm
+            title={t('users.deleteConfirm')}
+            onConfirm={() => handleDeleteUser(record.id)}
+            okText="Yes"
+            cancelText="No"
+          >
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              disabled={record.username === 'admin'}
+            >
+              {t('common.delete')}
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
   if (!isAdmin) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h2>{t('auth.accessDenied')}</h2>
-        <p>{t('auth.noPermission')}</p>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Empty
+          description={
+            <div className="text-center">
+              <h2>{t('auth.accessDenied')}</h2>
+              <p>{t('auth.noPermission')}</p>
+            </div>
+          }
+        />
       </div>
     );
   }
 
   if (loading) {
-    return <div style={{ padding: '2rem', textAlign: 'center' }}>{t('common.loading')}</div>;
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Spin size="large" tip={t('common.loading')} />
+      </div>
+    );
   }
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h2>{t('users.title')}</h2>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          style={{
-            padding: '0.5rem 1rem',
-            background: '#667eea',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
-          {t('users.createUser')}
-        </button>
-      </div>
-
+    <Space direction="vertical" size="large" className="w-full">
       {error && (
-        <div style={{
-          padding: '1rem',
-          marginBottom: '1rem',
-          background: '#fee',
-          color: '#c33',
-          borderRadius: '4px',
-        }}>
-          {error}
-        </div>
+        <Card>
+          <p className="text-red-500">{error}</p>
+        </Card>
       )}
 
-      <div style={{
-        background: 'white',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-      }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead style={{ background: '#f5f5f5' }}>
-            <tr>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t('users.id')}</th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t('users.username')}</th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t('users.role')}</th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t('users.clients')}</th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t('users.created')}</th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '1rem' }}>{user.id}</td>
-                <td style={{ padding: '1rem' }}>{user.username}</td>
-                <td style={{ padding: '1rem' }}>
-                  <span style={{
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    background: user.is_admin ? '#e3f2fd' : '#f5f5f5',
-                    color: user.is_admin ? '#1976d2' : '#666',
-                  }}>
-                    {user.is_admin ? t('users.admin') : t('users.user')}
-                  </span>
-                </td>
-                <td style={{ padding: '1rem' }}>{user.client_count || 0}</td>
-                <td style={{ padding: '1rem' }}>{new Date(user.created_at).toLocaleDateString()}</td>
-                <td style={{ padding: '1rem' }}>
-                  <button
-                    onClick={() => handleManageClients(user)}
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      marginRight: '0.5rem',
-                      background: '#4caf50',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    {t('users.manageClients')}
-                  </button>
-                  <button
-                    onClick={() => handleToggleAdmin(user)}
-                    disabled={user.username === 'admin'}
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      marginRight: '0.5rem',
-                      background: user.is_admin ? '#ff9800' : '#2196f3',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: user.username === 'admin' ? 'not-allowed' : 'pointer',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    {user.is_admin ? t('users.makeUser') : t('users.makeAdmin')}
-                  </button>
-                  <button
-                    onClick={() => handleDeleteUser(user.id)}
-                    disabled={user.username === 'admin'}
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      background: '#f44336',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: user.username === 'admin' ? 'not-allowed' : 'pointer',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    {t('common.delete')}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Card
+        title={t('users.title')}
+        extra={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setShowCreateModal(true)}
+          >
+            {t('users.createUser')}
+          </Button>
+        }
+      >
+        <Table
+          dataSource={users}
+          columns={columns}
+          rowKey="id"
+          pagination={false}
+        />
+      </Card>
 
       {/* Create User Modal */}
-      {showCreateModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '2rem',
-            borderRadius: '8px',
-            width: '100%',
-            maxWidth: '400px',
-          }}>
-            <h3 style={{ marginBottom: '1rem' }}>{t('users.modalTitle')}</h3>
-            <form onSubmit={handleCreateUser}>
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem' }}>{t('users.username')}</label>
-                <input
-                  type="text"
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
-                  required
-                  placeholder={t('users.usernamePlaceholder')}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem' }}>{t('auth.password')}</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder={t('users.passwordPlaceholder')}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={newIsAdmin}
-                    onChange={(e) => setNewIsAdmin(e.target.checked)}
-                    style={{ marginRight: '0.5rem' }}
-                  />
-                  {t('users.isAdmin')}
-                </label>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button
-                  type="submit"
-                  style={{
-                    flex: 1,
-                    padding: '0.5rem',
-                    background: '#667eea',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {t('common.create')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setNewUsername('');
-                    setNewPassword('');
-                    setNewIsAdmin(false);
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '0.5rem',
-                    background: '#999',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        title={t('users.modalTitle')}
+        open={showCreateModal}
+        onOk={handleCreateUser}
+        onCancel={() => {
+          setShowCreateModal(false);
+          createForm.resetFields();
+        }}
+        okText={t('common.create')}
+        cancelText={t('common.cancel')}
+      >
+        <Form
+          form={createForm}
+          layout="vertical"
+        >
+          <Form.Item
+            name="username"
+            label={t('users.username')}
+            rules={[{ required: true, message: 'Please enter username' }]}
+          >
+            <Input placeholder={t('users.usernamePlaceholder')} />
+          </Form.Item>
+          <Form.Item
+            name="password"
+            label={t('auth.password')}
+          >
+            <Input.Password placeholder={t('users.passwordPlaceholder')} />
+          </Form.Item>
+          <Form.Item
+            name="is_admin"
+            valuePropName="checked"
+          >
+            <Checkbox>{t('users.isAdmin')}</Checkbox>
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* Manage Clients Modal */}
-      {showClientModal && selectedUser && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '2rem',
-            borderRadius: '8px',
-            width: '100%',
-            maxWidth: '500px',
-            maxHeight: '80vh',
-            overflow: 'auto',
-          }}>
-            <h3 style={{ marginBottom: '1rem' }}>{t('users.manageClientsTitle', { username: selectedUser.username })}</h3>
-            <div style={{ marginBottom: '1rem' }}>
-              {allClients.map((client) => (
-                <label key={client.id} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '0.5rem',
-                  borderBottom: '1px solid #eee',
-                  cursor: 'pointer',
-                }}>
-                  <input
-                    type="checkbox"
-                    checked={assignedClients.includes(client.id)}
-                    onChange={() => handleToggleClient(client.id)}
-                    style={{ marginRight: '0.5rem' }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: '500' }}>{client.name}</div>
-                    <div style={{ fontSize: '0.875rem', color: '#666' }}>{client.id}</div>
-                  </div>
-                  <span style={{
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    background: client.is_online ? '#e8f5e9' : '#ffebee',
-                    color: client.is_online ? '#2e7d32' : '#c62828',
-                  }}>
-                    {client.is_online ? t('common.online') : t('common.offline')}
-                  </span>
-                </label>
-              ))}
-            </div>
-            <button
-              onClick={() => {
-                setShowClientModal(false);
-                setSelectedUser(null);
-                fetchUsers();
-              }}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                background: '#667eea',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
+      <Modal
+        title={t('users.manageClientsTitle', { username: selectedUser?.username })}
+        open={showClientModal}
+        onCancel={() => {
+          setShowClientModal(false);
+          setSelectedUser(null);
+          fetchUsers();
+        }}
+        footer={[
+          <Button
+            key="close"
+            type="primary"
+            onClick={() => {
+              setShowClientModal(false);
+              setSelectedUser(null);
+              fetchUsers();
+            }}
+          >
+            {t('common.close')}
+          </Button>
+        ]}
+        width={600}
+      >
+        <List
+          dataSource={allClients}
+          renderItem={(client) => (
+            <List.Item
+              actions={[
+                <Switch
+                  checked={assignedClients.includes(client.id)}
+                  onChange={() => handleToggleClient(client.id)}
+                />
+              ]}
             >
-              {t('common.close')}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+              <List.Item.Meta
+                title={<span className="font-medium">{client.name}</span>}
+                description={
+                  <Space>
+                    <span className="text-xs text-gray-500">{client.id}</span>
+                    <Tag
+                      color={client.is_online ? 'success' : 'default'}
+                    >
+                      {client.is_online ? t('common.online') : t('common.offline')}
+                    </Tag>
+                  </Space>
+                }
+              />
+            </List.Item>
+          )}
+        />
+      </Modal>
+    </Space>
   );
 };

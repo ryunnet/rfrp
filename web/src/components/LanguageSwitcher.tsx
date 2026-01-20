@@ -1,4 +1,7 @@
 import { useTranslation } from 'react-i18next';
+import { Button, Dropdown } from 'antd';
+import { GlobalOutlined } from '@ant-design/icons';
+import type { MenuProps } from 'antd';
 
 export const LanguageSwitcher = () => {
   const { i18n } = useTranslation();
@@ -8,36 +11,32 @@ export const LanguageSwitcher = () => {
     localStorage.setItem('language', lng);
   };
 
+  const items: MenuProps['items'] = [
+    {
+      key: 'en',
+      label: 'English',
+      onClick: () => changeLanguage('en'),
+    },
+    {
+      key: 'zh',
+      label: '中文',
+      onClick: () => changeLanguage('zh'),
+    },
+  ];
+
+  const getCurrentLabel = () => {
+    return i18n.language === 'zh' ? '中文' : 'EN';
+  };
+
   return (
-    <div style={{ display: 'flex', gap: '0.5rem' }}>
-      <button
-        onClick={() => changeLanguage('en')}
-        style={{
-          padding: '0.25rem 0.5rem',
-          background: i18n.language === 'en' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.1)',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '0.875rem',
-        }}
+    <Dropdown menu={{ items }} placement="bottomRight">
+      <Button
+        type="text"
+        icon={<GlobalOutlined />}
+        className="text-white hover:bg-white/10"
       >
-        EN
-      </button>
-      <button
-        onClick={() => changeLanguage('zh')}
-        style={{
-          padding: '0.25rem 0.5rem',
-          background: i18n.language === 'zh' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.1)',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '0.875rem',
-        }}
-      >
-        中文
-      </button>
-    </div>
+        {getCurrentLabel()}
+      </Button>
+    </Dropdown>
   );
 };

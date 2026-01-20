@@ -1,10 +1,20 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Layout, Menu, Button, Avatar, Typography, Spin, ConfigProvider } from 'antd'
+import {
+  DashboardOutlined,
+  UserOutlined,
+  LinkOutlined,
+  BarChartOutlined,
+  TeamOutlined,
+  LogoutOutlined} from '@ant-design/icons'
 import { Clients, Proxies, Traffic, Dashboard, LanguageSwitcher } from './components'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { Login } from './pages/Login'
 import { Users } from './pages/Users'
-import './App.css'
+
+const { Header, Content, Sider } = Layout
+const { Title } = Typography
 
 type TabType = 'dashboard' | 'clients' | 'proxies' | 'traffic' | 'users'
 
@@ -13,6 +23,7 @@ function AppContent() {
   const { user, loading, logout, isAuthenticated, isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>('dashboard')
   const [refreshKey, setRefreshKey] = useState(0)
+  const [collapsed, setCollapsed] = useState(false)
 
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1)
@@ -20,16 +31,8 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: 'white',
-        fontSize: '1.5rem',
-      }}>
-        {t('common.loading')}
+      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-primary-500 to-purple-600">
+        <Spin size="large" tip="Loading..." />
       </div>
     )
   }
@@ -38,115 +41,141 @@ function AppContent() {
     return <Login />
   }
 
+  const menuItems = [
+    {
+      key: 'dashboard',
+      icon: <DashboardOutlined />,
+      label: t('nav.dashboard'),
+    },
+    {
+      key: 'clients',
+      icon: <UserOutlined />,
+      label: t('nav.clients'),
+    },
+    {
+      key: 'proxies',
+      icon: <LinkOutlined />,
+      label: t('nav.proxies'),
+    },
+    {
+      key: 'traffic',
+      icon: <BarChartOutlined />,
+      label: 'Traffic',
+    },
+    ...(isAdmin ? [{
+      key: 'users',
+      icon: <TeamOutlined />,
+      label: t('nav.users'),
+    }] : []),
+  ]
+
   return (
-    <div className="app-container">
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <h1>RFRP</h1>
-          <p>{t('nav.dashboard')}</p>
-          <div style={{
-            marginTop: '0.5rem',
-            padding: '0.5rem',
-            background: 'rgba(255, 255, 255, 0.1)',
-            borderRadius: '4px',
-            fontSize: '0.875rem',
-          }}>
-            <div>{t('auth.username')}: {user?.username}</div>
-            <div style={{
-              fontSize: '0.75rem',
-              color: 'rgba(255, 255, 255, 0.7)',
-            }}>
-              {isAdmin ? t('users.admin') : t('users.user')}
-            </div>
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: '#667eea',
+          borderRadius: 8,
+        },
+      }}
+    >
+      <Layout style={{ minHeight: '100vh', maxHeight: '100vh', overflow: 'hidden' }}>
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+          style={{
+            background: 'linear-gradient(180deg, #667eea 0%, #764ba2 100%)',
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <div className="p-6 text-white flex-shrink-0">
+            <Title level={3} className="!mb-1 !text-white">
+              {collapsed ? 'R' : 'RFRP'}
+            </Title>
+            {!collapsed && (
+              <p className="text-sm opacity-80">{t('nav.dashboard')}</p>
+            )}
+            {!collapsed && user && (
+              <div className="mt-4 p-3 bg-white/10 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Avatar icon={<UserOutlined />} size="small" />
+                  <span className="text-sm font-medium">{user.username}</span>
+                </div>
+                <div className="text-xs opacity-70 mt-1">
+                  {isAdmin ? t('users.admin') : t('users.user')}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
 
-        <nav className="sidebar-nav">
-          <button
-            className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <span className="nav-icon">🏠</span>
-            <span className="nav-text">{t('nav.dashboard')}</span>
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'clients' ? 'active' : ''}`}
-            onClick={() => setActiveTab('clients')}
-          >
-            <span className="nav-icon">👥</span>
-            <span className="nav-text">{t('nav.clients')}</span>
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'proxies' ? 'active' : ''}`}
-            onClick={() => setActiveTab('proxies')}
-          >
-            <span className="nav-icon">🔗</span>
-            <span className="nav-text">{t('nav.proxies')}</span>
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'traffic' ? 'active' : ''}`}
-            onClick={() => setActiveTab('traffic')}
-          >
-            <span className="nav-icon">📊</span>
-            <span className="nav-text">Traffic</span>
-          </button>
-          {isAdmin && (
-            <button
-              className={`nav-item ${activeTab === 'users' ? 'active' : ''}`}
-              onClick={() => setActiveTab('users')}
-            >
-              <span className="nav-icon">👤</span>
-              <span className="nav-text">{t('nav.users')}</span>
-            </button>
-          )}
-        </nav>
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+            <Menu
+              theme="dark"
+              mode="inline"
+              selectedKeys={[activeTab]}
+              items={menuItems}
+              onClick={({ key }) => setActiveTab(key as TabType)}
+              className="border-0 bg-transparent"
+            />
+          </div>
 
-        <div className="sidebar-footer">
-          <LanguageSwitcher />
-          <button
-            onClick={logout}
-            style={{
-              width: '100%',
-              padding: '0.5rem',
-              background: 'rgba(255, 255, 255, 0.1)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginTop: '0.5rem',
-              marginBottom: '0.5rem',
-            }}
-          >
-            {t('auth.logout')}
-          </button>
-          <p className="version">v0.1.0</p>
-        </div>
-      </aside>
+          <div className="p-4 text-white flex-shrink-0">
+            {!collapsed && (
+              <>
+                <div className="flex gap-2 mb-3">
+                  <LanguageSwitcher />
+                </div>
+                <Button
+                  icon={<LogoutOutlined />}
+                  onClick={logout}
+                  block
+                  className="bg-white/10 border-0 text-white hover:bg-white/20"
+                >
+                  {t('auth.logout')}
+                </Button>
+                <p className="text-xs text-center opacity-60 mt-3">v0.1.0</p>
+              </>
+            )}
+            {collapsed && (
+              <Button
+                icon={<LogoutOutlined />}
+                onClick={logout}
+                block
+                className="bg-white/10 border-0 text-white hover:bg-white/20"
+              />
+            )}
+          </div>
+        </Sider>
 
-      <main className="main-content">
-        <div className="content-header">
-          <h2>{t(`${activeTab}.title`)}</h2>
-        </div>
+        <Layout style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+          <Header className="bg-white shadow-sm px-8 flex items-center flex-shrink-0">
+            <Title level={3} className="!mb-0 text-gray-800">
+              {t(`${activeTab}.title`)}
+            </Title>
+          </Header>
 
-        <div className="content-body">
-          {activeTab === 'dashboard' && (
-            <Dashboard key={`dashboard-${refreshKey}`} onRefresh={handleRefresh} />
-          )}
-          {activeTab === 'clients' && (
-            <Clients key={`clients-${refreshKey}`} onRefresh={handleRefresh} />
-          )}
-          {activeTab === 'proxies' && (
-            <Proxies key={`proxies-${refreshKey}`} onRefresh={handleRefresh} />
-          )}
-          {activeTab === 'traffic' && (
-            <Traffic key={`traffic-${refreshKey}`} onRefresh={handleRefresh} />
-          )}
-          {activeTab === 'users' && isAdmin && (
-            <Users key={`users-${refreshKey}`} />
-          )}
-        </div>
-      </main>
-    </div>
+          <Content className="p-8" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+            {activeTab === 'dashboard' && (
+              <Dashboard key={`dashboard-${refreshKey}`} onRefresh={handleRefresh} />
+            )}
+            {activeTab === 'clients' && (
+              <Clients key={`clients-${refreshKey}`} onRefresh={handleRefresh} />
+            )}
+            {activeTab === 'proxies' && (
+              <Proxies key={`proxies-${refreshKey}`} onRefresh={handleRefresh} />
+            )}
+            {activeTab === 'traffic' && (
+              <Traffic key={`traffic-${refreshKey}`} onRefresh={handleRefresh} />
+            )}
+            {activeTab === 'users' && isAdmin && (
+              <Users key={`users-${refreshKey}`} />
+            )}
+          </Content>
+        </Layout>
+      </Layout>
+    </ConfigProvider>
   )
 }
 
