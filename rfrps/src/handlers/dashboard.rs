@@ -76,11 +76,43 @@ pub async fn get_user_dashboard_stats(
         }
     };
 
-    // 获取用户流量统计
-    let user_traffic = UserTrafficStats {
-        total_bytes_sent: user.total_bytes_sent,
-        total_bytes_received: user.total_bytes_received,
-        total_bytes: user.total_bytes_sent + user.total_bytes_received,
+    // 获取用户流量统计（从代理表汇总）
+    let user_traffic = if is_admin {
+        // 管理员：汇总所有代理的流量
+        match entity::Proxy::find().all(db).await {
+            Ok(proxies) => {
+                let total_sent: i64 = proxies.iter().map(|p| p.total_bytes_sent).sum();
+                let total_received: i64 = proxies.iter().map(|p| p.total_bytes_received).sum();
+                UserTrafficStats {
+                    total_bytes_sent: total_sent,
+                    total_bytes_received: total_received,
+                    total_bytes: total_sent + total_received,
+                }
+            }
+            Err(_) => UserTrafficStats {
+                total_bytes_sent: 0,
+                total_bytes_received: 0,
+                total_bytes: 0,
+            },
+        }
+    } else {
+        // 普通用户：汇总绑定客户端的所有代理流量
+        match get_user_proxies(db, user_id).await {
+            Ok(proxies) => {
+                let total_sent: i64 = proxies.iter().map(|p| p.total_bytes_sent).sum();
+                let total_received: i64 = proxies.iter().map(|p| p.total_bytes_received).sum();
+                UserTrafficStats {
+                    total_bytes_sent: total_sent,
+                    total_bytes_received: total_received,
+                    total_bytes: total_sent + total_received,
+                }
+            }
+            Err(_) => UserTrafficStats {
+                total_bytes_sent: 0,
+                total_bytes_received: 0,
+                total_bytes: 0,
+            },
+        }
     };
 
     let stats = DashboardStats {

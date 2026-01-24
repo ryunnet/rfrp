@@ -4,6 +4,7 @@ pub mod proxy;
 pub mod user;
 pub mod traffic;
 pub mod dashboard;
+pub mod client_logs;
 
 // Re-export common handler modules
 pub use auth::*;
@@ -12,6 +13,7 @@ pub use proxy::*;
 pub use user::*;
 pub use traffic::*;
 pub use dashboard::*;
+pub use client_logs::*;
 
 use serde::Serialize;
 

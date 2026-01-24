@@ -61,23 +61,26 @@ struct UdpSession {
 pub struct ProxyServer {
     cert: CertificateDer<'static>,
     key: PrivateKeyDer<'static>,
+    traffic_manager: Arc<TrafficManager>,
+    listener_manager: Arc<ProxyListenerManager>,
+    client_connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
 }
 
 // 代理监听器管理器
-struct ProxyListenerManager {
+pub struct ProxyListenerManager {
     // client_id -> (proxy_id, JoinHandle)
     listeners: Arc<RwLock<HashMap<String, HashMap<i64, JoinHandle<()>>>>>,
-    traffic_manager: Arc<TrafficManager>,
     // UDP会话管理: (client_id, proxy_id) -> (source_addr -> UdpSession)
     udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
+    traffic_manager: Arc<TrafficManager>,
 }
 
 impl ProxyListenerManager {
-    fn new(traffic_manager: Arc<TrafficManager>) -> Self {
+    pub fn new(traffic_manager: Arc<TrafficManager>) -> Self {
         Self {
             listeners: Arc::new(RwLock::new(HashMap::new())),
-            traffic_manager,
             udp_sessions: Arc::new(RwLock::new(HashMap::new())),
+            traffic_manager,
         }
     }
 
@@ -118,8 +121,8 @@ impl ProxyListenerManager {
             let target_addr = format!("{}:{}", proxy.local_ip, proxy.local_port);
             let proxy_id = proxy.id;
             let connections_clone = connections.clone();
+            let traffic_manager = self.traffic_manager.clone();
 
-            let traffic_mgr = self.traffic_manager.clone();
             let udp_sessions = self.udp_sessions.clone();
 
             let handle = tokio::spawn(async move {
@@ -133,7 +136,7 @@ impl ProxyListenerManager {
                                 target_addr.clone(),
                                 connections_clone.clone(),
                                 proxy_id,
-                                traffic_mgr.clone(),
+                                traffic_manager.clone(),
                             ).await
                         }
                         ProxyProtocol::Udp => {
@@ -144,8 +147,8 @@ impl ProxyListenerManager {
                                 target_addr.clone(),
                                 connections_clone.clone(),
                                 proxy_id,
-                                traffic_mgr.clone(),
                                 udp_sessions.clone(),
+                                traffic_manager.clone(),
                             ).await
                         }
                     };
@@ -188,16 +191,153 @@ impl ProxyListenerManager {
             }
         }
     }
+
+    // 动态启动单个代理监听器（用于新增代理时）
+    pub async fn start_single_proxy(
+        &self,
+        client_id: String,
+        proxy_id: i64,
+        connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+    ) -> Result<()> {
+        // 检查客户端是否在线
+        let is_online = {
+            let conns = connections.read().await;
+            conns.contains_key(&client_id)
+        };
+
+        if !is_online {
+            info!("  [客户端 {}] 离线，跳过启动代理 #{}", client_id, proxy_id);
+            return Ok(());
+        }
+
+        let db = get_connection().await;
+
+        // 查询指定的代理
+        let proxy = match Proxy::find_by_id(proxy_id).one(db).await? {
+            Some(p) => p,
+            None => {
+                warn!("  代理 #{} 不存在", proxy_id);
+                return Ok(());
+            }
+        };
+
+        // 检查代理是否启用且属于该客户端
+        if proxy.client_id != client_id {
+            warn!("  代理 #{} 不属于客户端 {}", proxy_id, client_id);
+            return Ok(());
+        }
+
+        if !proxy.enabled {
+            info!("  代理 #{} 未启用，跳过启动", proxy_id);
+            return Ok(());
+        }
+
+        let mut listeners = self.listeners.write().await;
+        let client_listeners = listeners.entry(client_id.clone()).or_insert_with(HashMap::new);
+
+        // 如果该代理的监听器已经运行，跳过
+        if client_listeners.contains_key(&proxy.id) {
+            info!("  代理 #{} 监听器已运行", proxy_id);
+            return Ok(());
+        }
+
+        let proxy_name = proxy.name.clone();
+        let proxy_protocol: ProxyProtocol = proxy.proxy_type.clone().into();
+        let proxy_protocol_str = proxy_protocol.as_str().to_uppercase();
+        let client_id_clone = client_id.clone();
+        let listen_addr = format!("0.0.0.0:{}", proxy.remote_port);
+        let target_addr = format!("{}:{}", proxy.local_ip, proxy.local_port);
+        let connections_clone = connections.clone();
+        let traffic_manager = self.traffic_manager.clone();
+
+        let udp_sessions = self.udp_sessions.clone();
+
+        let handle = tokio::spawn(async move {
+            loop {
+                let result = match proxy_protocol {
+                    ProxyProtocol::Tcp => {
+                        run_tcp_proxy_listener(
+                            proxy_name.clone(),
+                            client_id_clone.clone(),
+                            listen_addr.clone(),
+                            target_addr.clone(),
+                            connections_clone.clone(),
+                            proxy_id,
+                            traffic_manager.clone(),
+                        ).await
+                    }
+                    ProxyProtocol::Udp => {
+                        run_udp_proxy_listener(
+                            proxy_name.clone(),
+                            client_id_clone.clone(),
+                            listen_addr.clone(),
+                            target_addr.clone(),
+                            connections_clone.clone(),
+                            proxy_id,
+                            udp_sessions.clone(),
+                            traffic_manager.clone(),
+                        ).await
+                    }
+                };
+
+                match result {
+                    Ok(_) => {},
+                    Err(e) => {
+                        error!("[{}] 代理监听失败: {}", proxy_name, e);
+                    }
+                }
+                // 如果监听器失败，等待一段时间后重新尝试启动（如果客户端仍在线）
+                tokio::time::sleep(Duration::from_secs(5)).await;
+
+                // 检查客户端是否仍在连接
+                let conns = connections_clone.read().await;
+                if !conns.contains_key(&client_id_clone) {
+                    warn!("[{}] 客户端已离线，停止代理监听", proxy_name);
+                    break;
+                }
+            }
+        });
+
+        client_listeners.insert(proxy_id, handle);
+        info!("  [客户端 {}] 启动{}代理: {} 端口: {}",
+              client_id, proxy_protocol_str, proxy.name, proxy.remote_port);
+
+        Ok(())
+    }
+
+    // 停止单个代理监听器（用于删除或禁用代理时）
+    pub async fn stop_single_proxy(&self, client_id: &str, proxy_id: i64) {
+        let mut listeners = self.listeners.write().await;
+        if let Some(client_listeners) = listeners.get_mut(client_id) {
+            if let Some(handle) = client_listeners.remove(&proxy_id) {
+                handle.abort();
+                info!("  [客户端 {}] 停止代理 #{}", client_id, proxy_id);
+            }
+        }
+    }
 }
 
 impl ProxyServer {
-    pub fn new() -> Result<Self> {
+    pub fn new(traffic_manager: Arc<TrafficManager>) -> Result<Self> {
         let cert = rcgen::generate_simple_self_signed(&["rfrp".to_string()])?;
+        let listener_manager = Arc::new(ProxyListenerManager::new(traffic_manager.clone()));
+        let client_connections = Arc::new(RwLock::new(HashMap::new()));
 
         Ok(Self {
             cert: CertificateDer::from(cert.cert.der().to_vec()),
             key: PrivateKeyDer::from(PrivatePkcs8KeyDer::from(cert.signing_key.serialize_der())),
+            traffic_manager,
+            listener_manager,
+            client_connections,
         })
+    }
+
+    pub fn get_listener_manager(&self) -> Arc<ProxyListenerManager> {
+        self.listener_manager.clone()
+    }
+
+    pub fn get_client_connections(&self) -> Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>> {
+        self.client_connections.clone()
     }
 
     pub async fn run(&self, bind_addr: String) -> Result<()> {
@@ -218,16 +358,6 @@ impl ProxyServer {
         info!("📡 监听地址: {}", bind_addr);
         info!("⏱️  空闲超时: 600秒, 心跳间隔: 5秒");
 
-        let client_connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>> =
-            Arc::new(RwLock::new(HashMap::new()));
-
-        // 初始化流量管理器
-        let traffic_manager = Arc::new(TrafficManager::new());
-        // 启动定期刷新任务
-        traffic_manager.clone().start_periodic_flush();
-
-        let listener_manager = Arc::new(ProxyListenerManager::new(traffic_manager.clone()));
-
         info!("⏳ 等待客户端连接...");
 
         // 接受客户端连接
@@ -239,8 +369,8 @@ impl ProxyServer {
 
                     // 等待客户端发送 token 认证
                     let conn_clone = Arc::new(conn);
-                    let connections = client_connections.clone();
-                    let listener_mgr = listener_manager.clone();
+                    let connections = self.client_connections.clone();
+                    let listener_mgr = self.listener_manager.clone();
 
                     tokio::spawn(async move {
                         debug!("开始处理连接！");
@@ -373,10 +503,10 @@ async fn run_tcp_proxy_listener(
                 let client_id = client_id.clone();
                 let target_addr = target_addr.clone();
                 let proxy_name = proxy_name.clone();
+                let traffic_manager = traffic_manager.clone();
 
-                let traffic_mgr = traffic_manager.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_tcp_to_quic(tcp_stream, addr, target_addr, proxy_name, client_id, connections_clone, proxy_id, traffic_mgr).await {
+                    if let Err(e) = handle_tcp_to_quic(tcp_stream, addr, target_addr, proxy_name, client_id, connections_clone, proxy_id, traffic_manager).await {
                         error!("❌ 处理连接错误: {}", e);
                     }
                 });
@@ -396,8 +526,8 @@ async fn run_udp_proxy_listener(
     target_addr: String,
     connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
     proxy_id: i64,
-    traffic_manager: Arc<TrafficManager>,
     udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
+    traffic_manager: Arc<TrafficManager>,
 ) -> Result<()> {
     let socket = Arc::new(UdpSocket::bind(&listen_addr).await?);
     info!("[{}] 🔌 UDP监听端口: {} -> {}", proxy_name, listen_addr, target_addr);
@@ -437,9 +567,9 @@ async fn run_udp_proxy_listener(
                 let client_id = client_id.clone();
                 let target_addr = target_addr.clone();
                 let proxy_name = proxy_name.clone();
-                let traffic_mgr = traffic_manager.clone();
                 let udp_sessions = udp_sessions.clone();
                 let socket = socket.clone();
+                let traffic_manager = traffic_manager.clone();
 
                 tokio::spawn(async move {
                     if let Err(e) = handle_udp_to_quic(
@@ -451,8 +581,8 @@ async fn run_udp_proxy_listener(
                         client_id,
                         connections_clone,
                         proxy_id,
-                        traffic_mgr,
                         udp_sessions,
+                        traffic_manager,
                     ).await {
                         error!("❌ 处理UDP错误: {}", e);
                     }
@@ -474,8 +604,8 @@ async fn handle_udp_to_quic(
     client_id: String,
     connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
     proxy_id: i64,
-    traffic_manager: Arc<TrafficManager>,
     _udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
+    traffic_manager: Arc<TrafficManager>,
 ) -> Result<()> {
     // 获取客户端连接
     let conn = {

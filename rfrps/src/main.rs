@@ -7,6 +7,7 @@ mod auth;
 mod jwt;
 mod middleware;
 mod traffic;
+mod client_logs;
 
 use crate::migration::init_sqlite;
 use crate::middleware::auth_middleware;
@@ -14,15 +15,23 @@ use anyhow::Result;
 use axum::{
     routing::{get, post, put, Router},
     middleware::from_fn,
+    Extension,
 };
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, NotSet, QueryFilter, Set};
 use sea_orm_migration::MigratorTrait;
 use std::path;
+use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 use chrono::Utc;
+
+// 应用状态，用于在handlers之间共享ProxyServer实例
+#[derive(Clone)]
+pub struct AppState {
+    pub proxy_server: Arc<server::ProxyServer>,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -63,6 +72,17 @@ async fn main() -> Result<()> {
     // 初始化 admin 用户（如果不存在）
     initialize_admin_user().await;
 
+    // 初始化流量管理器
+    let traffic_manager = std::sync::Arc::new(traffic::TrafficManager::new());
+
+    // 创建 ProxyServer 实例
+    let proxy_server = Arc::new(server::ProxyServer::new(traffic_manager.clone()).unwrap());
+
+    // 创建应用状态
+    let app_state = AppState {
+        proxy_server: proxy_server.clone(),
+    };
+
     // 启动 Web 服务器
     tokio::spawn(async move {
         // 构建 Web 应用
@@ -75,6 +95,7 @@ async fn main() -> Result<()> {
             .route("/dashboard/stats/{user_id}", get(handlers::get_user_dashboard_stats))
             .route("/clients", get(handlers::list_clients).post(handlers::create_client))
             .route("/clients/{id}", get(handlers::get_client).delete(handlers::delete_client))
+            .route("/clients/{id}/logs", get(handlers::get_client_logs))
             .route("/proxies", get(handlers::list_proxies).post(handlers::create_proxy))
             .route("/proxies/{id}", put(handlers::update_proxy).delete(handlers::delete_proxy))
             .route("/clients/{id}/proxies", get(handlers::list_proxies_by_client))
@@ -87,7 +108,9 @@ async fn main() -> Result<()> {
             .route("/users/{id}/clients", get(handlers::get_user_clients))
             .route("/users/{id}/clients/{client_id}", post(handlers::assign_client_to_user).delete(handlers::remove_client_from_user))
             // 应用认证中间件
-            .layer(from_fn(auth_middleware));
+            .layer(from_fn(auth_middleware))
+            // 添加应用状态
+            .layer(Extension(app_state));
 
         let app = Router::new()
             // API 路由
@@ -127,8 +150,7 @@ async fn main() -> Result<()> {
         }
 
         let bind_addr = format!("0.0.0.0:{}", cfg.bind_port);
-        let srv = server::ProxyServer::new().unwrap();
-        srv.run(bind_addr).await.unwrap();
+        proxy_server.run(bind_addr).await.unwrap();
     });
 
     tokio::signal::ctrl_c().await?;

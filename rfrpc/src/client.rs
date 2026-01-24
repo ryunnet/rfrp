@@ -7,8 +7,9 @@ use std::time::Duration;
 use tokio::net::{TcpStream, UdpSocket};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{info, error, warn, debug};
+use crate::log_collector::LogCollector;
 
-pub async fn run(server_addr: SocketAddr, token: String) -> Result<()> {
+pub async fn run(server_addr: SocketAddr, token: String, log_collector: LogCollector) -> Result<()> {
     // 创建传输配置
     let mut transport_config = TransportConfig::default();
     transport_config.max_concurrent_uni_streams(0u32.into());
@@ -34,7 +35,7 @@ pub async fn run(server_addr: SocketAddr, token: String) -> Result<()> {
 
     // 连接循环，支持自动重连
     loop {
-        match connect_to_server(&endpoint, server_addr, &token).await {
+        match connect_to_server(&endpoint, server_addr, &token, log_collector.clone()).await {
             Ok(_) => {
                 info!("连接已关闭");
             }
@@ -52,6 +53,7 @@ async fn connect_to_server(
     endpoint: &Endpoint,
     server_addr: SocketAddr,
     token: &str,
+    log_collector: LogCollector,
 ) -> Result<()> {
     // 连接到服务器
     let conn = endpoint
@@ -80,13 +82,36 @@ async fn connect_to_server(
             loop {
                 match conn.accept_bi().await {
                     Ok((quic_send, quic_recv)) => {
-                        info!("📨 收到新的代理请求");
+                        let collector = log_collector.clone();
 
                         tokio::spawn(async move {
-                            if let Err(e) = handle_proxy_stream(quic_send, quic_recv).await {
-                                error!("❌ 处理代理流错误: {}", e);
+                            // 读取消息类型（1字节）
+                            let mut msg_type_buf = [0u8; 1];
+                            let mut recv_clone = quic_recv;
+                            if recv_clone.read_exact(&mut msg_type_buf).await.is_err() {
+                                return;
                             }
-                            info!("🔚 代理流已关闭");
+
+                            match msg_type_buf[0] {
+                                b'p' => {
+                                    // 'p' = proxy request (代理请求)
+                                    info!("📨 收到新的代理请求");
+                                    if let Err(e) = handle_proxy_stream(quic_send, recv_clone).await {
+                                        error!("❌ 处理代理流错误: {}", e);
+                                    }
+                                    info!("🔚 代理流已关闭");
+                                }
+                                b'l' => {
+                                    // 'l' = log request (日志请求)
+                                    info!("📋 收到日志请求");
+                                    if let Err(e) = handle_log_request(quic_send, recv_clone, collector).await {
+                                        error!("❌ 处理日志请求错误: {}", e);
+                                    }
+                                }
+                                _ => {
+                                    warn!("❌ 未知的消息类型: {}", msg_type_buf[0]);
+                                }
+                            }
                         });
                     }
                     Err(e) => {
@@ -269,6 +294,43 @@ async fn handle_udp_proxy(
 
     // 关闭QUIC流
     quic_send.finish()?;
+
+    Ok(())
+}
+
+/// 处理日志请求
+async fn handle_log_request(
+    mut quic_send: quinn::SendStream,
+    mut quic_recv: quinn::RecvStream,
+    log_collector: LogCollector,
+) -> Result<()> {
+    // 读取请求的日志数量（2字节）
+    let mut count_buf = [0u8; 2];
+    quic_recv.read_exact(&mut count_buf).await?;
+    let count = u16::from_be_bytes(count_buf) as usize;
+
+    debug!("📋 请求日志数量: {}", count);
+
+    // 获取日志
+    let logs = if count == 0 {
+        log_collector.get_all_logs()
+    } else {
+        log_collector.get_recent_logs(count)
+    };
+
+    // 将日志序列化为JSON
+    let logs_json = serde_json::to_string(&logs)?;
+    let logs_bytes = logs_json.as_bytes();
+
+    // 发送日志数据长度（4字节）
+    let len = logs_bytes.len() as u32;
+    quic_send.write_all(&len.to_be_bytes()).await?;
+
+    // 发送日志数据
+    quic_send.write_all(logs_bytes).await?;
+    quic_send.finish()?;
+
+    info!("✅ 已发送 {} 条日志 ({} 字节)", logs.len(), logs_bytes.len());
 
     Ok(())
 }

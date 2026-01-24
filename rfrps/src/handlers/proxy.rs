@@ -5,8 +5,9 @@ use axum::{
 };
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, QueryFilter, Set};
 use serde::Deserialize;
+use tracing::info;
 
-use crate::{entity::Proxy, migration::get_connection, middleware::AuthUser};
+use crate::{entity::Proxy, migration::get_connection, middleware::AuthUser, AppState};
 
 use super::ApiResponse;
 
@@ -163,13 +164,14 @@ pub async fn list_proxies_by_client(
 
 pub async fn create_proxy(
     Extension(_auth_user): Extension<Option<AuthUser>>,
+    Extension(app_state): Extension<AppState>,
     Json(req): Json<CreateProxyRequest>,
 ) -> impl IntoResponse {
     let now = chrono::Utc::now().naive_utc();
 
     let new_proxy = crate::entity::proxy::ActiveModel {
         id: NotSet,
-        client_id: Set(req.client_id.to_string()),
+        client_id: Set(req.client_id.clone()),
         name: Set(req.name),
         proxy_type: Set(req.proxy_type),
         local_ip: Set(req.local_ip),
@@ -183,7 +185,30 @@ pub async fn create_proxy(
     };
     let db = get_connection().await;
     match new_proxy.insert(db).await {
-        Ok(proxy) => (StatusCode::OK, ApiResponse::success(proxy)),
+        Ok(proxy) => {
+            info!("✅ 代理已创建: {} (ID: {}, 客户端: {})", proxy.name, proxy.id, proxy.client_id);
+
+            // 动态启动代理监听器（如果客户端在线）
+            let listener_manager = app_state.proxy_server.get_listener_manager();
+            let connections = app_state.proxy_server.get_client_connections();
+            let proxy_id = proxy.id;
+            let proxy_name = proxy.name.clone();
+            let client_id = req.client_id.clone();
+
+            tokio::spawn(async move {
+                if let Err(e) = listener_manager.start_single_proxy(
+                    client_id,
+                    proxy_id,
+                    connections,
+                ).await {
+                    tracing::error!("❌ 启动代理监听器失败: {}", e);
+                } else {
+                    info!("🚀 代理监听器已动态启动: {}", proxy_name);
+                }
+            });
+
+            (StatusCode::OK, ApiResponse::success(proxy))
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             ApiResponse::<crate::entity::proxy::Model>::error(format!(
@@ -197,11 +222,14 @@ pub async fn create_proxy(
 pub async fn update_proxy(
     Path(id): Path<i64>,
     Extension(_auth_user): Extension<Option<AuthUser>>,
+    Extension(app_state): Extension<AppState>,
     Json(req): Json<UpdateProxyRequest>,
 ) -> impl IntoResponse {
     let db = get_connection().await;
     match Proxy::find_by_id(id).one(db).await {
         Ok(Some(proxy)) => {
+            let old_enabled = proxy.enabled;
+            let client_id = proxy.client_id.clone();
             let mut proxy: crate::entity::proxy::ActiveModel = proxy.into();
 
             if let Some(name) = req.name {
@@ -219,13 +247,50 @@ pub async fn update_proxy(
             if let Some(remote_port) = req.remote_port {
                 proxy.remote_port = Set(remote_port);
             }
-            if let Some(enabled) = req.enabled {
+
+            let enabled_changed = if let Some(enabled) = req.enabled {
                 proxy.enabled = Set(enabled);
-            }
+                old_enabled != enabled
+            } else {
+                false
+            };
+
             proxy.updated_at = Set(chrono::Utc::now().naive_utc());
 
             match proxy.update(&*db).await {
-                Ok(updated) => (StatusCode::OK, ApiResponse::success(updated)),
+                Ok(updated) => {
+                    info!("✅ 代理已更新: {} (ID: {})", updated.name, updated.id);
+
+                    // 如果启用状态发生变化，动态启动或停止监听器
+                    if enabled_changed {
+                        let listener_manager = app_state.proxy_server.get_listener_manager();
+                        let connections = app_state.proxy_server.get_client_connections();
+                        let proxy_id = updated.id;
+                        let proxy_name = updated.name.clone();
+                        let is_enabled = updated.enabled;
+
+                        tokio::spawn(async move {
+                            if is_enabled {
+                                // 启用代理 - 启动监听器
+                                if let Err(e) = listener_manager.start_single_proxy(
+                                    client_id,
+                                    proxy_id,
+                                    connections,
+                                ).await {
+                                    tracing::error!("❌ 启动代理监听器失败: {}", e);
+                                } else {
+                                    info!("🚀 代理监听器已启动: {}", proxy_name);
+                                }
+                            } else {
+                                // 禁用代理 - 停止监听器
+                                listener_manager.stop_single_proxy(&client_id, proxy_id).await;
+                                info!("⏸️  代理监听器已停止: {}", proxy_name);
+                            }
+                        });
+                    }
+
+                    (StatusCode::OK, ApiResponse::success(updated))
+                }
                 Err(e) => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ApiResponse::<crate::entity::proxy::Model>::error(format!(
@@ -252,10 +317,44 @@ pub async fn update_proxy(
 pub async fn delete_proxy(
     Path(id): Path<i64>,
     Extension(_auth_user): Extension<Option<AuthUser>>,
+    Extension(app_state): Extension<AppState>,
 ) -> impl IntoResponse {
     let db = get_connection().await;
+
+    // 先获取代理信息，用于停止监听器
+    let proxy = match Proxy::find_by_id(id).one(db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                ApiResponse::<&str>::error("Proxy not found".to_string()),
+            )
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ApiResponse::<&str>::error(format!("Failed to get proxy: {}", e)),
+            )
+        }
+    };
+
+    let client_id = proxy.client_id.clone();
+    let proxy_name = proxy.name.clone();
+
+    // 删除代理
     match Proxy::delete_by_id(id).exec(db).await {
-        Ok(_) => (StatusCode::OK, ApiResponse::success("Proxy deleted successfully")),
+        Ok(_) => {
+            info!("✅ 代理已删除: {} (ID: {})", proxy_name, id);
+
+            // 停止代理监听器
+            let listener_manager = app_state.proxy_server.get_listener_manager();
+            tokio::spawn(async move {
+                listener_manager.stop_single_proxy(&client_id, id).await;
+                info!("⏹️  代理监听器已停止: {}", proxy_name);
+            });
+
+            (StatusCode::OK, ApiResponse::success("Proxy deleted successfully"))
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             ApiResponse::<&str>::error(format!("Failed to delete proxy: {}", e)),

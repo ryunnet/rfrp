@@ -1,0 +1,11 @@
+# Docker相关文件
+target/
+dist/
+
+# 临时文件
+*.log
+*.tmp
+
+# IDE配置
+.vscode/
+.idea/

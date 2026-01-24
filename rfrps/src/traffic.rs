@@ -2,33 +2,142 @@ use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, Set};
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::{debug, error, info};
+use tokio::sync::mpsc;
+use std::time::Duration;
 
 use crate::entity::{proxy, client, user, traffic_daily, Proxy, Client, User, TrafficDaily};
 use crate::migration::get_connection;
 
+struct TrafficEvent {
+    proxy_id: i64,
+    client_id: i64,
+    user_id: Option<i64>,
+    bytes_sent: i64,
+    bytes_received: i64,
+}
+
 /// 流量统计管理器
+#[derive(Clone)]
 pub struct TrafficManager {
-    // proxy_id -> (bytes_sent, bytes_received)
-    proxy_traffic: Arc<RwLock<HashMap<i64, (i64, i64)>>>,
-    // client_id -> (bytes_sent, bytes_received)
-    client_traffic: Arc<RwLock<HashMap<i64, (i64, i64)>>>,
-    // user_id -> (bytes_sent, bytes_received)
-    user_traffic: Arc<RwLock<HashMap<i64, (i64, i64)>>>,
+    sender: mpsc::Sender<TrafficEvent>,
 }
 
 impl TrafficManager {
     pub fn new() -> Self {
-        Self {
-            proxy_traffic: Arc::new(RwLock::new(HashMap::new())),
-            client_traffic: Arc::new(RwLock::new(HashMap::new())),
-            user_traffic: Arc::new(RwLock::new(HashMap::new())),
+        let (tx, mut rx) = mpsc::channel::<TrafficEvent>(10000);
+
+        tokio::spawn(async move {
+            let mut buffer: HashMap<(i64, i64, Option<i64>), (i64, i64)> = HashMap::new();
+            let mut interval = tokio::time::interval(Duration::from_secs(5));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+            loop {
+                tokio::select! {
+                    Some(event) = rx.recv() => {
+                        let key = (event.proxy_id, event.client_id, event.user_id);
+                        let entry = buffer.entry(key).or_insert((0, 0));
+                        entry.0 += event.bytes_sent;
+                        entry.1 += event.bytes_received;
+
+                        // 防止内存积压，如果积压太多则立即刷新
+                        if buffer.len() > 1000 {
+                            Self::flush_buffer(&mut buffer).await;
+                        }
+                    }
+                    _ = interval.tick() => {
+                        if !buffer.is_empty() {
+                            Self::flush_buffer(&mut buffer).await;
+                        }
+                    }
+                }
+            }
+        });
+
+        Self { sender: tx }
+    }
+
+    async fn flush_buffer(buffer: &mut HashMap<(i64, i64, Option<i64>), (i64, i64)>) {
+        let db = get_connection().await;
+        let today = Utc::now().format("%Y-%m-%d").to_string();
+        let now = Utc::now().naive_utc();
+
+        let count = buffer.len();
+        debug!("🔄 正在批量写入流量统计数据: {} 条聚合记录", count);
+
+        for ((proxy_id, client_id, user_id), (bytes_sent, bytes_received)) in buffer.drain() {
+            if bytes_sent == 0 && bytes_received == 0 {
+                continue;
+            }
+
+            // 更新代理流量
+            if let Ok(Some(proxy)) = Proxy::find_by_id(proxy_id).one(db).await {
+                let mut proxy_active: proxy::ActiveModel = proxy.into();
+                proxy_active.total_bytes_sent = Set(proxy_active.total_bytes_sent.unwrap() + bytes_sent);
+                proxy_active.total_bytes_received = Set(proxy_active.total_bytes_received.unwrap() + bytes_received);
+                proxy_active.updated_at = Set(now);
+                if let Err(e) = proxy_active.update(db).await {
+                    error!("更新代理流量失败: {}", e);
+                }
+
+                // 更新每日流量统计
+                if let Ok(existing) = TrafficDaily::find()
+                    .filter(traffic_daily::Column::ProxyId.eq(proxy_id))
+                    .filter(traffic_daily::Column::Date.eq(&today))
+                    .one(db)
+                    .await
+                {
+                    let mut daily_active: traffic_daily::ActiveModel = existing.unwrap().into();
+                    daily_active.bytes_sent = Set(daily_active.bytes_sent.unwrap() + bytes_sent);
+                    daily_active.bytes_received = Set(daily_active.bytes_received.unwrap() + bytes_received);
+                    daily_active.updated_at = Set(now);
+                    if let Err(e) = daily_active.update(db).await {
+                        error!("更新每日流量统计失败: {}", e);
+                    }
+                } else {
+                    let daily = traffic_daily::ActiveModel {
+                        id: Set(0),
+                        proxy_id: Set(proxy_id),
+                        client_id: Set(client_id),
+                        bytes_sent: Set(bytes_sent),
+                        bytes_received: Set(bytes_received),
+                        date: Set(today.clone()),
+                        created_at: Set(now),
+                        updated_at: Set(now),
+                    };
+                    if let Err(e) = daily.insert(db).await {
+                        error!("插入每日流量统计失败: {}", e);
+                    }
+                }
+            }
+
+            // 更新客户端流量
+            if let Ok(Some(client)) = Client::find_by_id(client_id).one(db).await {
+                let mut client_active: client::ActiveModel = client.into();
+                client_active.total_bytes_sent = Set(client_active.total_bytes_sent.unwrap() + bytes_sent);
+                client_active.total_bytes_received = Set(client_active.total_bytes_received.unwrap() + bytes_received);
+                client_active.updated_at = Set(now);
+                if let Err(e) = client_active.update(db).await {
+                    error!("更新客户端流量失败: {}", e);
+                }
+            }
+
+            // 更新用户流量
+            if let Some(uid) = user_id {
+                if let Ok(Some(user)) = User::find_by_id(uid).one(db).await {
+                    let mut user_active: user::ActiveModel = user.into();
+                    user_active.total_bytes_sent = Set(user_active.total_bytes_sent.unwrap() + bytes_sent);
+                    user_active.total_bytes_received = Set(user_active.total_bytes_received.unwrap() + bytes_received);
+                    user_active.updated_at = Set(now);
+                    if let Err(e) = user_active.update(db).await {
+                        error!("更新用户流量失败: {}", e);
+                    }
+                }
+            }
         }
     }
 
-    /// 记录流量统计
+    /// 实时记录流量统计到数据库 (异步非阻塞)
     pub async fn record_traffic(
         &self,
         proxy_id: i64,
@@ -37,142 +146,31 @@ impl TrafficManager {
         bytes_sent: i64,
         bytes_received: i64,
     ) {
-        // 更新代理流量
-        let mut proxy_traffic = self.proxy_traffic.write().await;
-        let entry = proxy_traffic.entry(proxy_id).or_insert((0, 0));
-        entry.0 += bytes_sent;
-        entry.1 += bytes_received;
-
-        // 更新客户端流量
-        let mut client_traffic = self.client_traffic.write().await;
-        let entry = client_traffic.entry(client_id).or_insert((0, 0));
-        entry.0 += bytes_sent;
-        entry.1 += bytes_received;
-
-        // 更新用户流量
-        if let Some(uid) = user_id {
-            let mut user_traffic = self.user_traffic.write().await;
-            let entry = user_traffic.entry(uid).or_insert((0, 0));
-            entry.0 += bytes_sent;
-            entry.1 += bytes_received;
+        if bytes_sent == 0 && bytes_received == 0 {
+            return;
         }
 
-        debug!(
-            "记录流量: proxy={}, client={}, sent={}, received={}",
-            proxy_id, client_id, bytes_sent, bytes_received
-        );
+        let event = TrafficEvent {
+            proxy_id,
+            client_id,
+            user_id,
+            bytes_sent,
+            bytes_received,
+        };
+
+        if let Err(e) = self.sender.send(event).await {
+            error!("发送流量统计事件失败: {}", e);
+        }
     }
 
-    /// 刷新统计数据到数据库
+    /// 不再需要定时刷新，保留此方法用于兼容
     pub async fn flush_to_database(&self) -> Result<()> {
-        let db = get_connection().await;
-        let today = Utc::now().format("%Y-%m-%d").to_string();
-        let now = Utc::now().naive_utc();
-
-        // 刷新代理流量
-        {
-            let mut proxy_traffic = self.proxy_traffic.write().await;
-            for (proxy_id, (sent, received)) in proxy_traffic.iter() {
-                if *sent == 0 && *received == 0 {
-                    continue;
-                }
-
-                // 获取代理信息（只查询一次）
-                if let Some(proxy) = Proxy::find_by_id(*proxy_id).one(db).await? {
-                    let client_id = proxy.client_id.parse::<i64>().unwrap_or(0);
-
-                    // 更新代理总流量
-                    let mut proxy_active: proxy::ActiveModel = proxy.into();
-                    proxy_active.total_bytes_sent = Set(proxy_active.total_bytes_sent.unwrap() + sent);
-                    proxy_active.total_bytes_received = Set(proxy_active.total_bytes_received.unwrap() + received);
-                    proxy_active.updated_at = Set(now);
-                    proxy_active.update(db).await?;
-
-                    // 更新每日流量统计
-                    if let Some(existing) = TrafficDaily::find()
-                        .filter(traffic_daily::Column::ProxyId.eq(*proxy_id))
-                        .filter(traffic_daily::Column::Date.eq(&today))
-                        .one(db)
-                        .await?
-                    {
-                        let sent_val = existing.bytes_sent + sent;
-                        let received_val = existing.bytes_received + received;
-                        let mut daily_active: traffic_daily::ActiveModel = existing.into();
-                        daily_active.bytes_sent = Set(sent_val);
-                        daily_active.bytes_received = Set(received_val);
-                        daily_active.updated_at = Set(now);
-                        daily_active.update(db).await?;
-                    } else {
-                        let daily = traffic_daily::ActiveModel {
-                            id: Set(0),
-                            proxy_id: Set(*proxy_id),
-                            client_id: Set(client_id),
-                            bytes_sent: Set(*sent),
-                            bytes_received: Set(*received),
-                            date: Set(today.clone()),
-                            created_at: Set(now),
-                            updated_at: Set(now),
-                        };
-                        daily.insert(db).await?;
-                    }
-                }
-            }
-            proxy_traffic.clear();
-        }
-
-        // 刷新客户端流量
-        {
-            let mut client_traffic = self.client_traffic.write().await;
-            for (client_id, (sent, received)) in client_traffic.iter() {
-                if *sent == 0 && *received == 0 {
-                    continue;
-                }
-
-                if let Some(client) = Client::find_by_id(*client_id).one(db).await? {
-                    let mut client_active: client::ActiveModel = client.into();
-                    client_active.total_bytes_sent = Set(client_active.total_bytes_sent.unwrap() + sent);
-                    client_active.total_bytes_received = Set(client_active.total_bytes_received.unwrap() + received);
-                    client_active.updated_at = Set(now);
-                    client_active.update(db).await?;
-                }
-            }
-            client_traffic.clear();
-        }
-
-        // 刷新用户流量
-        {
-            let mut user_traffic = self.user_traffic.write().await;
-            for (user_id, (sent, received)) in user_traffic.iter() {
-                if *sent == 0 && *received == 0 {
-                    continue;
-                }
-
-                if let Some(user) = User::find_by_id(*user_id).one(db).await? {
-                    let mut user_active: user::ActiveModel = user.into();
-                    user_active.total_bytes_sent = Set(user_active.total_bytes_sent.unwrap() + sent);
-                    user_active.total_bytes_received = Set(user_active.total_bytes_received.unwrap() + received);
-                    user_active.updated_at = Set(now);
-                    user_active.update(db).await?;
-                }
-            }
-            user_traffic.clear();
-        }
-
-        info!("流量统计数据已刷新到数据库");
         Ok(())
     }
 
-    /// 启动定期刷新任务
-    pub fn start_periodic_flush(self: Arc<Self>) -> tokio::task::JoinHandle<()> {
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
-            loop {
-                interval.tick().await;
-                if let Err(e) = self.flush_to_database().await {
-                    error!("刷新流量统计数据失败: {}", e);
-                }
-            }
-        })
+    /// 不再需要定时刷新，保留此方法用于兼容
+    pub fn start_periodic_flush(self: std::sync::Arc<Self>) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async {})
     }
 }
 
