@@ -28,7 +28,7 @@ WORKDIR /build
 COPY . .
 
 # 复制前端构建产物到dist目录
-COPY --from=web-builder /build/dashboard/dist ./dist
+COPY --from=web-builder /build/dist ./dist
 
 # 构建rfrps
 RUN cargo build --release -p rfrps
