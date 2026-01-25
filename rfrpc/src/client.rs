@@ -14,7 +14,7 @@ pub async fn run(server_addr: SocketAddr, token: String, log_collector: LogColle
     let mut transport_config = TransportConfig::default();
     transport_config.max_concurrent_uni_streams(0u32.into());
     transport_config.keep_alive_interval(Some(Duration::from_secs(5)));
-    transport_config.max_idle_timeout(Some(Duration::from_secs(600).try_into()?));
+    transport_config.max_idle_timeout(Some(Duration::from_secs(60).try_into()?));
 
     // 创建客户端配置（跳过证书验证）
     let crypto = rustls::ClientConfig::builder()
@@ -31,7 +31,7 @@ pub async fn run(server_addr: SocketAddr, token: String, log_collector: LogColle
 
     info!("🔧 QUIC客户端配置完成");
     info!("🌐 连接到服务器: {}", server_addr);
-    info!("⏱️  空闲超时: 600秒, 心跳间隔: 5秒");
+    info!("⏱️  空闲超时: 60秒, 心跳间隔: 5秒");
 
     // 连接循环，支持自动重连
     loop {

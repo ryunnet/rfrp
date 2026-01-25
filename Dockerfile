@@ -50,8 +50,8 @@ COPY --from=rust-builder /build/target/release/rfrpc /app/
 COPY --from=rust-builder /build/dist /app/dist
 
 # 复制配置文件模板
-COPY rfrps.toml /app/rfrps.toml.example
-COPY rfrpc.toml /app/rfrpc.toml.example
+COPY rfrps.toml /app/rfrps.toml
+COPY rfrpc.toml /app/rfrpc.toml
 
 # 暴露端口
 EXPOSE 7000 3000

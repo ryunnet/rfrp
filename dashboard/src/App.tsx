@@ -8,6 +8,7 @@ import Clients from './pages/Clients';
 import Proxies from './pages/Proxies';
 import Users from './pages/Users';
 import Traffic from './pages/Traffic';
+import Settings from './pages/Settings';
 
 function App() {
   return (
@@ -30,6 +31,14 @@ function App() {
                       element={
                         <ProtectedRoute requireAdmin>
                           <Users />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/settings"
+                      element={
+                        <ProtectedRoute requireAdmin>
+                          <Settings />
                         </ProtectedRoute>
                       }
                     />

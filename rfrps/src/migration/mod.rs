@@ -5,6 +5,8 @@ use std::{fs, path};
 use tokio::sync::OnceCell;
 
 mod m20250119_000001_init;
+mod m20250126_000001_add_traffic_limit;
+mod m20250126_000002_create_system_config;
 
 pub struct Migrator;
 
@@ -13,6 +15,8 @@ impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![
             Box::new(m20250119_000001_init::Migration),
+            Box::new(m20250126_000001_add_traffic_limit::Migration),
+            Box::new(m20250126_000002_create_system_config::Migration),
         ]
     }
 }

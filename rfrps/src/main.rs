@@ -8,6 +8,8 @@ mod jwt;
 mod middleware;
 mod traffic;
 mod client_logs;
+mod traffic_limiter;
+mod config_manager;
 
 use crate::migration::init_sqlite;
 use crate::middleware::auth_middleware;
@@ -31,6 +33,7 @@ use chrono::Utc;
 #[derive(Clone)]
 pub struct AppState {
     pub proxy_server: Arc<server::ProxyServer>,
+    pub config_manager: Arc<config_manager::ConfigManager>,
 }
 
 #[tokio::main]
@@ -72,15 +75,22 @@ async fn main() -> Result<()> {
     // 初始化 admin 用户（如果不存在）
     initialize_admin_user().await;
 
+    // 初始化配置管理器
+    let config_manager = Arc::new(config_manager::ConfigManager::new());
+    if let Err(e) = config_manager.load_from_db().await {
+        tracing::error!("加载系统配置失败: {}", e);
+    }
+
     // 初始化流量管理器
     let traffic_manager = std::sync::Arc::new(traffic::TrafficManager::new());
 
     // 创建 ProxyServer 实例
-    let proxy_server = Arc::new(server::ProxyServer::new(traffic_manager.clone()).unwrap());
+    let proxy_server = Arc::new(server::ProxyServer::new(traffic_manager.clone(), config_manager.clone()).unwrap());
 
     // 创建应用状态
     let app_state = AppState {
         proxy_server: proxy_server.clone(),
+        config_manager: config_manager.clone(),
     };
 
     // 启动 Web 服务器
@@ -102,6 +112,10 @@ async fn main() -> Result<()> {
             // 流量统计路由
             .route("/traffic/overview", get(handlers::get_traffic_overview_handler))
             .route("/traffic/users/{id}", get(handlers::get_user_traffic_handler))
+            // 系统配置路由
+            .route("/system/configs", get(handlers::get_configs))
+            .route("/system/configs/update", post(handlers::update_config))
+            .route("/system/configs/batch", post(handlers::batch_update_configs))
             // 管理员路由（需要管理员权限）
             .route("/users", get(handlers::list_users).post(handlers::create_user))
             .route("/users/{id}", put(handlers::update_user).delete(handlers::delete_user))
@@ -191,6 +205,11 @@ async fn initialize_admin_user() {
                 is_admin: Set(true),
                 total_bytes_sent: Set(0),
                 total_bytes_received: Set(0),
+                upload_limit_gb: Set(None),
+                download_limit_gb: Set(None),
+                traffic_reset_cycle: Set("none".to_string()),
+                last_reset_at: Set(None),
+                is_traffic_exceeded: Set(false),
                 created_at: Set(now),
                 updated_at: Set(now),
             };

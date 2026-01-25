@@ -13,6 +13,16 @@ pub struct Model {
     pub total_bytes_sent: i64,
     #[serde(rename = "totalBytesReceived")]
     pub total_bytes_received: i64,
+    #[serde(rename = "uploadLimitGb")]
+    pub upload_limit_gb: Option<f64>,
+    #[serde(rename = "downloadLimitGb")]
+    pub download_limit_gb: Option<f64>,
+    #[serde(rename = "trafficResetCycle")]
+    pub traffic_reset_cycle: String,
+    #[serde(rename = "lastResetAt")]
+    pub last_reset_at: Option<DateTime>,
+    #[serde(rename = "isTrafficExceeded")]
+    pub is_traffic_exceeded: bool,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

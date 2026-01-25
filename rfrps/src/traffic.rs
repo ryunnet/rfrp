@@ -125,12 +125,68 @@ impl TrafficManager {
             // 更新用户流量
             if let Some(uid) = user_id {
                 if let Ok(Some(user)) = User::find_by_id(uid).one(db).await {
-                    let mut user_active: user::ActiveModel = user.into();
-                    user_active.total_bytes_sent = Set(user_active.total_bytes_sent.unwrap() + bytes_sent);
-                    user_active.total_bytes_received = Set(user_active.total_bytes_received.unwrap() + bytes_received);
+                    // 检查是否需要重置流量
+                    let needs_reset = crate::traffic_limiter::should_reset_traffic(&user);
+
+                    let mut user_active: user::ActiveModel = user.clone().into();
+
+                    if needs_reset {
+                        // 重置流量统计
+                        user_active.total_bytes_sent = Set(bytes_sent);
+                        user_active.total_bytes_received = Set(bytes_received);
+                        user_active.is_traffic_exceeded = Set(false);
+                        user_active.last_reset_at = Set(Some(now));
+                        info!("🔄 用户 #{} ({}) 流量已自动重置", uid, user.username);
+                    } else {
+                        // 累加流量
+                        user_active.total_bytes_sent = Set(user_active.total_bytes_sent.unwrap() + bytes_sent);
+                        user_active.total_bytes_received = Set(user_active.total_bytes_received.unwrap() + bytes_received);
+                    }
+
                     user_active.updated_at = Set(now);
+
                     if let Err(e) = user_active.update(db).await {
                         error!("更新用户流量失败: {}", e);
+                    } else {
+                        // 更新成功后，检查是否超限
+                        let new_sent = if needs_reset { bytes_sent } else { user.total_bytes_sent + bytes_sent };
+                        let new_received = if needs_reset { bytes_received } else { user.total_bytes_received + bytes_received };
+
+                        // 检查上传流量限制
+                        if let Some(upload_limit_gb) = user.upload_limit_gb {
+                            let upload_limit_bytes = crate::traffic_limiter::gb_to_bytes(upload_limit_gb);
+                            if new_sent >= upload_limit_bytes && !user.is_traffic_exceeded {
+                                // 标记为超限
+                                if let Ok(Some(u)) = User::find_by_id(uid).one(db).await {
+                                    let mut u_active: user::ActiveModel = u.into();
+                                    u_active.is_traffic_exceeded = Set(true);
+                                    u_active.updated_at = Set(now);
+                                    let _ = u_active.update(db).await;
+                                    error!("⚠️ 用户 #{} ({}) 上传流量超限: {:.2} GB / {:.2} GB",
+                                        uid, user.username,
+                                        crate::traffic_limiter::bytes_to_gb(new_sent),
+                                        upload_limit_gb);
+                                }
+                            }
+                        }
+
+                        // 检查下载流量限制
+                        if let Some(download_limit_gb) = user.download_limit_gb {
+                            let download_limit_bytes = crate::traffic_limiter::gb_to_bytes(download_limit_gb);
+                            if new_received >= download_limit_bytes && !user.is_traffic_exceeded {
+                                // 标记为超限
+                                if let Ok(Some(u)) = User::find_by_id(uid).one(db).await {
+                                    let mut u_active: user::ActiveModel = u.into();
+                                    u_active.is_traffic_exceeded = Set(true);
+                                    u_active.updated_at = Set(now);
+                                    let _ = u_active.update(db).await;
+                                    error!("⚠️ 用户 #{} ({}) 下载流量超限: {:.2} GB / {:.2} GB",
+                                        uid, user.username,
+                                        crate::traffic_limiter::bytes_to_gb(new_received),
+                                        download_limit_gb);
+                                }
+                            }
+                        }
                     }
                 }
             }

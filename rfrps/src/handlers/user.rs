@@ -31,6 +31,9 @@ pub struct CreateUserRequest {
     pub username: String,
     pub password: Option<String>,
     pub is_admin: Option<bool>,
+    pub upload_limit_gb: Option<f64>,
+    pub download_limit_gb: Option<f64>,
+    pub traffic_reset_cycle: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -38,6 +41,10 @@ pub struct UpdateUserRequest {
     pub username: Option<String>,
     pub password: Option<String>,
     pub is_admin: Option<bool>,
+    pub upload_limit_gb: Option<f64>,
+    pub download_limit_gb: Option<f64>,
+    pub traffic_reset_cycle: Option<String>,
+    pub is_traffic_exceeded: Option<bool>,
 }
 
 /// GET /api/users - Get all users (admin only)
@@ -133,6 +140,11 @@ pub async fn create_user(
         is_admin: Set(req.is_admin.unwrap_or(false)),
         total_bytes_sent: Set(0),
         total_bytes_received: Set(0),
+        upload_limit_gb: Set(req.upload_limit_gb),
+        download_limit_gb: Set(req.download_limit_gb),
+        traffic_reset_cycle: Set(req.traffic_reset_cycle.unwrap_or_else(|| "none".to_string())),
+        last_reset_at: Set(None),
+        is_traffic_exceeded: Set(false),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -245,6 +257,20 @@ pub async fn update_user(
     // Update admin status if provided
     if let Some(is_admin) = req.is_admin {
         user.is_admin = Set(is_admin);
+    }
+
+    // Update traffic limits if provided
+    if let Some(upload_limit) = req.upload_limit_gb {
+        user.upload_limit_gb = Set(Some(upload_limit));
+    }
+    if let Some(download_limit) = req.download_limit_gb {
+        user.download_limit_gb = Set(Some(download_limit));
+    }
+    if let Some(cycle) = req.traffic_reset_cycle {
+        user.traffic_reset_cycle = Set(cycle);
+    }
+    if let Some(exceeded) = req.is_traffic_exceeded {
+        user.is_traffic_exceeded = Set(exceeded);
     }
 
     user.updated_at = Set(Utc::now().naive_utc());

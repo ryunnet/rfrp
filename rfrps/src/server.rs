@@ -13,9 +13,10 @@ use tokio::task::JoinHandle;
 use tracing::{info, warn, error, debug};
 use serde::{Serialize, Deserialize};
 
-use crate::entity::{Proxy, Client, client, user_client, UserClient};
+use crate::entity::{Proxy, Client, User, client, user_client, UserClient};
 use crate::migration::get_connection;
 use crate::traffic::TrafficManager;
+use crate::config_manager::ConfigManager;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -64,6 +65,7 @@ pub struct ProxyServer {
     traffic_manager: Arc<TrafficManager>,
     listener_manager: Arc<ProxyListenerManager>,
     client_connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+    config_manager: Arc<ConfigManager>,
 }
 
 // 代理监听器管理器
@@ -181,7 +183,7 @@ impl ProxyListenerManager {
     }
 
     // 停止客户端的所有代理监听器
-    async fn stop_client_proxies(&self, client_id: &str) {
+    pub async fn stop_client_proxies(&self, client_id: &str) {
         let mut listeners = self.listeners.write().await;
         if let Some(client_listeners) = listeners.remove(client_id) {
             info!("  [客户端 {}] 停止 {} 个代理监听器", client_id, client_listeners.len());
@@ -318,7 +320,7 @@ impl ProxyListenerManager {
 }
 
 impl ProxyServer {
-    pub fn new(traffic_manager: Arc<TrafficManager>) -> Result<Self> {
+    pub fn new(traffic_manager: Arc<TrafficManager>, config_manager: Arc<ConfigManager>) -> Result<Self> {
         let cert = rcgen::generate_simple_self_signed(&["rfrp".to_string()])?;
         let listener_manager = Arc::new(ProxyListenerManager::new(traffic_manager.clone()));
         let client_connections = Arc::new(RwLock::new(HashMap::new()));
@@ -329,6 +331,7 @@ impl ProxyServer {
             traffic_manager,
             listener_manager,
             client_connections,
+            config_manager,
         })
     }
 
@@ -341,10 +344,15 @@ impl ProxyServer {
     }
 
     pub async fn run(&self, bind_addr: String) -> Result<()> {
+        // 从配置管理器获取配置
+        let idle_timeout = self.config_manager.get_number("idle_timeout", 60).await as u64;
+        let keep_alive_interval = self.config_manager.get_number("keep_alive_interval", 5).await as u64;
+        let max_streams = self.config_manager.get_number("max_concurrent_streams", 100).await as u32;
+
         let mut transport_config = TransportConfig::default();
-        transport_config.max_concurrent_uni_streams(VarInt::from_u32(100));
-        transport_config.keep_alive_interval(Some(Duration::from_secs(5)));
-        transport_config.max_idle_timeout(Some(Duration::from_secs(600).try_into()?));
+        transport_config.max_concurrent_uni_streams(VarInt::from_u32(max_streams));
+        transport_config.keep_alive_interval(Some(Duration::from_secs(keep_alive_interval)));
+        transport_config.max_idle_timeout(Some(Duration::from_secs(idle_timeout).try_into()?));
 
         let mut server_config = ServerConfig::with_single_cert(
             vec![self.cert.clone()],
@@ -356,7 +364,8 @@ impl ProxyServer {
 
         info!("🚀 QUIC服务器启动成功!");
         info!("📡 监听地址: {}", bind_addr);
-        info!("⏱️  空闲超时: 600秒, 心跳间隔: 5秒");
+        info!("⏱️  空闲超时: {}秒, 心跳间隔: {}秒", idle_timeout, keep_alive_interval);
+        info!("🔢 最大并发流: {}", max_streams);
 
         info!("⏳ 等待客户端连接...");
 
@@ -371,10 +380,11 @@ impl ProxyServer {
                     let conn_clone = Arc::new(conn);
                     let connections = self.client_connections.clone();
                     let listener_mgr = self.listener_manager.clone();
+                    let config_mgr = self.config_manager.clone();
 
                     tokio::spawn(async move {
                         debug!("开始处理连接！");
-                        if let Err(e) = handle_client_auth(conn_clone, connections, listener_mgr).await {
+                        if let Err(e) = handle_client_auth(conn_clone, connections, listener_mgr, config_mgr).await {
                             error!("❌ 客户端认证失败: {}", e);
                         }
                     });
@@ -393,6 +403,7 @@ async fn handle_client_auth(
     conn: Arc<quinn::Connection>,
     connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
     listener_manager: Arc<ProxyListenerManager>,
+    config_manager: Arc<ConfigManager>,
 ) -> Result<()> {
     // 等待客户端发送 token (格式: 2字节长度 + 内容)
     let mut recv_stream = match conn.accept_uni().await {
@@ -427,6 +438,31 @@ async fn handle_client_auth(
     let client_id = client.id;
     let client_name = client.name.clone();
 
+    // 检查该客户端绑定的用户是否有流量超限
+    let user_clients = match UserClient::find()
+        .filter(user_client::Column::ClientId.eq(client_id))
+        .all(db)
+        .await
+    {
+        Ok(ucs) => ucs,
+        Err(e) => {
+            error!("❌ 查询用户客户端关联失败: {}", e);
+            return Ok(());
+        }
+    };
+
+    // 检查所有关联用户的流量状态
+    for uc in user_clients {
+        if let Ok(Some(user)) = User::find_by_id(uc.user_id).one(db).await {
+            // 如果用户已标记为流量超限，拒绝连接
+            if user.is_traffic_exceeded {
+                error!("❌ 客户端 {} 认证失败: 用户 {} (#{}) 流量已超限",
+                    client_name, user.username, user.id);
+                return Ok(());
+            }
+        }
+    }
+
     // 更新客户端为在线状态
     let mut client_active: client::ActiveModel = client.into();
     client_active.is_online = Set(true);
@@ -444,6 +480,45 @@ async fn handle_client_auth(
     let mut conns = connections.write().await;
     conns.insert(format!("{}", client_id), conn.clone());
     drop(conns);
+
+    // 启动连接健康检查任务
+    let conn_health_check = conn.clone();
+    let client_id_health = client_id;
+    let client_name_health = client_name.clone();
+    let connections_health = connections.clone();
+    let listener_manager_health = listener_manager.clone();
+
+    // 从配置获取健康检查间隔
+    let health_check_interval = config_manager.get_number("health_check_interval", 15).await as u64;
+
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(health_check_interval));
+        loop {
+            interval.tick().await;
+
+            // 检查连接是否仍然有效
+            if conn_health_check.close_reason().is_some() {
+                warn!("⚠️  检测到客户端连接已关闭: {}", client_name_health);
+
+                // 清理连接
+                let mut conns = connections_health.write().await;
+                conns.remove(&format!("{}", client_id_health));
+                drop(conns);
+
+                // 停止该客户端的所有代理监听器
+                listener_manager_health.stop_client_proxies(&format!("{}", client_id_health)).await;
+
+                // 更新客户端为离线状态
+                let db = get_connection().await;
+                if let Some(client) = Client::find_by_id(client_id_health).one(db).await.unwrap() {
+                    let mut client_active: client::ActiveModel = client.into();
+                    client_active.is_online = Set(false);
+                    let _ = client_active.update(db).await;
+                }
+                break;
+            }
+        }
+    });
 
     // 循环接受代理流请求
     loop {

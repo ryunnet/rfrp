@@ -18,6 +18,7 @@ export default function Layout({ children }: LayoutProps) {
 
   if (isAdmin) {
     navigation.push({ name: '用户管理', href: '/users', icon: '👥' });
+    navigation.push({ name: '系统设置', href: '/settings', icon: '⚙️' });
   }
 
   return (
