@@ -17,7 +17,7 @@ COPY dashboard/ ./
 RUN npm run build
 
 # 阶段2: 构建Rust后端
-FROM rust:1.75-alpine AS rust-builder
+FROM rust:alpine AS rust-builder
 
 # 安装编译依赖
 RUN apk add --no-cache musl-dev openssl-dev pkgconfig
