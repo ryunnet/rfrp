@@ -36,19 +36,13 @@ services:
   # ==================== RFRP 客户端 (可选) ====================
   # 如果需要在同一台机器上运行客户端，取消下面的注释
   # 通常客户端部署在需要被访问的内网机器上
-  # rfrpc:
-  #   image: harbor.yunnet.top/rfrp:latest
-  #   container_name: rfrpc
-  #   restart: unless-stopped
-  #
-  #   # 客户端配置文件
-  #   volumes:
-  #     - ./rfrpc.toml:/app/rfrpc.toml:ro
-  #
-  #   # 环境变量
-  #   environment:
-  #     - TZ=Asia/Shanghai
-  #     - RUST_LOG=info
-  #
-  #   # 启动命令
-  #   command: ["/app/rfrpc"]
+  rfrpc:
+    image: harbor.yunnet.top/rfrp:latest
+    container_name: rfrpc
+    restart: unless-stopped
+    volumes:
+      - ./rfrpc.toml:/app/rfrpc.toml:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - RUST_LOG=info
+    command: ["/app/rfrpc"]
