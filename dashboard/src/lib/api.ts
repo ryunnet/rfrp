@@ -31,6 +31,12 @@ api.interceptors.response.use(
       const url = error.config?.url || '';
       const errorMessage = error.response?.data?.message || '';
 
+      // 登录接口的401错误应该由登录组件自己处理，不在这里跳转
+      const isLoginRequest = url.includes('/auth/login');
+      if (isLoginRequest) {
+        return Promise.reject(error);
+      }
+
       // 只在token真正无效时才登出，避免过于激进的登出行为
       // 检查是否是认证相关的401错误
       const isAuthError =

@@ -94,6 +94,20 @@ export const clientService = {
     const response = await api.get<ApiResponse<LogEntry[]>>(`/clients/${id}/logs`);
     return response.data;
   },
+
+  async updateClient(
+    id: number,
+    data: {
+      name?: string;
+      upload_limit_gb?: number | null;
+      download_limit_gb?: number | null;
+      traffic_reset_cycle?: string;
+      is_traffic_exceeded?: boolean;
+    }
+  ): Promise<ApiResponse<Client>> {
+    const response = await api.put<ApiResponse<Client>>(`/clients/${id}`, data);
+    return response.data;
+  },
 };
 
 // ============ 代理服务 ============

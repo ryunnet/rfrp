@@ -16,6 +16,9 @@ use super::ApiResponse;
 pub struct CreateClientRequest {
     pub name: String,
     pub token: Option<String>,
+    pub upload_limit_gb: Option<f64>,
+    pub download_limit_gb: Option<f64>,
+    pub traffic_reset_cycle: Option<String>,
 }
 
 pub async fn list_clients(Extension(auth_user_opt): Extension<Option<AuthUser>>) -> impl IntoResponse {
@@ -100,6 +103,11 @@ pub async fn create_client(
         is_online: NotSet,
         total_bytes_sent: Set(0),
         total_bytes_received: Set(0),
+        upload_limit_gb: Set(req.upload_limit_gb),
+        download_limit_gb: Set(req.download_limit_gb),
+        traffic_reset_cycle: Set(req.traffic_reset_cycle.unwrap_or_else(|| "none".to_string())),
+        last_reset_at: Set(None),
+        is_traffic_exceeded: Set(false),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -148,5 +156,62 @@ pub async fn delete_client(
             StatusCode::INTERNAL_SERVER_ERROR,
             ApiResponse::<&str>::error(format!("Failed to delete client: {}", e)),
         ),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UpdateClientRequest {
+    pub name: Option<String>,
+    pub upload_limit_gb: Option<f64>,
+    pub download_limit_gb: Option<f64>,
+    pub traffic_reset_cycle: Option<String>,
+    pub is_traffic_exceeded: Option<bool>,
+}
+
+pub async fn update_client(
+    Path(id): Path<i64>,
+    Extension(auth_user_opt): Extension<Option<AuthUser>>,
+    Json(req): Json<UpdateClientRequest>,
+) -> impl IntoResponse {
+    let auth_user = match auth_user_opt {
+        Some(user) => user,
+        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<crate::entity::client::Model>::error("Not authenticated".to_string())),
+    };
+
+    if !auth_user.is_admin {
+        return (StatusCode::FORBIDDEN, ApiResponse::<crate::entity::client::Model>::error("Only admin can update client".to_string()));
+    }
+
+    let db = get_connection().await;
+
+    let client = match Client::find_by_id(id).one(db).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, ApiResponse::<crate::entity::client::Model>::error("Client not found".to_string())),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<crate::entity::client::Model>::error(format!("Failed to find client: {}", e))),
+    };
+
+    let mut client_active: crate::entity::client::ActiveModel = client.into();
+
+    if let Some(name) = req.name {
+        client_active.name = Set(name);
+    }
+    if req.upload_limit_gb.is_some() || req.upload_limit_gb.is_none() {
+        client_active.upload_limit_gb = Set(req.upload_limit_gb);
+    }
+    if req.download_limit_gb.is_some() || req.download_limit_gb.is_none() {
+        client_active.download_limit_gb = Set(req.download_limit_gb);
+    }
+    if let Some(cycle) = req.traffic_reset_cycle {
+        client_active.traffic_reset_cycle = Set(cycle);
+    }
+    if let Some(exceeded) = req.is_traffic_exceeded {
+        client_active.is_traffic_exceeded = Set(exceeded);
+    }
+
+    client_active.updated_at = Set(Utc::now().naive_utc());
+
+    match client_active.update(db).await {
+        Ok(updated) => (StatusCode::OK, ApiResponse::success(updated)),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<crate::entity::client::Model>::error(format!("Failed to update client: {}", e))),
     }
 }

@@ -188,3 +188,128 @@ pub async fn check_and_handle_traffic_exceeded(
 
     Ok(())
 }
+
+// ============== 节点（Client）级别流量限制 ==============
+
+/// 判断节点是否需要重置流量
+pub fn should_reset_client_traffic(client: &client::Model) -> bool {
+    let now = Utc::now().naive_utc();
+
+    if client.last_reset_at.is_none() {
+        return true; // 从未重置过，需要初始化
+    }
+
+    let last_reset = client.last_reset_at.unwrap();
+
+    match client.traffic_reset_cycle.as_str() {
+        "daily" => {
+            // 检查日期是否不同
+            now.date() > last_reset.date()
+        },
+        "monthly" => {
+            // 检查月份是否不同
+            now.year() > last_reset.year() ||
+            (now.year() == last_reset.year() && now.month() > last_reset.month())
+        },
+        _ => false, // "none" 或其他值，不重置
+    }
+}
+
+/// 重置节点流量统计
+pub async fn reset_client_traffic(client_id: i64, db: &DatabaseConnection) -> Result<()> {
+    let client_model = match Client::find_by_id(client_id).one(db).await? {
+        Some(c) => c,
+        None => return Ok(()),
+    };
+
+    let mut client_active: client::ActiveModel = client_model.into();
+    client_active.total_bytes_sent = Set(0);
+    client_active.total_bytes_received = Set(0);
+    client_active.is_traffic_exceeded = Set(false);
+    client_active.last_reset_at = Set(Some(Utc::now().naive_utc()));
+    client_active.updated_at = Set(Utc::now().naive_utc());
+
+    client_active.update(db).await?;
+    info!("✅ 节点 #{} 流量已重置", client_id);
+
+    Ok(())
+}
+
+/// 检查节点流量是否超限
+/// 返回 (是否超限, 超限原因)
+pub async fn check_client_traffic_limit(client_id: i64, db: &DatabaseConnection) -> Result<(bool, String)> {
+    let client_model = match Client::find_by_id(client_id).one(db).await? {
+        Some(c) => c,
+        None => return Ok((false, String::new())),
+    };
+
+    // 检查是否需要重置流量
+    if should_reset_client_traffic(&client_model) {
+        reset_client_traffic(client_id, db).await?;
+        return Ok((false, String::new()));
+    }
+
+    // 检查上传流量限制
+    if let Some(upload_limit_gb) = client_model.upload_limit_gb {
+        let upload_limit_bytes = gb_to_bytes(upload_limit_gb);
+        if client_model.total_bytes_sent >= upload_limit_bytes {
+            let reason = format!(
+                "上传流量超限: {:.2} GB / {:.2} GB",
+                bytes_to_gb(client_model.total_bytes_sent),
+                upload_limit_gb
+            );
+            return Ok((true, reason));
+        }
+    }
+
+    // 检查下载流量限制
+    if let Some(download_limit_gb) = client_model.download_limit_gb {
+        let download_limit_bytes = gb_to_bytes(download_limit_gb);
+        if client_model.total_bytes_received >= download_limit_bytes {
+            let reason = format!(
+                "下载流量超限: {:.2} GB / {:.2} GB",
+                bytes_to_gb(client_model.total_bytes_received),
+                download_limit_gb
+            );
+            return Ok((true, reason));
+        }
+    }
+
+    Ok((false, String::new()))
+}
+
+/// 断开单个节点的连接
+pub async fn disconnect_client(
+    client_id: i64,
+    connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+    listener_manager: Arc<ProxyListenerManager>,
+    db: &DatabaseConnection,
+) -> Result<()> {
+    let client_id_str = format!("{}", client_id);
+
+    info!("🚫 节点 #{} 流量超限，正在断开连接", client_id);
+
+    // 停止代理监听器
+    listener_manager.stop_client_proxies(&client_id_str).await;
+
+    // 断开 QUIC 连接
+    let mut conns = connections.write().await;
+    if let Some(conn) = conns.remove(&client_id_str) {
+        conn.close(VarInt::from_u32(1), b"traffic limit exceeded");
+        warn!("  断开节点 #{} 的连接：流量超限", client_id);
+    }
+    drop(conns);
+
+    // 更新节点离线状态和超限状态
+    if let Some(client_model) = Client::find_by_id(client_id).one(db).await? {
+        let mut client_active: client::ActiveModel = client_model.into();
+        client_active.is_online = Set(false);
+        client_active.is_traffic_exceeded = Set(true);
+        client_active.updated_at = Set(Utc::now().naive_utc());
+        if let Err(e) = client_active.update(db).await {
+            error!("更新节点 #{} 状态失败: {}", client_id, e);
+        }
+    }
+
+    Ok(())
+}

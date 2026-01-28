@@ -28,6 +28,11 @@ export interface Client {
   is_online: boolean;
   total_bytes_sent: number;
   total_bytes_received: number;
+  uploadLimitGb: number | null;
+  downloadLimitGb: number | null;
+  trafficResetCycle: string;
+  lastResetAt: string | null;
+  isTrafficExceeded: boolean;
   created_at: string;
   updated_at: string;
 }
