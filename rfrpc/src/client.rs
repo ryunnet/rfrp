@@ -78,45 +78,70 @@ async fn connect_to_server(
 
             let conn = Arc::new(conn);
 
+            // 启动连接健康检查任务
+            let conn_health = conn.clone();
+            let mut health_check_handle = tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(10));
+                loop {
+                    interval.tick().await;
+
+                    // 检查连接是否仍然有效
+                    if conn_health.close_reason().is_some() {
+                        warn!("⚠️  检测到与服务器的连接已断开");
+                        break;
+                    }
+                }
+            });
+
             // 循环接受来自服务器的QUIC流
             loop {
-                match conn.accept_bi().await {
-                    Ok((quic_send, quic_recv)) => {
-                        let collector = log_collector.clone();
-
-                        tokio::spawn(async move {
-                            // 读取消息类型（1字节）
-                            let mut msg_type_buf = [0u8; 1];
-                            let mut recv_clone = quic_recv;
-                            if recv_clone.read_exact(&mut msg_type_buf).await.is_err() {
-                                return;
-                            }
-
-                            match msg_type_buf[0] {
-                                b'p' => {
-                                    // 'p' = proxy request (代理请求)
-                                    info!("📨 收到新的代理请求");
-                                    if let Err(e) = handle_proxy_stream(quic_send, recv_clone).await {
-                                        error!("❌ 处理代理流错误: {}", e);
-                                    }
-                                    info!("🔚 代理流已关闭");
-                                }
-                                b'l' => {
-                                    // 'l' = log request (日志请求)
-                                    info!("📋 收到日志请求");
-                                    if let Err(e) = handle_log_request(quic_send, recv_clone, collector).await {
-                                        error!("❌ 处理日志请求错误: {}", e);
-                                    }
-                                }
-                                _ => {
-                                    warn!("❌ 未知的消息类型: {}", msg_type_buf[0]);
-                                }
-                            }
-                        });
+                tokio::select! {
+                    // 监听健康检查任务
+                    _ = &mut health_check_handle => {
+                        error!("❌ 连接健康检查失败，准备重连");
+                        return Err(anyhow::anyhow!("Connection health check failed"));
                     }
-                    Err(e) => {
-                        error!("❌ 接受流失败: {}", e);
-                        return Err(e.into());
+                    // 接受新的流
+                    result = conn.accept_bi() => {
+                        match result {
+                            Ok((quic_send, quic_recv)) => {
+                                let collector = log_collector.clone();
+
+                                tokio::spawn(async move {
+                                    // 读取消息类型（1字节）
+                                    let mut msg_type_buf = [0u8; 1];
+                                    let mut recv_clone = quic_recv;
+                                    if recv_clone.read_exact(&mut msg_type_buf).await.is_err() {
+                                        return;
+                                    }
+
+                                    match msg_type_buf[0] {
+                                        b'p' => {
+                                            // 'p' = proxy request (代理请求)
+                                            info!("📨 收到新的代理请求");
+                                            if let Err(e) = handle_proxy_stream(quic_send, recv_clone).await {
+                                                error!("❌ 处理代理流错误: {}", e);
+                                            }
+                                            info!("🔚 代理流已关闭");
+                                        }
+                                        b'l' => {
+                                            // 'l' = log request (日志请求)
+                                            info!("📋 收到日志请求");
+                                            if let Err(e) = handle_log_request(quic_send, recv_clone, collector).await {
+                                                error!("❌ 处理日志请求错误: {}", e);
+                                            }
+                                        }
+                                        _ => {
+                                            warn!("❌ 未知的消息类型: {}", msg_type_buf[0]);
+                                        }
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                error!("❌ 接受流失败: {}", e);
+                                return Err(e.into());
+                            }
+                        }
                     }
                 }
             }

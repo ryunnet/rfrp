@@ -37,7 +37,7 @@ services:
   # 如果需要在同一台机器上运行客户端，取消下面的注释
   # 通常客户端部署在需要被访问的内网机器上
   rfrpc:
-    image: harbor.yunnet.top/rfrp:latest
+    image: docker.yunnet.top/all/rfrp:latest
     container_name: rfrpc
     restart: unless-stopped
     volumes:

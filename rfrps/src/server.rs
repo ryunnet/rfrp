@@ -346,12 +346,12 @@ impl ProxyServer {
     pub async fn run(&self, bind_addr: String) -> Result<()> {
         // 从配置管理器获取配置
         let idle_timeout = self.config_manager.get_number("idle_timeout", 60).await as u64;
-        let keep_alive_interval = self.config_manager.get_number("keep_alive_interval", 5).await as u64;
         let max_streams = self.config_manager.get_number("max_concurrent_streams", 100).await as u32;
 
         let mut transport_config = TransportConfig::default();
         transport_config.max_concurrent_uni_streams(VarInt::from_u32(max_streams));
-        transport_config.keep_alive_interval(Some(Duration::from_secs(keep_alive_interval)));
+        // 服务器不主动发送心跳，由客户端主动发送
+        // transport_config.keep_alive_interval(Some(Duration::from_secs(keep_alive_interval)));
         transport_config.max_idle_timeout(Some(Duration::from_secs(idle_timeout).try_into()?));
 
         let mut server_config = ServerConfig::with_single_cert(
@@ -364,7 +364,7 @@ impl ProxyServer {
 
         info!("🚀 QUIC服务器启动成功!");
         info!("📡 监听地址: {}", bind_addr);
-        info!("⏱️  空闲超时: {}秒, 心跳间隔: {}秒", idle_timeout, keep_alive_interval);
+        info!("⏱️  空闲超时: {}秒 (心跳由客户端主动发送)", idle_timeout);
         info!("🔢 最大并发流: {}", max_streams);
 
         info!("⏳ 等待客户端连接...");
