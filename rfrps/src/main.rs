@@ -15,7 +15,7 @@ use crate::migration::{get_connection, init_sqlite};
 use anyhow::Result;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, QueryFilter, Set};
 use sea_orm_migration::MigratorTrait;
-use std::path;
+use std::path::{self, PathBuf};
 use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -124,6 +124,26 @@ async fn initialize_admin_user() {
                     info!("🔑 Admin 密码: {}", password);
                     info!("⚠️  请妥善保存此密码，仅在创建时显示一次！");
                     info!("═══════════════════════════════════════════════════════════════");
+
+                    // 将密码保存到 ./data 目录
+                    let data_dir = PathBuf::from("./data");
+                    if let Err(e) = std::fs::create_dir_all(&data_dir) {
+                        tracing::error!("无法创建 data 目录: {}", e);
+                    } else {
+                        let password_file = data_dir.join("admin_password.txt");
+                        let content = format!(
+                            "Admin 初始密码\n═══════════════════════════════════════\n用户名: admin\n密码: {}\n═══════════════════════════════════════\n⚠️ 请妥善保管此文件，登录后建议修改密码并删除此文件！\n",
+                            password
+                        );
+                        match std::fs::write(&password_file, &content) {
+                            Ok(_) => {
+                                info!("📁 密码已保存到: {}", password_file.display());
+                            }
+                            Err(e) => {
+                                tracing::error!("无法保存密码文件: {}", e);
+                            }
+                        }
+                    }
                 }
                 Err(e) => {
                     tracing::error!("Failed to create admin user: {}", e);
