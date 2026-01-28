@@ -29,6 +29,11 @@ export default function Login() {
           updated_at: '',
           total_bytes_sent: 0,
           total_bytes_received: 0,
+          uploadLimitGb: null,
+          downloadLimitGb: null,
+          trafficResetCycle: 'none',
+          lastResetAt: null,
+          isTrafficExceeded: false,
         });
         navigate('/');
       } else {
