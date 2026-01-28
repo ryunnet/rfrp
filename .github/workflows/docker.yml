@@ -36,7 +36,7 @@ jobs:
             TAG="${{ github.ref_name }}"
           fi
 
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          IMAGE="${{ env.REGISTRY }}/all/${{ env.IMAGE_NAME }}"
 
           # 构建镜像
           docker build -t ${IMAGE}:${TAG} .
