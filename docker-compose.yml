@@ -1,64 +1,31 @@
-version: '3.8'
-
 services:
   # ==================== RFRP 服务端 ====================
   # 反向代理服务端，提供 QUIC 协议支持和 Web 管理界面
   rfrps:
-    image: harbor.yunnet.top/rfrp:latest
+    image: docker.yunnet.top/all/rfrp:latest
     container_name: rfrps
     restart: unless-stopped
-
     # 端口映射配置
     ports:
       # QUIC 主服务端口 (必须使用 UDP 协议)
       - "7000:7000/udp"
-
       # Web 管理界面端口 (HTTP)
       # 访问: http://your-server-ip:3000
       # 默认账号: admin (密码见首次启动日志)
       - "3000:3000"
-
-      # 代理服务端口范围 (根据实际需要调整)
-      # 用于转发客户端的流量，可以根据需要增加或减少端口范围
-      - "8000-8100:8000-8100"
-
-      # 常用端口示例 (取消注释以启用)
-      # - "8080:8080"    # HTTP 代理
-      # - "8443:8443"    # HTTPS 代理
-      # - "3306:3306"    # MySQL
-      # - "5432:5432"    # PostgreSQL
-      # - "6379:6379"    # Redis
-      # - "27017:27017"  # MongoDB
-
     # 卷挂载配置
     volumes:
       # 服务端配置文件 (只读)
       - ./rfrps.toml:/app/rfrps.toml:ro
-
       # 数据持久化目录 (SQLite 数据库、日志等)
       - ./data:/app/data
-
-      # 可选: 挂载自定义证书 (TLS)
-      # - ./certs:/app/certs:ro
-
     # 环境变量配置
     environment:
       # 时区设置
       - TZ=Asia/Shanghai
-
       # 日志级别: trace, debug, info, warn, error
       - RUST_LOG=info
-
-      # 可选: 数据库路径 (如果不使用默认路径)
-      # - DATABASE_URL=sqlite:///app/data/rfrp.db
-
-    # 启动命令
     command: ["/app/rfrps"]
-
-    # 网络配置
-    networks:
-      - rfrp-network
-
     # 健康检查 (用于监控服务状态)
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
@@ -66,21 +33,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-
-    # 资源限制 (可选，防止资源过度使用)
-    # deploy:
-    #   resources:
-    #     limits:
-    #       cpus: '2'
-    #       memory: 1G
-    #     reservations:
-    #       cpus: '0.5'
-    #       memory: 256M
-
   # ==================== RFRP 客户端 (可选) ====================
   # 如果需要在同一台机器上运行客户端，取消下面的注释
   # 通常客户端部署在需要被访问的内网机器上
-
   # rfrpc:
   #   image: harbor.yunnet.top/rfrp:latest
   #   container_name: rfrpc
@@ -97,31 +52,3 @@ services:
   #
   #   # 启动命令
   #   command: ["/app/rfrpc"]
-  #
-  #   # 网络配置
-  #   networks:
-  #     - rfrp-network
-  #
-  #   # 依赖服务端启动
-  #   depends_on:
-  #     rfrps:
-  #       condition: service_healthy
-  #
-  #   # 可选: 如果需要访问宿主机服务
-  #   # extra_hosts:
-  #   #   - "host.docker.internal:host-gateway"
-
-# ==================== 网络配置 ====================
-networks:
-  rfrp-network:
-    driver: bridge
-    # 可选: 自定义网络配置
-    # ipam:
-    #   config:
-    #     - subnet: 172.20.0.0/16
-
-# ==================== 卷配置 ====================
-# 如果需要使用命名卷而不是绑定挂载
-# volumes:
-#   rfrp-data:
-#     driver: local

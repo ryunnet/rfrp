@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use crate::entity::{SystemConfig, system_config};
 use crate::migration::get_connection;
-use crate::handlers::ApiResponse;
 use crate::config_manager::ConfigManager;
 use crate::AppState;
+use crate::features::api::handlers::ApiResponse;
 
 #[derive(Debug, Serialize)]
 pub struct ConfigListResponse {

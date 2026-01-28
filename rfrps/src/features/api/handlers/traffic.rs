@@ -4,7 +4,7 @@ use axum::{
 };
 use serde::Deserialize;
 
-use crate::handlers::ApiResponse;
+use crate::features::api::handlers::ApiResponse;
 use crate::traffic::{get_traffic_overview, TrafficOverview};
 
 #[derive(Debug, Deserialize)]
