@@ -14,6 +14,11 @@ export interface User {
   updated_at: string;
   total_bytes_sent: number;
   total_bytes_received: number;
+  uploadLimitGb: number | null;
+  downloadLimitGb: number | null;
+  trafficResetCycle: string;
+  lastResetAt: string | null;
+  isTrafficExceeded: boolean;
 }
 
 export interface UserWithClientCount extends User {

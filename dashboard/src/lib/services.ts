@@ -41,6 +41,10 @@ export const userService = {
       username?: string;
       password?: string;
       is_admin?: boolean;
+      upload_limit_gb?: number | null;
+      download_limit_gb?: number | null;
+      traffic_reset_cycle?: string;
+      is_traffic_exceeded?: boolean;
     }
   ): Promise<ApiResponse<any>> {
     const response = await api.put<ApiResponse<any>>(`/users/${id}`, data);

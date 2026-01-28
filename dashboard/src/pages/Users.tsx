@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { userService, clientService } from '../lib/services';
 import type { UserWithClientCount, Client } from '../lib/types';
-import { formatDate } from '../lib/utils';
+import { formatDate, formatBytes } from '../lib/utils';
 
 export default function Users() {
   const [users, setUsers] = useState<UserWithClientCount[]>([]);
@@ -9,13 +9,20 @@ export default function Users() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showBindModal, setShowBindModal] = useState(false);
+  const [showTrafficModal, setShowTrafficModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithClientCount | null>(null);
   const [userClients, setUserClients] = useState<Client[]>([]);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [trafficSaving, setTrafficSaving] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     password: '',
     is_admin: false,
+  });
+  const [trafficFormData, setTrafficFormData] = useState({
+    uploadLimitGb: '',
+    downloadLimitGb: '',
+    trafficResetCycle: 'none',
   });
 
   useEffect(() => {
@@ -169,6 +176,63 @@ export default function Users() {
     }
   };
 
+  const handleTrafficLimit = (user: UserWithClientCount) => {
+    setSelectedUser(user);
+    setTrafficFormData({
+      uploadLimitGb: user.uploadLimitGb?.toString() || '',
+      downloadLimitGb: user.downloadLimitGb?.toString() || '',
+      trafficResetCycle: user.trafficResetCycle || 'none',
+    });
+    setShowTrafficModal(true);
+  };
+
+  const handleSaveTraffic = async () => {
+    if (!selectedUser) return;
+
+    try {
+      setTrafficSaving(true);
+      const response = await userService.updateUser(selectedUser.id, {
+        upload_limit_gb: trafficFormData.uploadLimitGb ? parseFloat(trafficFormData.uploadLimitGb) : null,
+        download_limit_gb: trafficFormData.downloadLimitGb ? parseFloat(trafficFormData.downloadLimitGb) : null,
+        traffic_reset_cycle: trafficFormData.trafficResetCycle,
+      });
+
+      if (response.success) {
+        showToast('流量限制设置成功', 'success');
+        setShowTrafficModal(false);
+        setSelectedUser(null);
+        loadUsers();
+      } else {
+        showToast(response.message || '设置失败', 'error');
+      }
+    } catch (error) {
+      console.error('设置流量限制失败:', error);
+      showToast('设置失败', 'error');
+    } finally {
+      setTrafficSaving(false);
+    }
+  };
+
+  const handleResetTrafficExceeded = async (user: UserWithClientCount) => {
+    if (!confirm('确定要重置该用户的超限状态吗？')) return;
+
+    try {
+      const response = await userService.updateUser(user.id, {
+        is_traffic_exceeded: false,
+      });
+
+      if (response.success) {
+        showToast('超限状态已重置', 'success');
+        loadUsers();
+      } else {
+        showToast(response.message || '重置失败', 'error');
+      }
+    } catch (error) {
+      console.error('重置超限状态失败:', error);
+      showToast('重置失败', 'error');
+    }
+  };
+
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -218,6 +282,12 @@ export default function Users() {
                   绑定节点
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  流量统计
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  流量限制
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   创建时间
                 </th>
                 <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -228,7 +298,7 @@ export default function Users() {
             <tbody className="divide-y divide-gray-100">
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-16 text-center">
+                  <td colSpan={7} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
@@ -279,6 +349,52 @@ export default function Users() {
                         {user.client_count} 个节点
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-blue-500">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+                          </svg>
+                          <span className="text-gray-600">{formatBytes(user.total_bytes_sent)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-green-500">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+                          </svg>
+                          <span className="text-gray-600">{formatBytes(user.total_bytes_received)}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col gap-1">
+                        {user.uploadLimitGb || user.downloadLimitGb ? (
+                          <>
+                            <div className="text-xs text-gray-600">
+                              上传: {user.uploadLimitGb ? `${user.uploadLimitGb} GB` : '无限制'}
+                            </div>
+                            <div className="text-xs text-gray-600">
+                              下载: {user.downloadLimitGb ? `${user.downloadLimitGb} GB` : '无限制'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {user.trafficResetCycle === 'daily' && '每日重置'}
+                              {user.trafficResetCycle === 'weekly' && '每周重置'}
+                              {user.trafficResetCycle === 'monthly' && '每月重置'}
+                              {user.trafficResetCycle === 'none' && '不重置'}
+                            </div>
+                            {user.isTrafficExceeded && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-md bg-red-100 text-red-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                </svg>
+                                已超限
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-400">未设置</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(user.created_at)}
                     </td>
@@ -290,6 +406,20 @@ export default function Users() {
                         >
                           管理节点
                         </button>
+                        <button
+                          onClick={() => handleTrafficLimit(user)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        >
+                          流量限制
+                        </button>
+                        {user.isTrafficExceeded && (
+                          <button
+                            onClick={() => handleResetTrafficExceeded(user)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                          >
+                            重置超限
+                          </button>
+                        )}
                         <button
                           onClick={() => handleToggleAdmin(user)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
@@ -506,6 +636,85 @@ export default function Users() {
               >
                 关闭
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 流量限制设置模态框 */}
+      {showTrafficModal && selectedUser && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">流量限制设置</h3>
+                  <p className="text-sm text-gray-500">{selectedUser.username}</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">上传限制 (GB)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={trafficFormData.uploadLimitGb}
+                    onChange={(e) => setTrafficFormData({ ...trafficFormData, uploadLimitGb: e.target.value })}
+                    placeholder="留空表示无限制"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">下载限制 (GB)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={trafficFormData.downloadLimitGb}
+                    onChange={(e) => setTrafficFormData({ ...trafficFormData, downloadLimitGb: e.target.value })}
+                    placeholder="留空表示无限制"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">流量重置周期</label>
+                  <select
+                    value={trafficFormData.trafficResetCycle}
+                    onChange={(e) => setTrafficFormData({ ...trafficFormData, trafficResetCycle: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                  >
+                    <option value="none">不重置</option>
+                    <option value="daily">每日重置</option>
+                    <option value="weekly">每周重置</option>
+                    <option value="monthly">每月重置</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowTrafficModal(false);
+                    setSelectedUser(null);
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  disabled={trafficSaving}
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveTraffic}
+                  disabled={trafficSaving}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 transition-all disabled:opacity-50"
+                >
+                  {trafficSaving ? '保存中...' : '保存'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
