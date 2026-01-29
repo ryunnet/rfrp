@@ -347,6 +347,7 @@ impl ProxyServer {
         // 从配置管理器获取配置
         let idle_timeout = self.config_manager.get_number("idle_timeout", 60).await as u64;
         let max_streams = self.config_manager.get_number("max_concurrent_streams", 100).await as u32;
+        let keep_alive_interval = self.config_manager.get_number("keep_alive_interval", 5).await as u64;
 
         let mut transport_config = TransportConfig::default();
         transport_config.max_concurrent_uni_streams(VarInt::from_u32(max_streams));
