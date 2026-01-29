@@ -4,261 +4,74 @@
 
 **基于 Rust 的高性能反向代理工具**
 
-[![Build](https://github.com/yourusername/rfrp/actions/workflows/build.yml/badge.svg)](https://github.com/yourusername/rfrp/actions/workflows/build.yml)
-[![CI](https://github.com/yourusername/rfrp/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/rfrp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Rust](https://img.shields.io/badge/Rust-2024_Edition-orange.svg)](https://www.rust-lang.org/)
+[![QUIC](https://img.shields.io/badge/Protocol-QUIC-blue.svg)](https://quicwg.org/)
 
 一个现代化的 FRP (Fast Reverse Proxy) 实现，采用 Rust + QUIC + Web 技术栈，提供高性能的内网穿透解决方案。
 
-[特性](#-特性) • [快速开始](#-快速开始) • [配置说明](#-配置说明) • [Web 管理界面](#-web-管理界面) • [架构](#-架构)
+[特性](#-特性) | [快速开始](#-快速开始) | [安装教程](#-安装教程) | [配置说明](#-配置说明) | [Web 管理界面](#-web-管理界面) | [架构](#-架构)
 
 </div>
 
 ## ✨ 特性
 
-### 🚀 核心优势
+| 特性 | 说明 |
+|------|------|
+| **高性能** | 基于 Rust + QUIC 协议，低延迟、高并发 |
+| **安全可靠** | TLS 加密传输，Token/JWT 认证机制 |
+| **跨平台** | 支持 Linux、Windows、macOS (amd64/arm64) |
+| **易于使用** | 简洁配置 + Web 可视化管理界面 |
+| **自动重连** | 客户端断线自动重连，服务稳定 |
+| **流量监控** | 实时统计客户端和隧道流量 |
+| **多用户** | 支持多用户、多客户端、多隧道管理 |
 
-- **高性能**：基于 Rust + QUIC 协议，低延迟、高并发
-- **安全可靠**：TLS 加密传输，Token 认证机制
-- **跨平台**：支持 Linux、Windows、macOS (amd64/arm64)
-- **易于使用**：简洁的配置文件，Web 可视化管理界面
-- **自动重连**：客户端断线自动重连，保证服务稳定
-- **流量监控**：实时统计客户端和隧道流量数据
-- **多用户管理**：支持多用户、多客户端、多隧道管理
+<details>
+<summary><b>功能详情</b></summary>
 
-### 📦 功能列表
+**服务端 (rfrps)**：QUIC 协议、SQLite 持久化、Web 管理界面、JWT 认证、流量统计、用户权限管理、在线状态监控
 
-#### 服务端 (rfrps)
-- ✅ QUIC 协议支持
-- ✅ SQLite 数据持久化
-- ✅ Web 管理界面 (React + Ant Design)
-- ✅ JWT 身份认证
-- ✅ 流量统计与监控
-- ✅ 用户权限管理
-- ✅ 客户端在线状态监控
+**客户端 (rfrpc)**：自动重连、TCP/UDP 代理、多隧道并发、心跳保活
 
-#### 客户端 (rfrpc)
-- ✅ 自动重连机制
-- ✅ TCP/UDP 代理支持
-- ✅ 多隧道并发
-- ✅ 心跳保活
+**Web 界面**：仪表盘、客户端管理、隧道管理、流量统计、用户管理、多语言 (中文/English)
 
-#### Web 管理界面
-- ✅ 仪表盘总览
-- ✅ 客户端管理
-- ✅ 隧道管理
-- ✅ 流量统计
-- ✅ 用户管理 (管理员)
-- ✅ 多语言支持 (中文/English)
+</details>
 
-## 📦 安装教程
+## 🚀 快速开始
 
-RFRP 提供三种安装方式，根据您的需求选择：
-
-- **[Docker Compose 安装](#docker-compose-安装推荐)** - 推荐方式，最简单，适合生产环境
-- **[Docker 安装](#docker-安装)** - 容器化部署，适合熟悉 Docker 的用户
-- **[原生安装](#原生安装)** - 直接运行二进制文件或从源码编译
-
-### Docker Compose 安装（推荐）
-
-这是最简单的部署方式，一条命令即可启动服务，适合生产环境使用。
-
-#### 1. 前置要求：安装 Docker 和 Docker Compose
-
-**Ubuntu/Debian:**
-```bash
-# 更新包索引
-sudo apt update
-
-# 安装依赖
-sudo apt install -y apt-transport-https ca-certificates curl gnupg lsb-release
-
-# 添加 Docker 官方 GPG 密钥
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-# 设置稳定版仓库
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# 安装 Docker Engine
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io
-
-# 启动 Docker 服务
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# 将当前用户添加到 docker 组 (可选，避免每次使用 sudo)
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-**CentOS/RHEL:**
-```bash
-# 安装依赖
-sudo yum install -y yum-utils
-
-# 添加 Docker 仓库
-sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-
-# 安装 Docker Engine
-sudo yum install -y docker-ce docker-ce-cli containerd.io
-
-# 启动 Docker 服务
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# 将当前用户添加到 docker 组 (可选)
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-**Windows:**
-1. 下载并安装 [Docker Desktop for Windows](https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe)
-2. 安装完成后重启电脑
-3. 启动 Docker Desktop
-
-**macOS:**
-1. 下载并安装 [Docker Desktop for Mac](https://desktop.docker.com/mac/main/amd64/Docker.dmg) (Intel) 或 [Apple Silicon](https://desktop.docker.com/mac/main/arm64/Docker.dmg)
-2. 启动 Docker Desktop
-
-#### 2. 安装 Docker Compose
-
-> Docker Desktop (Windows/macOS) 已内置 Docker Compose，无需单独安装。
-
-**Linux:**
-```bash
-# 下载 Docker Compose (v2)
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-
-# 添加执行权限
-sudo chmod +x /usr/local/bin/docker-compose
-
-# 验证安装
-docker-compose --version
-```
-
-#### 3. 部署 RFRP 服务端
+### 1. 部署服务端
 
 ```bash
-# 创建部署目录
+# Docker Compose 一键部署（推荐）
 mkdir -p /opt/rfrp && cd /opt/rfrp
+curl -O https://raw.githubusercontent.com/rfrp/rfrp/master/docker-compose.yml
+curl -O https://raw.githubusercontent.com/rfrp/rfrp/master/rfrps.toml
+mkdir -p data && docker-compose up -d
 
-# 下载配置文件
-wget https://raw.githubusercontent.com/yourusername/rfrp/master/docker-compose.yml
-wget https://raw.githubusercontent.com/yourusername/rfrp/master/rfrps.toml
-
-# 编辑配置文件 (可选，使用默认配置也可以)
-# vim rfrps.toml
-
-# 创建数据目录
-mkdir -p data
-
-# 启动服务 (后台运行)
-docker-compose up -d
-
-# 查看日志 - 重要: 首次启动会显示 admin 随机密码!
-docker-compose logs -f rfrps
+# 查看日志获取 admin 初始密码
+docker-compose logs rfrps
 ```
 
-**首次启动后，请务必：**
-1. 在日志中找到 admin 账号的初始密码
-2. 访问 `http://your-server-ip:3000` 登录 Web 管理界面
-3. 登录后立即修改默认密码
-4. 创建客户端并获取 Token
+### 2. 访问 Web 管理界面
 
-#### 4. 配置防火墙
+打开 `http://your-server-ip:3000`，使用日志中的密码登录 admin 账号。
 
-部署完成后，需要开放以下端口：
+### 3. 创建客户端和隧道
 
-**Ubuntu/Debian (ufw):**
-```bash
-# 开放 QUIC 服务端口 (UDP)
-sudo ufw allow 7000/udp
+1. 进入「客户端管理」→「新建客户端」→ 复制生成的 Token
+2. 进入「隧道管理」→「新建隧道」→ 配置端口映射
 
-# 开放 Web 管理界面端口 (TCP)
-sudo ufw allow 3000/tcp
-
-# 开放代理端口范围 (根据实际需要)
-sudo ufw allow 8000:8100/tcp
-
-# 重载防火墙
-sudo ufw reload
-```
-
-**CentOS/RHEL (firewalld):**
-```bash
-# 开放 QUIC 服务端口 (UDP)
-sudo firewall-cmd --permanent --add-port=7000/udp
-
-# 开放 Web 管理界面端口 (TCP)
-sudo firewall-cmd --permanent --add-port=3000/tcp
-
-# 开放代理端口范围
-sudo firewall-cmd --permanent --add-port=8000-8100/tcp
-
-# 重载防火墙
-sudo firewall-cmd --reload
-```
-
-#### 5. 常用 Docker Compose 命令
+### 4. 部署客户端
 
 ```bash
-# 启动服务 (后台运行)
-docker-compose up -d
-
-# 停止服务 (保留数据)
-docker-compose stop
-
-# 停止并删除容器 (保留数据卷)
-docker-compose down
-
-# 完全删除 (包括数据卷，慎用!)
-docker-compose down -v
-
-# 重启服务
-docker-compose restart
-
-# 重启特定服务
-docker-compose restart rfrps
-
-# 查看服务状态
-docker-compose ps
-
-# 查看实时日志
-docker-compose logs -f
-
-# 查看特定服务日志
-docker-compose logs -f rfrps
-
-# 查看最近 100 行日志
-docker-compose logs --tail=100 rfrps
-
-# 更新镜像并重启
-docker-compose pull && docker-compose up -d
-
-# 进入容器 (调试用)
-docker-compose exec rfrps sh
-
-# 查看资源使用情况
-docker stats rfrps
-```
-
-#### 6. 部署客户端 (内网机器)
-
-在需要被访问的内网机器上部署客户端：
-
-```bash
-# 创建客户端目录
 mkdir -p /opt/rfrpc && cd /opt/rfrpc
 
-# 创建客户端配置文件
 cat > rfrpc.toml << EOF
-server_addr = "your-server-ip"  # 替换为服务端公网 IP
+server_addr = "your-server-ip"
 server_port = 7000
-token = "your-client-token"      # 从 Web 界面获取
+token = "your-client-token"
 EOF
 
-# 创建 docker-compose 文件
 cat > docker-compose.yml << EOF
 version: '3.8'
 services:
@@ -268,262 +81,185 @@ services:
     restart: unless-stopped
     volumes:
       - ./rfrpc.toml:/app/rfrpc.toml:ro
-    environment:
-      - TZ=Asia/Shanghai
-      - RUST_LOG=info
     command: ["/app/rfrpc"]
-    # 如果需要访问宿主机服务，取消下面的注释
-    # extra_hosts:
-    #   - "host.docker.internal:host-gateway"
 EOF
 
-# 启动客户端
 docker-compose up -d
-
-# 查看日志，确认连接成功
-docker-compose logs -f
 ```
 
----
+### 5. 使用示例
 
-### Docker 安装
+| 场景 | 本地端口 | 远程端口 | 访问方式 |
+|------|---------|---------|----------|
+| SSH | 22 | 2222 | `ssh -p 2222 user@server-ip` |
+| 远程桌面 | 3389 | 33389 | RDP 连接 `server-ip:33389` |
+| Web 服务 | 80 | 8080 | 访问 `http://server-ip:8080` |
+| MySQL | 3306 | 13306 | 连接 `server-ip:13306` |
 
-如果您熟悉 Docker，可以直接使用 Docker 命令运行容器，无需 Docker Compose。
+## 📦 安装教程
 
-#### 服务端部署
+RFRP 提供三种安装方式：
 
+| 方式 | 适用场景 | 难度 |
+|------|---------|------|
+| [Docker Compose](#docker-compose-安装推荐) | 生产环境，推荐 | ⭐ |
+| [Docker](#docker-安装) | 熟悉 Docker 的用户 | ⭐⭐ |
+| [原生安装](#原生安装) | 自定义编译或无 Docker 环境 | ⭐⭐⭐ |
+
+### Docker Compose 安装（推荐）
+
+<details>
+<summary><b>前置要求：安装 Docker</b></summary>
+
+**Linux (Ubuntu/Debian):**
 ```bash
-# 创建数据目录
-mkdir -p /opt/rfrp/data
-cd /opt/rfrp
-
-# 创建配置文件
-cat > rfrps.toml << EOF
-bind_port = 7000
-EOF
-
-# 运行服务端容器
-docker run -d \
-  --name rfrps \
-  --restart unless-stopped \
-  -p 7000:7000/udp \
-  -p 3000:3000/tcp \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/rfrps.toml:/app/rfrps.toml:ro \
-  -e TZ=Asia/Shanghai \
-  -e RUST_LOG=info \
-  harbor.yunnet.top/rfrp:latest \
-  /app/rfrps
-
-# 查看日志，获取 admin 初始密码
-docker logs -f rfrps
+curl -fsSL https://get.docker.com | sh
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER && newgrp docker
 ```
 
-**开放防火墙端口：**
+**Linux (CentOS/RHEL):**
 ```bash
-# Ubuntu/Debian
-sudo ufw allow 7000/udp
-sudo ufw allow 3000/tcp
+curl -fsSL https://get.docker.com | sh
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER && newgrp docker
+```
 
-# CentOS/RHEL
+**Windows/macOS:** 下载安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+</details>
+
+#### 部署服务端
+
+```bash
+mkdir -p /opt/rfrp && cd /opt/rfrp
+
+# 下载配置文件
+curl -O https://raw.githubusercontent.com/rfrp/rfrp/master/docker-compose.yml
+curl -O https://raw.githubusercontent.com/rfrp/rfrp/master/rfrps.toml
+
+mkdir -p data && docker-compose up -d
+docker-compose logs rfrps  # 获取 admin 初始密码
+```
+
+> **重要**: 首次启动后查看日志获取 admin 密码，访问 `http://your-server-ip:3000` 登录并修改密码。
+
+<details>
+<summary><b>配置防火墙</b></summary>
+
+```bash
+# Ubuntu/Debian (ufw)
+sudo ufw allow 7000/udp  # QUIC 服务端口
+sudo ufw allow 3000/tcp  # Web 界面端口
+sudo ufw reload
+
+# CentOS/RHEL (firewalld)
 sudo firewall-cmd --permanent --add-port=7000/udp
 sudo firewall-cmd --permanent --add-port=3000/tcp
 sudo firewall-cmd --reload
 ```
 
-#### 客户端部署
+</details>
+
+<details>
+<summary><b>常用命令</b></summary>
 
 ```bash
-# 创建客户端目录
-mkdir -p /opt/rfrpc
-cd /opt/rfrpc
+docker-compose up -d          # 启动
+docker-compose stop           # 停止
+docker-compose restart        # 重启
+docker-compose logs -f        # 查看日志
+docker-compose pull && docker-compose up -d  # 更新
+```
 
-# 创建配置文件
+</details>
+
+---
+
+### Docker 安装
+
+<details>
+<summary><b>服务端部署</b></summary>
+
+```bash
+mkdir -p /opt/rfrp/data && cd /opt/rfrp
+cat > rfrps.toml << EOF
+bind_port = 7000
+EOF
+
+docker run -d --name rfrps --restart unless-stopped \
+  -p 7000:7000/udp -p 3000:3000/tcp \
+  -v $(pwd)/data:/app/data -v $(pwd)/rfrps.toml:/app/rfrps.toml:ro \
+  -e TZ=Asia/Shanghai -e RUST_LOG=info \
+  harbor.yunnet.top/rfrp:latest /app/rfrps
+
+docker logs -f rfrps  # 获取 admin 初始密码
+```
+
+</details>
+
+<details>
+<summary><b>客户端部署</b></summary>
+
+```bash
+mkdir -p /opt/rfrpc && cd /opt/rfrpc
 cat > rfrpc.toml << EOF
 server_addr = "your-server-ip"
 server_port = 7000
 token = "your-client-token"
 EOF
 
-# 运行客户端容器
-docker run -d \
-  --name rfrpc \
-  --restart unless-stopped \
+docker run -d --name rfrpc --restart unless-stopped \
   -v $(pwd)/rfrpc.toml:/app/rfrpc.toml:ro \
-  -e TZ=Asia/Shanghai \
-  -e RUST_LOG=info \
-  harbor.yunnet.top/rfrp:latest \
-  /app/rfrpc
-
-# 查看日志
-docker logs -f rfrpc
+  -e TZ=Asia/Shanghai -e RUST_LOG=info \
+  harbor.yunnet.top/rfrp:latest /app/rfrpc
 ```
 
-**常用 Docker 命令：**
-```bash
-# 停止容器
-docker stop rfrps
-
-# 启动容器
-docker start rfrps
-
-# 重启容器
-docker restart rfrps
-
-# 查看日志
-docker logs -f rfrps
-
-# 查看容器状态
-docker ps -a
-
-# 更新镜像
-docker pull harbor.yunnet.top/rfrp:latest
-docker stop rfrps && docker rm rfrps
-# 然后重新运行 docker run 命令
-
-# 进入容器
-docker exec -it rfrps sh
-
-# 删除容器
-docker stop rfrps && docker rm rfrps
-```
+</details>
 
 ---
 
 ### 原生安装
 
-适合不想使用 Docker 或需要自定义编译的用户。
+<details>
+<summary><b>预编译二进制文件</b></summary>
 
-#### 方式一：使用预编译二进制文件
+从 [Releases](https://github.com/rfrp/rfrp/releases) 下载对应平台的文件：
 
-从 [Releases](https://github.com/yourusername/rfrp/releases) 页面下载对应平台的二进制文件。
+| 平台 | 下载 |
+|------|------|
+| Linux amd64 | `rfrps-linux-amd64.tar.gz` |
+| Linux arm64 | `rfrps-linux-arm64.tar.gz` |
+| Windows | `rfrps-windows-amd64.zip` |
+| macOS Intel | `rfrps-darwin-amd64.tar.gz` |
+| macOS Apple Silicon | `rfrps-darwin-arm64.tar.gz` |
 
-**Linux (amd64):**
 ```bash
-# 下载并解压
-wget https://github.com/yourusername/rfrp/releases/latest/download/rfrps-linux-amd64.tar.gz
 tar -xzf rfrps-linux-amd64.tar.gz
-
-# 赋予执行权限
-chmod +x rfrps rfrpc
-
-# 移动到系统路径 (可选)
-sudo mv rfrps rfrpc /usr/local/bin/
-```
-
-**Linux (arm64):**
-```bash
-wget https://github.com/yourusername/rfrp/releases/latest/download/rfrps-linux-arm64.tar.gz
-tar -xzf rfrps-linux-arm64.tar.gz
 chmod +x rfrps rfrpc
 sudo mv rfrps rfrpc /usr/local/bin/
 ```
 
-**Windows:**
-```powershell
-# 下载 ZIP 文件
-# https://github.com/yourusername/rfrp/releases/latest/download/rfrps-windows-amd64.zip
+</details>
 
-# 解压后双击运行 rfrps.exe 或 rfrpc.exe
-# 或在 PowerShell/CMD 中运行
-.\rfrps.exe
-```
+<details>
+<summary><b>从源码编译</b></summary>
 
-**macOS (Intel):**
-```bash
-wget https://github.com/yourusername/rfrp/releases/latest/download/rfrps-darwin-amd64.tar.gz
-tar -xzf rfrps-darwin-amd64.tar.gz
-chmod +x rfrps rfrpc
-sudo mv rfrps rfrpc /usr/local/bin/
-```
-
-**macOS (Apple Silicon):**
-```bash
-wget https://github.com/yourusername/rfrp/releases/latest/download/rfrps-darwin-arm64.tar.gz
-tar -xzf rfrps-darwin-arm64.tar.gz
-chmod +x rfrps rfrpc
-sudo mv rfrps rfrpc /usr/local/bin/
-```
-
-#### 方式二：从源码编译
-
-**环境要求：**
-- Rust 1.85+ (2024 edition)
-- Bun 1.0+ (用于构建 Web 界面)
-- SQLite 3
-- Git
-
-**步骤：**
+**环境要求**: Rust 1.85+, Bun 1.0+, SQLite 3, Git
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/yourusername/rfrp.git
-cd rfrp
-
-# 2. 编译服务端和客户端
+git clone https://github.com/rfrp/rfrp.git && cd rfrp
 cargo build --release
-
-# 3. 编译 Web 界面
-cd web
-bun install
-bun run build
-cd ..
-
-# 4. 可执行文件位于 target/release/ 目录
-# rfrps - 服务端
-# rfrpc - 客户端
+cd web && bun install && bun run build
+# 可执行文件: target/release/rfrps, target/release/rfrpc
 ```
 
-#### 配置和启动
+</details>
 
-**1. 启动服务端：**
-
-```bash
-# 创建配置文件
-cat > rfrps.toml << EOF
-bind_port = 7000
-EOF
-
-# 启动服务端
-./target/release/rfrps
-# 或从系统路径启动
-rfrps
-
-# Windows
-rfrps.exe
-```
-
-**首次启动注意事项：**
-- 服务端会自动创建 admin 用户
-- **请务必查看日志中的初始密码！**
-- Web 界面地址：`http://localhost:3000`
-- 默认用户名：`admin`
-
-**2. 启动客户端：**
+<details>
+<summary><b>配置为 systemd 服务 (Linux)</b></summary>
 
 ```bash
-# 创建配置文件
-cat > rfrpc.toml << EOF
-server_addr = "your-server-ip"
-server_port = 7000
-token = "your-client-token"  # 从 Web 界面获取
-EOF
-
-# 启动客户端
-./target/release/rfrpc
-# 或
-rfrpc
-
-# Windows
-rfrpc.exe
-```
-
-#### 配置为系统服务（Linux）
-
-**使用 systemd 管理服务端：**
-
-```bash
-# 创建服务文件
 sudo tee /etc/systemd/system/rfrps.service > /dev/null << EOF
 [Unit]
 Description=RFRP Server
@@ -531,117 +267,19 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
 WorkingDirectory=/opt/rfrp
 ExecStart=/usr/local/bin/rfrps
 Restart=always
-RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# 启动并设置开机自启
 sudo systemctl daemon-reload
-sudo systemctl enable rfrps
-sudo systemctl start rfrps
-
-# 查看状态
-sudo systemctl status rfrps
-
-# 查看日志
-sudo journalctl -u rfrps -f
+sudo systemctl enable --now rfrps
 ```
 
-**使用 systemd 管理客户端：**
-
-```bash
-# 创建服务文件
-sudo tee /etc/systemd/system/rfrpc.service > /dev/null << EOF
-[Unit]
-Description=RFRP Client
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/rfrpc
-ExecStart=/usr/local/bin/rfrpc
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# 启动并设置开机自启
-sudo systemctl daemon-reload
-sudo systemctl enable rfrpc
-sudo systemctl start rfrpc
-
-# 查看状态
-sudo systemctl status rfrpc
-```
-
----
-
-## 🚀 快速开始
-
-安装完成后，按照以下步骤快速开始使用：
-
-### 1. 访问 Web 管理界面
-
-打开浏览器访问：`http://your-server-ip:3000`
-
-- 用户名：`admin`
-- 密码：查看服务端首次启动日志
-
-### 2. 修改默认密码
-
-登录后立即修改 admin 密码：
-1. 点击右上角用户头像
-2. 选择"修改密码"
-3. 输入新密码并保存
-
-### 3. 创建客户端
-
-1. 进入"客户端管理"页面
-2. 点击"新建客户端"
-3. 填写客户端名称和描述
-4. 点击"保存"，复制生成的 Token
-
-### 4. 创建隧道
-
-1. 进入"隧道管理"页面
-2. 点击"新建隧道"
-3. 配置隧道参数：
-   - **隧道名称**：自定义名称
-   - **隧道类型**：TCP/UDP
-   - **远程端口**：外网访问端口
-   - **本地地址**：内网服务地址（如 127.0.0.1）
-   - **本地端口**：内网服务端口
-4. 点击"保存"
-
-### 5. 使用示例
-
-假设您想通过公网访问内网的 SSH 服务（22 端口）：
-
-**隧道配置：**
-- 隧道类型：TCP
-- 远程端口：2222（公网访问端口）
-- 本地地址：127.0.0.1
-- 本地端口：22
-
-**访问方式：**
-```bash
-ssh -p 2222 user@your-server-ip
-```
-
-**更多使用场景：**
-- **远程桌面**：将内网 RDP (3389) 映射到公网
-- **Web 服务**：将内网 HTTP (80/443) 映射到公网
-- **数据库**：访问内网 MySQL (3306) / PostgreSQL (5432)
-- **游戏服务器**：映射游戏端口供外网玩家连接
+</details>
 
 ## ⚙️ 配置说明
 

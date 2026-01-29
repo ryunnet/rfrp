@@ -350,8 +350,8 @@ impl ProxyServer {
 
         let mut transport_config = TransportConfig::default();
         transport_config.max_concurrent_uni_streams(VarInt::from_u32(max_streams));
-        // 服务器不主动发送心跳，由客户端主动发送
-        // transport_config.keep_alive_interval(Some(Duration::from_secs(keep_alive_interval)));
+        // 服务器也发送心跳，确保连接稳定
+        transport_config.keep_alive_interval(Some(Duration::from_secs(keep_alive_interval)));
         transport_config.max_idle_timeout(Some(Duration::from_secs(idle_timeout).try_into()?));
 
         let mut server_config = ServerConfig::with_single_cert(
