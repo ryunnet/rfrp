@@ -1995,19 +1995,6 @@ dependencies = [
 
 [[package]]
 name = "rcgen"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75e669e5202259b5314d1ea5397316ad400819437857b90861765f24c4cf80a2"
-dependencies = [
- "pem",
- "ring",
- "rustls-pki-types",
- "time",
- "yasna",
-]
-
-[[package]]
-name = "rcgen"
 version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ec0a99f2de91c3cddc84b37e7db80e4d96b743e05607f647eb236fc0455907f"
@@ -2083,7 +2070,6 @@ dependencies = [
  "anyhow",
  "chrono",
  "quinn",
- "rcgen 0.13.2",
  "rustls",
  "serde",
  "serde_json",
@@ -2105,7 +2091,7 @@ dependencies = [
  "jsonwebtoken",
  "quinn",
  "rand 0.8.5",
- "rcgen 0.14.6",
+ "rcgen",
  "rustls",
  "sea-orm",
  "sea-orm-migration",

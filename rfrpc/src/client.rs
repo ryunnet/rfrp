@@ -11,8 +11,8 @@ use tracing::{info, error, warn, debug};
 use crate::log_collector::LogCollector;
 
 // 心跳配置
-const HEARTBEAT_INTERVAL_SECS: u64 = 10;  // 心跳发送间隔
-const HEARTBEAT_TIMEOUT_SECS: u64 = 30;   // 心跳超时时间
+const HEARTBEAT_INTERVAL_SECS: u64 = 3;   // 心跳发送间隔（缩短以更快检测断连）
+const HEARTBEAT_TIMEOUT_SECS: u64 = 5;    // 心跳超时时间（缩短以更快响应）
 
 pub async fn run(server_addr: SocketAddr, token: String, log_collector: LogCollector) -> Result<()> {
     // 创建传输配置
