@@ -529,8 +529,26 @@ async fn handle_client_auth(
                 let connections_clone = connections.clone();
 
                 tokio::spawn(async move {
-                    if let Err(e) = handle_proxy_stream(send, recv, conn_clone, connections_clone).await {
-                        error!("❌ 处理代理流错误: {}", e);
+                    // 先读取消息类型
+                    let mut msg_type = [0u8; 1];
+                    let mut recv = recv;
+                    if recv.read_exact(&mut msg_type).await.is_err() {
+                        return;
+                    }
+
+                    match msg_type[0] {
+                        b'h' => {
+                            // 心跳请求，回复心跳
+                            if let Err(e) = handle_heartbeat(send).await {
+                                debug!("心跳处理错误: {}", e);
+                            }
+                        }
+                        _ => {
+                            // 其他消息类型，交给代理流处理
+                            if let Err(e) = handle_proxy_stream(send, recv, conn_clone, connections_clone).await {
+                                error!("❌ 处理代理流错误: {}", e);
+                            }
+                        }
                     }
                 });
             }
@@ -892,6 +910,14 @@ async fn handle_tcp_to_quic(
                proxy_name, bytes_sent, bytes_received, user_count);
     }
 
+    Ok(())
+}
+
+/// 处理心跳请求
+async fn handle_heartbeat(mut send: quinn::SendStream) -> Result<()> {
+    // 回复心跳 'h'
+    send.write_all(&[b'h']).await?;
+    send.finish()?;
     Ok(())
 }
 

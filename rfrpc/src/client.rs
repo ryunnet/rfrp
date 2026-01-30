@@ -3,11 +3,16 @@ use quinn::{ClientConfig, Endpoint, crypto::rustls::QuicClientConfig, TransportC
 use rustls::pki_types::ServerName;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::net::{TcpStream, UdpSocket};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{info, error, warn, debug};
 use crate::log_collector::LogCollector;
+
+// 心跳配置
+const HEARTBEAT_INTERVAL_SECS: u64 = 10;  // 心跳发送间隔
+const HEARTBEAT_TIMEOUT_SECS: u64 = 30;   // 心跳超时时间
 
 pub async fn run(server_addr: SocketAddr, token: String, log_collector: LogCollector) -> Result<()> {
     // 创建传输配置
@@ -78,28 +83,59 @@ async fn connect_to_server(
 
             let conn = Arc::new(conn);
 
-            // 启动连接健康检查任务
-            let conn_health = conn.clone();
-            let mut health_check_handle = tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(10));
+            // 启动应用层心跳任务
+            let conn_heartbeat = conn.clone();
+            let heartbeat_failed = Arc::new(AtomicBool::new(false));
+            let heartbeat_failed_clone = heartbeat_failed.clone();
+
+            let mut heartbeat_handle = tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
+                let mut consecutive_failures = 0u32;
+                const MAX_FAILURES: u32 = 3;
+
                 loop {
                     interval.tick().await;
 
                     // 检查连接是否仍然有效
-                    if conn_health.close_reason().is_some() {
+                    if conn_heartbeat.close_reason().is_some() {
                         warn!("⚠️  检测到与服务器的连接已断开");
+                        heartbeat_failed_clone.store(true, Ordering::SeqCst);
                         break;
+                    }
+
+                    // 发送应用层心跳
+                    match send_heartbeat(&conn_heartbeat).await {
+                        Ok(_) => {
+                            consecutive_failures = 0;
+                            debug!("💓 心跳发送成功");
+                        }
+                        Err(e) => {
+                            consecutive_failures += 1;
+                            warn!("⚠️  心跳发送失败 ({}/{}): {}", consecutive_failures, MAX_FAILURES, e);
+
+                            if consecutive_failures >= MAX_FAILURES {
+                                error!("❌ 心跳连续失败 {} 次，判定连接已断开", MAX_FAILURES);
+                                heartbeat_failed_clone.store(true, Ordering::SeqCst);
+                                break;
+                            }
+                        }
                     }
                 }
             });
 
             // 循环接受来自服务器的QUIC流
             loop {
+                // 检查心跳是否失败
+                if heartbeat_failed.load(Ordering::SeqCst) {
+                    error!("❌ 心跳检测失败，准备重连");
+                    return Err(anyhow::anyhow!("Heartbeat failed"));
+                }
+
                 tokio::select! {
-                    // 监听健康检查任务
-                    _ = &mut health_check_handle => {
-                        error!("❌ 连接健康检查失败，准备重连");
-                        return Err(anyhow::anyhow!("Connection health check failed"));
+                    // 监听心跳任务
+                    _ = &mut heartbeat_handle => {
+                        error!("❌ 心跳任务结束，准备重连");
+                        return Err(anyhow::anyhow!("Heartbeat task ended"));
                     }
                     // 接受新的流
                     result = conn.accept_bi() => {
@@ -319,6 +355,36 @@ async fn handle_udp_proxy(
 
     // 关闭QUIC流
     quic_send.finish()?;
+
+    Ok(())
+}
+
+/// 发送应用层心跳
+/// 心跳协议: 客户端发送 'h' (heartbeat)，服务器回复 'h'
+async fn send_heartbeat(conn: &quinn::Connection) -> Result<()> {
+    // 打开双向流发送心跳
+    let (mut send, mut recv) = tokio::time::timeout(
+        Duration::from_secs(HEARTBEAT_TIMEOUT_SECS),
+        conn.open_bi()
+    ).await.map_err(|_| anyhow::anyhow!("Heartbeat open_bi timeout"))??;
+
+    // 发送心跳请求 'h'
+    send.write_all(&[b'h']).await?;
+    send.flush().await?;
+
+    // 等待服务器回复
+    let mut response = [0u8; 1];
+    tokio::time::timeout(
+        Duration::from_secs(HEARTBEAT_TIMEOUT_SECS),
+        recv.read_exact(&mut response)
+    ).await.map_err(|_| anyhow::anyhow!("Heartbeat response timeout"))??;
+
+    if response[0] != b'h' {
+        return Err(anyhow::anyhow!("Invalid heartbeat response: {}", response[0]));
+    }
+
+    // 关闭流
+    send.finish()?;
 
     Ok(())
 }
