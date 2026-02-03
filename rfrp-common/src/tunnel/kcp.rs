@@ -312,6 +312,7 @@ impl KcpMultiplexer {
             {
                 let mut stream = self.stream.lock().await;
                 if let Err(e) = stream.read_exact(&mut header_buf).await {
+                    tracing::error!("KCP receive_loop: Failed to read frame header: {}", e);
                     return Err(anyhow!("Failed to read frame header: {}", e));
                 }
             }
@@ -319,6 +320,8 @@ impl KcpMultiplexer {
             let stream_id = u32::from_be_bytes([header_buf[0], header_buf[1], header_buf[2], header_buf[3]]);
             let flags = header_buf[4];
             let length = u16::from_be_bytes([header_buf[5], header_buf[6]]) as usize;
+
+            tracing::debug!("KCP receive_loop: stream_id={}, flags={}, length={}", stream_id, flags, length);
 
             // 读取帧数据
             let mut data = vec![0u8; length];
@@ -329,6 +332,7 @@ impl KcpMultiplexer {
 
             match flags {
                 FLAG_SYN => {
+                    tracing::debug!("KCP receive_loop: Received SYN for stream {}", stream_id);
                     // 新的传入流
                     let (tx, rx) = mpsc::channel(100);
                     let state = StreamState { sender: tx };
@@ -340,10 +344,11 @@ impl KcpMultiplexer {
 
                     // 通知接受者
                     if self.incoming_streams.send((stream_id, rx)).await.is_err() {
-                        // 接受者已关闭
+                        tracing::warn!("KCP receive_loop: Failed to notify incoming stream {}", stream_id);
                     }
                 }
                 FLAG_FIN => {
+                    tracing::debug!("KCP receive_loop: Received FIN for stream {}", stream_id);
                     // 流关闭
                     let sender = {
                         let mut streams = self.streams.write().await;
@@ -356,6 +361,7 @@ impl KcpMultiplexer {
                     }
                 }
                 FLAG_DATA => {
+                    tracing::debug!("KCP receive_loop: Received DATA for stream {}, {} bytes", stream_id, data.len());
                     // 数据帧
                     let sender = {
                         let streams = self.streams.read().await;
@@ -368,10 +374,12 @@ impl KcpMultiplexer {
                             let mut streams = self.streams.write().await;
                             streams.remove(&stream_id);
                         }
+                    } else {
+                        tracing::warn!("KCP receive_loop: No sender found for stream {}", stream_id);
                     }
                 }
                 _ => {
-                    // 未知标志，忽略
+                    tracing::warn!("KCP receive_loop: Unknown flag {} for stream {}", flags, stream_id);
                 }
             }
         }
