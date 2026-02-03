@@ -43,6 +43,7 @@ pub async fn enable_api_feature(proxy_server: Arc<ProxyServer>, config_manager: 
             .route("/system/configs", get(handlers::get_configs))
             .route("/system/configs/update", post(handlers::update_config))
             .route("/system/configs/batch", post(handlers::batch_update_configs))
+            .route("/system/restart", post(handlers::restart_system))
             // 管理员路由（需要管理员权限）
             .route("/users", get(handlers::list_users).post(handlers::create_user))
             .route("/users/{id}", put(handlers::update_user).delete(handlers::delete_user))

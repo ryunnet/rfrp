@@ -8,6 +8,7 @@ use serde::Deserialize;
 use tracing::info;
 
 use crate::{entity::Proxy, migration::get_connection, middleware::AuthUser, AppState};
+use crate::server::ConnectionProvider;
 
 use super::ApiResponse;
 
@@ -188,18 +189,21 @@ pub async fn create_proxy(
         Ok(proxy) => {
             info!("✅ 代理已创建: {} (ID: {}, 客户端: {})", proxy.name, proxy.id, proxy.client_id);
 
-            // 动态启动代理监听器（如果客户端在线）
+            // 动态启动代理监听器（如果客户端在线，支持 QUIC 和 KCP）
             let listener_manager = app_state.proxy_server.get_listener_manager();
-            let connections = app_state.proxy_server.get_client_connections();
+            let conn_provider = ConnectionProvider::new(
+                app_state.proxy_server.get_client_connections(),
+                app_state.proxy_server.get_tunnel_connections(),
+            );
             let proxy_id = proxy.id;
             let proxy_name = proxy.name.clone();
             let client_id = req.client_id.clone();
 
             tokio::spawn(async move {
-                if let Err(e) = listener_manager.start_single_proxy(
+                if let Err(e) = listener_manager.start_single_proxy_unified(
                     client_id,
                     proxy_id,
-                    connections,
+                    conn_provider,
                 ).await {
                     tracing::error!("❌ 启动代理监听器失败: {}", e);
                 } else {
@@ -264,7 +268,10 @@ pub async fn update_proxy(
                     // 如果启用状态发生变化，动态启动或停止监听器
                     if enabled_changed {
                         let listener_manager = app_state.proxy_server.get_listener_manager();
-                        let connections = app_state.proxy_server.get_client_connections();
+                        let conn_provider = ConnectionProvider::new(
+                            app_state.proxy_server.get_client_connections(),
+                            app_state.proxy_server.get_tunnel_connections(),
+                        );
                         let proxy_id = updated.id;
                         let proxy_name = updated.name.clone();
                         let is_enabled = updated.enabled;
@@ -272,10 +279,10 @@ pub async fn update_proxy(
                         tokio::spawn(async move {
                             if is_enabled {
                                 // 启用代理 - 启动监听器
-                                if let Err(e) = listener_manager.start_single_proxy(
+                                if let Err(e) = listener_manager.start_single_proxy_unified(
                                     client_id,
                                     proxy_id,
-                                    connections,
+                                    conn_provider,
                                 ).await {
                                     tracing::error!("❌ 启动代理监听器失败: {}", e);
                                 } else {

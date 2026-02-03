@@ -17,6 +17,13 @@ use crate::entity::{Proxy, Client, User, client, user_client, UserClient};
 use crate::migration::get_connection;
 use crate::traffic::TrafficManager;
 use crate::config_manager::ConfigManager;
+use crate::config::KcpConfig;
+
+// 从共享库导入隧道模块
+use rfrp_common::{
+    TunnelConnection, TunnelSendStream, TunnelRecvStream,
+    TunnelListener, KcpListener, QuicSendStream, QuicRecvStream
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -65,7 +72,32 @@ pub struct ProxyServer {
     traffic_manager: Arc<TrafficManager>,
     listener_manager: Arc<ProxyListenerManager>,
     client_connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+    tunnel_connections: Arc<RwLock<HashMap<String, Arc<Box<dyn TunnelConnection>>>>>,
     config_manager: Arc<ConfigManager>,
+}
+
+/// Unified connection type that can be either QUIC or KCP
+#[derive(Clone)]
+pub enum UnifiedConnection {
+    Quic(Arc<quinn::Connection>),
+    Tunnel(Arc<Box<dyn TunnelConnection>>),
+}
+
+impl UnifiedConnection {
+    pub async fn open_bi(&self) -> Result<(Box<dyn TunnelSendStream>, Box<dyn TunnelRecvStream>)> {
+        match self {
+            UnifiedConnection::Quic(conn) => {
+                let (send, recv) = conn.open_bi().await?;
+                Ok((
+                    Box::new(QuicSendStream::new(send)) as Box<dyn TunnelSendStream>,
+                    Box::new(QuicRecvStream::new(recv)) as Box<dyn TunnelRecvStream>,
+                ))
+            }
+            UnifiedConnection::Tunnel(conn) => {
+                conn.open_bi().await
+            }
+        }
+    }
 }
 
 // 代理监听器管理器
@@ -77,6 +109,49 @@ pub struct ProxyListenerManager {
     traffic_manager: Arc<TrafficManager>,
 }
 
+/// Connection provider for proxy listeners
+#[derive(Clone)]
+pub struct ConnectionProvider {
+    quic_connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+    tunnel_connections: Arc<RwLock<HashMap<String, Arc<Box<dyn TunnelConnection>>>>>,
+}
+
+impl ConnectionProvider {
+    pub fn new(
+        quic_connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+        tunnel_connections: Arc<RwLock<HashMap<String, Arc<Box<dyn TunnelConnection>>>>>,
+    ) -> Self {
+        Self {
+            quic_connections,
+            tunnel_connections,
+        }
+    }
+
+    /// Get a unified connection for a client
+    pub async fn get_connection(&self, client_id: &str) -> Option<UnifiedConnection> {
+        // First check QUIC connections
+        {
+            let quic_conns = self.quic_connections.read().await;
+            if let Some(conn) = quic_conns.get(client_id) {
+                return Some(UnifiedConnection::Quic(conn.clone()));
+            }
+        }
+        // Then check tunnel (KCP) connections
+        {
+            let tunnel_conns = self.tunnel_connections.read().await;
+            if let Some(conn) = tunnel_conns.get(client_id) {
+                return Some(UnifiedConnection::Tunnel(conn.clone()));
+            }
+        }
+        None
+    }
+
+    /// Check if a client is online
+    pub async fn is_online(&self, client_id: &str) -> bool {
+        self.get_connection(client_id).await.is_some()
+    }
+}
+
 impl ProxyListenerManager {
     pub fn new(traffic_manager: Arc<TrafficManager>) -> Self {
         Self {
@@ -86,11 +161,11 @@ impl ProxyListenerManager {
         }
     }
 
-    // 为客户端启动所有代理监听器
-    async fn start_client_proxies(
+    // 为客户端启动所有代理监听器 (使用统一连接提供器)
+    pub async fn start_client_proxies_unified(
         &self,
         client_id: String,
-        connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+        conn_provider: ConnectionProvider,
     ) -> Result<()> {
         let db = get_connection().await;
 
@@ -122,7 +197,7 @@ impl ProxyListenerManager {
             let listen_addr = format!("0.0.0.0:{}", proxy.remote_port);
             let target_addr = format!("{}:{}", proxy.local_ip, proxy.local_port);
             let proxy_id = proxy.id;
-            let connections_clone = connections.clone();
+            let conn_provider_clone = conn_provider.clone();
             let traffic_manager = self.traffic_manager.clone();
 
             let udp_sessions = self.udp_sessions.clone();
@@ -131,23 +206,23 @@ impl ProxyListenerManager {
                 loop {
                     let result = match proxy_protocol {
                         ProxyProtocol::Tcp => {
-                            run_tcp_proxy_listener(
+                            run_tcp_proxy_listener_unified(
                                 proxy_name.clone(),
                                 client_id_clone.clone(),
                                 listen_addr.clone(),
                                 target_addr.clone(),
-                                connections_clone.clone(),
+                                conn_provider_clone.clone(),
                                 proxy_id,
                                 traffic_manager.clone(),
                             ).await
                         }
                         ProxyProtocol::Udp => {
-                            run_udp_proxy_listener(
+                            run_udp_proxy_listener_unified(
                                 proxy_name.clone(),
                                 client_id_clone.clone(),
                                 listen_addr.clone(),
                                 target_addr.clone(),
-                                connections_clone.clone(),
+                                conn_provider_clone.clone(),
                                 proxy_id,
                                 udp_sessions.clone(),
                                 traffic_manager.clone(),
@@ -159,15 +234,13 @@ impl ProxyListenerManager {
                         Ok(_) => {},
                         Err(e) => {
                             error!("[{}] 代理监听失败: {}", proxy_name, e);
-                            // 监听器失败，等待重试
                         }
                     }
                     // 如果监听器失败，等待一段时间后重新尝试启动（如果客户端仍在线）
                     tokio::time::sleep(Duration::from_secs(5)).await;
 
                     // 检查客户端是否仍在连接
-                    let conns = connections_clone.read().await;
-                    if !conns.contains_key(&client_id_clone) {
+                    if !conn_provider_clone.is_online(&client_id_clone).await {
                         warn!("[{}] 客户端已离线，停止代理监听", proxy_name);
                         break;
                     }
@@ -194,20 +267,15 @@ impl ProxyListenerManager {
         }
     }
 
-    // 动态启动单个代理监听器（用于新增代理时）
-    pub async fn start_single_proxy(
+    // 动态启动单个代理监听器（使用统一连接提供器）
+    pub async fn start_single_proxy_unified(
         &self,
         client_id: String,
         proxy_id: i64,
-        connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+        conn_provider: ConnectionProvider,
     ) -> Result<()> {
         // 检查客户端是否在线
-        let is_online = {
-            let conns = connections.read().await;
-            conns.contains_key(&client_id)
-        };
-
-        if !is_online {
+        if !conn_provider.is_online(&client_id).await {
             info!("  [客户端 {}] 离线，跳过启动代理 #{}", client_id, proxy_id);
             return Ok(());
         }
@@ -249,7 +317,7 @@ impl ProxyListenerManager {
         let client_id_clone = client_id.clone();
         let listen_addr = format!("0.0.0.0:{}", proxy.remote_port);
         let target_addr = format!("{}:{}", proxy.local_ip, proxy.local_port);
-        let connections_clone = connections.clone();
+        let conn_provider_clone = conn_provider.clone();
         let traffic_manager = self.traffic_manager.clone();
 
         let udp_sessions = self.udp_sessions.clone();
@@ -258,23 +326,23 @@ impl ProxyListenerManager {
             loop {
                 let result = match proxy_protocol {
                     ProxyProtocol::Tcp => {
-                        run_tcp_proxy_listener(
+                        run_tcp_proxy_listener_unified(
                             proxy_name.clone(),
                             client_id_clone.clone(),
                             listen_addr.clone(),
                             target_addr.clone(),
-                            connections_clone.clone(),
+                            conn_provider_clone.clone(),
                             proxy_id,
                             traffic_manager.clone(),
                         ).await
                     }
                     ProxyProtocol::Udp => {
-                        run_udp_proxy_listener(
+                        run_udp_proxy_listener_unified(
                             proxy_name.clone(),
                             client_id_clone.clone(),
                             listen_addr.clone(),
                             target_addr.clone(),
-                            connections_clone.clone(),
+                            conn_provider_clone.clone(),
                             proxy_id,
                             udp_sessions.clone(),
                             traffic_manager.clone(),
@@ -292,8 +360,7 @@ impl ProxyListenerManager {
                 tokio::time::sleep(Duration::from_secs(5)).await;
 
                 // 检查客户端是否仍在连接
-                let conns = connections_clone.read().await;
-                if !conns.contains_key(&client_id_clone) {
+                if !conn_provider_clone.is_online(&client_id_clone).await {
                     warn!("[{}] 客户端已离线，停止代理监听", proxy_name);
                     break;
                 }
@@ -324,6 +391,7 @@ impl ProxyServer {
         let cert = rcgen::generate_simple_self_signed(&["rfrp".to_string()])?;
         let listener_manager = Arc::new(ProxyListenerManager::new(traffic_manager.clone()));
         let client_connections = Arc::new(RwLock::new(HashMap::new()));
+        let tunnel_connections = Arc::new(RwLock::new(HashMap::new()));
 
         Ok(Self {
             cert: CertificateDer::from(cert.cert.der().to_vec()),
@@ -331,6 +399,7 @@ impl ProxyServer {
             traffic_manager,
             listener_manager,
             client_connections,
+            tunnel_connections,
             config_manager,
         })
     }
@@ -341,6 +410,45 @@ impl ProxyServer {
 
     pub fn get_client_connections(&self) -> Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>> {
         self.client_connections.clone()
+    }
+
+    pub fn get_tunnel_connections(&self) -> Arc<RwLock<HashMap<String, Arc<Box<dyn TunnelConnection>>>>> {
+        self.tunnel_connections.clone()
+    }
+
+    /// Get a unified connection for a client (checks both QUIC and KCP)
+    pub async fn get_unified_connection(&self, client_id: &str) -> Option<UnifiedConnection> {
+        // First check QUIC connections
+        {
+            let quic_conns = self.client_connections.read().await;
+            if let Some(conn) = quic_conns.get(client_id) {
+                return Some(UnifiedConnection::Quic(conn.clone()));
+            }
+        }
+        // Then check tunnel (KCP) connections
+        {
+            let tunnel_conns = self.tunnel_connections.read().await;
+            if let Some(conn) = tunnel_conns.get(client_id) {
+                return Some(UnifiedConnection::Tunnel(conn.clone()));
+            }
+        }
+        None
+    }
+
+    /// Check if a client is online (either QUIC or KCP)
+    pub async fn is_client_online(&self, client_id: &str) -> bool {
+        let quic_online = {
+            let conns = self.client_connections.read().await;
+            conns.contains_key(client_id)
+        };
+        if quic_online {
+            return true;
+        }
+        let tunnel_online = {
+            let conns = self.tunnel_connections.read().await;
+            conns.contains_key(client_id)
+        };
+        tunnel_online
     }
 
     pub async fn run(&self, bind_addr: String) -> Result<()> {
@@ -380,12 +488,13 @@ impl ProxyServer {
                     // 等待客户端发送 token 认证
                     let conn_clone = Arc::new(conn);
                     let connections = self.client_connections.clone();
+                    let tunnel_connections = self.tunnel_connections.clone();
                     let listener_mgr = self.listener_manager.clone();
                     let config_mgr = self.config_manager.clone();
 
                     tokio::spawn(async move {
                         debug!("开始处理连接！");
-                        if let Err(e) = handle_client_auth(conn_clone, connections, listener_mgr, config_mgr).await {
+                        if let Err(e) = handle_client_auth(conn_clone, connections, tunnel_connections, listener_mgr, config_mgr).await {
                             error!("❌ 客户端认证失败: {}", e);
                         }
                     });
@@ -398,11 +507,53 @@ impl ProxyServer {
 
         Ok(())
     }
+
+    /// Run KCP server on specified address
+    pub async fn run_kcp(&self, bind_addr: String, kcp_config: Option<KcpConfig>) -> Result<()> {
+        let addr: SocketAddr = bind_addr.parse()?;
+        let listener = KcpListener::new(addr, kcp_config).await?;
+
+        info!("KCP server started successfully!");
+        info!("KCP listening on: {}", bind_addr);
+        info!("Waiting for KCP client connections...");
+
+        loop {
+            match listener.accept().await {
+                Ok(conn) => {
+                    let remote_addr = conn.remote_address();
+                    info!("New KCP connection from: {}", remote_addr);
+
+                    let conn = Arc::new(conn);
+                    let tunnel_connections = self.tunnel_connections.clone();
+                    let listener_mgr = self.listener_manager.clone();
+                    let config_mgr = self.config_manager.clone();
+                    let quic_connections = self.client_connections.clone();
+
+                    tokio::spawn(async move {
+                        debug!("Processing KCP connection!");
+                        if let Err(e) = handle_tunnel_client_auth(
+                            conn,
+                            tunnel_connections,
+                            quic_connections,
+                            listener_mgr,
+                            config_mgr,
+                        ).await {
+                            error!("KCP client authentication failed: {}", e);
+                        }
+                    });
+                }
+                Err(e) => {
+                    error!("KCP connection accept failed: {}", e);
+                }
+            }
+        }
+    }
 }
 
 async fn handle_client_auth(
     conn: Arc<quinn::Connection>,
     connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+    tunnel_connections: Arc<RwLock<HashMap<String, Arc<Box<dyn TunnelConnection>>>>>,
     listener_manager: Arc<ProxyListenerManager>,
     config_manager: Arc<ConfigManager>,
 ) -> Result<()> {
@@ -472,15 +623,16 @@ async fn handle_client_auth(
 
     info!("✅ 客户端认证成功: {} (ID: {}, 在线: {})", client_name, client_id, conn.remote_address());
 
-    // 启动该客户端的所有代理监听器
-    if let Err(e) = listener_manager.start_client_proxies(format!("{}", client_id), connections.clone()).await {
-        error!("❌ 启动代理监听器失败: {}", e);
-    }
-
-    // 保存连接
+    // 保存连接（先保存，再启动代理，这样代理监听器能找到连接）
     let mut conns = connections.write().await;
     conns.insert(format!("{}", client_id), conn.clone());
     drop(conns);
+
+    // 启动该客户端的所有代理监听器（使用统一连接提供器）
+    let conn_provider = ConnectionProvider::new(connections.clone(), tunnel_connections.clone());
+    if let Err(e) = listener_manager.start_client_proxies_unified(format!("{}", client_id), conn_provider).await {
+        error!("❌ 启动代理监听器失败: {}", e);
+    }
 
     // 启动连接健康检查任务
     let conn_health_check = conn.clone();
@@ -501,20 +653,35 @@ async fn handle_client_auth(
             if conn_health_check.close_reason().is_some() {
                 warn!("⚠️  检测到客户端连接已关闭: {}", client_name_health);
 
-                // 清理连接
+                // 清理连接 - 只有当前连接与健康检查的连接是同一个时才删除
+                let client_id_str = format!("{}", client_id_health);
                 let mut conns = connections_health.write().await;
-                conns.remove(&format!("{}", client_id_health));
-                drop(conns);
 
-                // 停止该客户端的所有代理监听器
-                listener_manager_health.stop_client_proxies(&format!("{}", client_id_health)).await;
+                // 检查当前存储的连接是否与我们监控的连接是同一个
+                let should_cleanup = if let Some(current_conn) = conns.get(&client_id_str) {
+                    // 比较连接的远程地址来判断是否是同一个连接
+                    Arc::ptr_eq(current_conn, &conn_health_check)
+                } else {
+                    false
+                };
 
-                // 更新客户端为离线状态
-                let db = get_connection().await;
-                if let Some(client) = Client::find_by_id(client_id_health).one(db).await.unwrap() {
-                    let mut client_active: client::ActiveModel = client.into();
-                    client_active.is_online = Set(false);
-                    let _ = client_active.update(db).await;
+                if should_cleanup {
+                    conns.remove(&client_id_str);
+                    drop(conns);
+
+                    // 停止该客户端的所有代理监听器
+                    listener_manager_health.stop_client_proxies(&client_id_str).await;
+
+                    // 更新客户端为离线状态
+                    let db = get_connection().await;
+                    if let Some(client) = Client::find_by_id(client_id_health).one(db).await.unwrap() {
+                        let mut client_active: client::ActiveModel = client.into();
+                        client_active.is_online = Set(false);
+                        let _ = client_active.update(db).await;
+                    }
+                } else {
+                    drop(conns);
+                    debug!("跳过清理: 客户端 {} 已经重新连接", client_name_health);
                 }
                 break;
             }
@@ -576,276 +743,230 @@ async fn handle_client_auth(
     Ok(())
 }
 
-async fn run_tcp_proxy_listener(
-    proxy_name: String,
-    client_id: String,
-    listen_addr: String,
-    target_addr: String,
-    connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
-    proxy_id: i64,
-    traffic_manager: Arc<TrafficManager>,
+/// Handle client authentication for tunnel connections (KCP)
+async fn handle_tunnel_client_auth(
+    conn: Arc<Box<dyn TunnelConnection>>,
+    tunnel_connections: Arc<RwLock<HashMap<String, Arc<Box<dyn TunnelConnection>>>>>,
+    quic_connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
+    listener_manager: Arc<ProxyListenerManager>,
+    config_manager: Arc<ConfigManager>,
 ) -> Result<()> {
-    let listener = TcpListener::bind(&listen_addr).await?;
-    info!("[{}] 🔌 TCP监听端口: {} -> {}", proxy_name, listen_addr, target_addr);
+    // Wait for client to send token (format: 2 byte length + content)
+    let mut recv_stream = match conn.accept_uni().await {
+        Ok(s) => s,
+        Err(_) => return Ok(()),
+    };
 
-    loop {
-        match listener.accept().await {
-            Ok((tcp_stream, addr)) => {
-                info!("[{}] 📥 新连接来自: {}", proxy_name, addr);
+    let mut len_buf = [0u8; 2];
+    recv_stream.read_exact(&mut len_buf).await?;
+    let len = u16::from_be_bytes(len_buf) as usize;
+    debug!("Received token length: {}", len);
 
-                let connections_clone = connections.clone();
-                let client_id = client_id.clone();
-                let target_addr = target_addr.clone();
-                let proxy_name = proxy_name.clone();
-                let traffic_manager = traffic_manager.clone();
+    let mut token_buf = vec![0u8; len];
+    recv_stream.read_exact(&mut token_buf).await?;
+    let token = String::from_utf8(token_buf)?;
+    debug!("Received token: {}", token);
 
-                tokio::spawn(async move {
-                    if let Err(e) = handle_tcp_to_quic(tcp_stream, addr, target_addr, proxy_name, client_id, connections_clone, proxy_id, traffic_manager).await {
-                        error!("❌ 处理连接错误: {}", e);
-                    }
-                });
-            }
-            Err(e) => {
-                error!("[{}] ❌ 接受连接失败: {}", proxy_name, e);
+    let db = get_connection().await;
+    // Find corresponding client
+    let client = match Client::find()
+        .filter(client::Column::Token.eq(&token))
+        .one(db)
+        .await?
+    {
+        Some(c) => c,
+        None => {
+            error!("Invalid token");
+            return Ok(());
+        }
+    };
+
+    let client_id = client.id;
+    let client_name = client.name.clone();
+
+    // Check if users bound to this client have exceeded traffic limits
+    let user_clients = match UserClient::find()
+        .filter(user_client::Column::ClientId.eq(client_id))
+        .all(db)
+        .await
+    {
+        Ok(ucs) => ucs,
+        Err(e) => {
+            error!("Failed to query user-client associations: {}", e);
+            return Ok(());
+        }
+    };
+
+    // Check traffic status for all associated users
+    for uc in user_clients {
+        if let Ok(Some(user)) = User::find_by_id(uc.user_id).one(db).await {
+            if user.is_traffic_exceeded {
+                error!("Client {} auth failed: User {} (#{}) traffic exceeded",
+                    client_name, user.username, user.id);
+                return Ok(());
             }
         }
     }
-}
 
-// UDP代理监听器
-async fn run_udp_proxy_listener(
-    proxy_name: String,
-    client_id: String,
-    listen_addr: String,
-    target_addr: String,
-    connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
-    proxy_id: i64,
-    udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
-    traffic_manager: Arc<TrafficManager>,
-) -> Result<()> {
-    let socket = Arc::new(UdpSocket::bind(&listen_addr).await?);
-    info!("[{}] 🔌 UDP监听端口: {} -> {}", proxy_name, listen_addr, target_addr);
+    // Update client to online status
+    let mut client_active: client::ActiveModel = client.into();
+    client_active.is_online = Set(true);
+    debug!("Updating client status: {:?}", client_active);
+    let _ = client_active.update(db).await;
 
-    let mut buf = vec![0u8; 65535];
-    let session_timeout = Duration::from_secs(300); // 5分钟超时
+    info!("KCP client authenticated: {} (ID: {}, Online: {})", client_name, client_id, conn.remote_address());
 
-    // 启动会话清理任务
-    let udp_sessions_cleanup = udp_sessions.clone();
-    let client_id_clone = client_id.clone();
-    let proxy_name_clone = proxy_name.clone();
+    // Save tunnel connection first (so proxy listeners can find it)
+    let mut conns = tunnel_connections.write().await;
+    conns.insert(format!("{}", client_id), conn.clone());
+    drop(conns);
+
+    // Start all proxy listeners for this client (using unified connection provider)
+    let conn_provider = ConnectionProvider::new(quic_connections.clone(), tunnel_connections.clone());
+    if let Err(e) = listener_manager.start_client_proxies_unified(format!("{}", client_id), conn_provider).await {
+        error!("Failed to start proxy listeners: {}", e);
+    }
+
+    // Start connection health check task
+    let conn_health_check = conn.clone();
+    let client_id_health = client_id;
+    let client_name_health = client_name.clone();
+    let tunnel_connections_health = tunnel_connections.clone();
+    let listener_manager_health = listener_manager.clone();
+
+    let health_check_interval = config_manager.get_number("health_check_interval", 15).await as u64;
+
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        let mut interval = tokio::time::interval(Duration::from_secs(health_check_interval));
         loop {
             interval.tick().await;
-            let mut sessions = udp_sessions_cleanup.write().await;
-            let key = (client_id_clone.clone(), proxy_id);
-            if let Some(session_map) = sessions.get_mut(&key) {
-                let now = tokio::time::Instant::now();
-                session_map.retain(|addr, session| {
-                    if now.duration_since(session.last_activity) > session_timeout {
-                        debug!("[{}] UDP会话超时: {}", proxy_name_clone, addr);
-                        false
-                    } else {
-                        true
+
+            if conn_health_check.close_reason().is_some() {
+                warn!("Detected KCP client connection closed: {}", client_name_health);
+
+                // 清理连接 - 只有当前连接与健康检查的连接是同一个时才删除
+                let client_id_str = format!("{}", client_id_health);
+                let mut conns = tunnel_connections_health.write().await;
+
+                // 检查当前存储的连接是否与我们监控的连接是同一个
+                let should_cleanup = if let Some(current_conn) = conns.get(&client_id_str) {
+                    // 比较连接的远程地址来判断是否是同一个连接
+                    Arc::ptr_eq(current_conn, &conn_health_check)
+                } else {
+                    false
+                };
+
+                if should_cleanup {
+                    conns.remove(&client_id_str);
+                    drop(conns);
+
+                    listener_manager_health.stop_client_proxies(&client_id_str).await;
+
+                    let db = get_connection().await;
+                    if let Some(client) = Client::find_by_id(client_id_health).one(db).await.unwrap() {
+                        let mut client_active: client::ActiveModel = client.into();
+                        client_active.is_online = Set(false);
+                        let _ = client_active.update(db).await;
                     }
-                });
+                } else {
+                    drop(conns);
+                    debug!("Skipping cleanup: KCP client {} has already reconnected", client_name_health);
+                }
+                break;
             }
         }
     });
 
+    // Loop to accept proxy stream requests
     loop {
-        match socket.recv_from(&mut buf).await {
-            Ok((len, src_addr)) => {
-                let data = buf[..len].to_vec();
-                let connections_clone = connections.clone();
-                let client_id = client_id.clone();
-                let target_addr = target_addr.clone();
-                let proxy_name = proxy_name.clone();
-                let udp_sessions = udp_sessions.clone();
-                let socket = socket.clone();
-                let traffic_manager = traffic_manager.clone();
+        match conn.accept_bi().await {
+            Ok((send, mut recv)) => {
+                let conn_clone = conn.clone();
+                let tunnel_connections_clone = tunnel_connections.clone();
 
                 tokio::spawn(async move {
-                    if let Err(e) = handle_udp_to_quic(
-                        socket,
-                        src_addr,
-                        data,
-                        target_addr,
-                        proxy_name,
-                        client_id,
-                        connections_clone,
-                        proxy_id,
-                        udp_sessions,
-                        traffic_manager,
-                    ).await {
-                        error!("❌ 处理UDP错误: {}", e);
+                    // Read message type
+                    let mut msg_type = [0u8; 1];
+                    if recv.read_exact(&mut msg_type).await.is_err() {
+                        return;
+                    }
+
+                    match msg_type[0] {
+                        b'h' => {
+                            // Heartbeat request
+                            if let Err(e) = handle_tunnel_heartbeat(send).await {
+                                debug!("Heartbeat error: {}", e);
+                            }
+                        }
+                        _ => {
+                            // Other message types
+                            if let Err(e) = handle_tunnel_proxy_stream(send, recv, conn_clone, tunnel_connections_clone).await {
+                                error!("Tunnel proxy stream error: {}", e);
+                            }
+                        }
                     }
                 });
             }
-            Err(e) => {
-                error!("[{}] ❌ 接收UDP数据失败: {}", proxy_name, e);
-            }
-        }
-    }
-}
+            Err(_) => {
+                warn!("KCP client disconnected: {}", client_name);
+                let mut conns = tunnel_connections.write().await;
+                conns.remove(&format!("{}", client_id));
+                drop(conns);
 
-async fn handle_udp_to_quic(
-    socket: Arc<UdpSocket>,
-    src_addr: SocketAddr,
-    data: Vec<u8>,
-    target_addr: String,
-    proxy_name: String,
-    client_id: String,
-    connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
-    proxy_id: i64,
-    _udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
-    traffic_manager: Arc<TrafficManager>,
-) -> Result<()> {
-    // 获取客户端连接
-    let conn = {
-        let conns = connections.read().await;
-        conns.get(&client_id).cloned()
-    };
+                listener_manager.stop_client_proxies(&format!("{}", client_id)).await;
 
-    let conn = match conn {
-        Some(c) => c,
-        None => {
-            error!("[{}] ❌ 客户端未连接", proxy_name);
-            return Ok(());
-        }
-    };
-
-    // 打开双向QUIC流
-    let (mut quic_send, mut quic_recv) = conn.open_bi().await?;
-
-    info!("[{}] 🔗 UDP QUIC流已打开: {}", proxy_name, src_addr);
-
-    // 发送协议类型和目标地址 (格式: 1字节协议类型 + 2字节长度 + 地址)
-    quic_send.write_all(&[b'u']).await?; // 'u' 表示UDP
-    let target_bytes = target_addr.as_bytes();
-    let len = target_bytes.len() as u16;
-    quic_send.write_all(&len.to_be_bytes()).await?;
-    quic_send.write_all(target_bytes).await?;
-    quic_send.write_all(&data).await?;
-    quic_send.flush().await?;
-
-    // 统计发送字节数
-    traffic_manager.record_traffic(
-        proxy_id,
-        client_id.parse::<i64>().unwrap_or(0),
-        None,
-        data.len() as i64,
-        0,
-    ).await;
-
-    // 读取响应并转发回源
-    let mut recv_buf = vec![0u8; 65535];
-    let mut bytes_received = 0i64;
-
-    loop {
-        match quic_recv.read(&mut recv_buf).await? {
-            Some(n) => {
-                if n == 0 {
-                    break;
+                let db = get_connection().await;
+                if let Some(client) = Client::find_by_id(client_id).one(db).await.unwrap() {
+                    let mut client_active: client::ActiveModel = client.into();
+                    client_active.is_online = Set(false);
+                    let _ = client_active.update(db).await;
                 }
-                bytes_received += n as i64;
-                socket.send_to(&recv_buf[..n], src_addr).await?;
+                break;
             }
-            None => break,
         }
     }
 
-    // 统计接收字节数
-    if bytes_received > 0 {
-        traffic_manager.record_traffic(
-            proxy_id,
-            client_id.parse::<i64>().unwrap_or(0),
-            None,
-            0,
-            bytes_received,
-        ).await;
-    }
-
-    quic_send.finish()?;
     Ok(())
 }
 
-async fn handle_tcp_to_quic(
-    mut tcp_stream: TcpStream,
-    addr: std::net::SocketAddr,
-    target_addr: String,
-    proxy_name: String,
-    client_id: String,
-    connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
-    proxy_id: i64,
-    traffic_manager: Arc<TrafficManager>,
+/// Handle heartbeat for tunnel connections
+async fn handle_tunnel_heartbeat(mut send: Box<dyn TunnelSendStream>) -> Result<()> {
+    send.write_all(&[b'h']).await?;
+    send.finish()?;
+    Ok(())
+}
+
+/// Handle proxy stream for tunnel connections
+async fn handle_tunnel_proxy_stream(
+    mut tunnel_send: Box<dyn TunnelSendStream>,
+    mut tunnel_recv: Box<dyn TunnelRecvStream>,
+    _conn: Arc<Box<dyn TunnelConnection>>,
+    _connections: Arc<RwLock<HashMap<String, Arc<Box<dyn TunnelConnection>>>>>,
 ) -> Result<()> {
-    // 获取客户端连接
-    let conn = {
-        let conns = connections.read().await;
-        conns.get(&client_id).cloned()
-    };
+    // Read target address
+    let mut len_buf = [0u8; 2];
+    tunnel_recv.read_exact(&mut len_buf).await?;
+    let len = u16::from_be_bytes(len_buf) as usize;
 
-    let conn = match conn {
-        Some(c) => c,
-        None => {
-            error!("[{}] ❌ 客户端未连接", proxy_name);
-            return Ok(());
-        }
-    };
+    let mut addr_buf = vec![0u8; len];
+    tunnel_recv.read_exact(&mut addr_buf).await?;
+    let target_addr = String::from_utf8(addr_buf)?;
 
-    // 打开双向QUIC流
-    let (mut quic_send, mut quic_recv) = conn.open_bi().await?;
-
-    info!("[{}] 🔗 QUIC流已打开: {}", proxy_name, addr);
-
-    // 发送协议类型和目标地址 (格式: 1字节协议类型 + 2字节长度 + 地址)
-    quic_send.write_all(&[b't']).await?; // 't' 表示TCP
-    let target_bytes = target_addr.as_bytes();
-    let len = target_bytes.len() as u16;
-
-    quic_send.write_all(&len.to_be_bytes()).await?;
-    quic_send.write_all(target_bytes).await?;
-    quic_send.flush().await?;
+    // Connect to target service
+    let mut tcp_stream = TcpStream::connect(&target_addr).await?;
 
     let (mut tcp_read, mut tcp_write) = tcp_stream.split();
 
-    // 使用Arc<RwLock>>来在两个方向上统计流量
-    let sent_stats = Arc::new(RwLock::new(0i64));
-    let received_stats = Arc::new(RwLock::new(0i64));
-
-    let sent_stats_clone = sent_stats.clone();
-    let received_stats_clone = received_stats.clone();
-
-    // TCP -> QUIC
-    let tcp_to_quic = async {
+    // Tunnel -> TCP
+    let tunnel_to_tcp = async {
         let mut buf = vec![0u8; 8192];
         loop {
-            let n = tcp_read.read(&mut buf).await?;
-            if n == 0 {
-                break;
-            }
-            quic_send.write_all(&buf[..n]).await?;
-            // 统计发送字节数
-            let mut stats = sent_stats_clone.write().await;
-            *stats += n as i64;
-        }
-        Ok::<_, anyhow::Error>(())
-    };
-
-    // QUIC -> TCP
-    let quic_to_tcp = async {
-        let mut buf = vec![0u8; 8192];
-        loop {
-            match quic_recv.read(&mut buf).await? {
+            match tunnel_recv.read(&mut buf).await? {
                 Some(n) => {
                     if n == 0 {
                         break;
                     }
                     tcp_write.write_all(&buf[..n]).await?;
-                    // 统计接收字节数
-                    let mut stats = received_stats_clone.write().await;
-                    *stats += n as i64;
                 }
                 None => break,
             }
@@ -853,62 +974,33 @@ async fn handle_tcp_to_quic(
         Ok::<_, anyhow::Error>(())
     };
 
+    // TCP -> Tunnel
+    let tcp_to_tunnel = async {
+        let mut buf = vec![0u8; 8192];
+        loop {
+            let n = tcp_read.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+            tunnel_send.write_all(&buf[..n]).await?;
+        }
+        Ok::<_, anyhow::Error>(())
+    };
+
     tokio::select! {
-        res = tcp_to_quic => {
+        res = tunnel_to_tcp => {
             if let Err(e) = res {
-                error!("[{}] TCP->QUIC错误: {}", proxy_name, e);
+                error!("Tunnel->TCP error: {}", e);
             }
         }
-        res = quic_to_tcp => {
+        res = tcp_to_tunnel => {
             if let Err(e) = res {
-                error!("[{}] QUIC->TCP错误: {}", proxy_name, e);
+                error!("TCP->Tunnel error: {}", e);
             }
         }
     }
 
-    quic_send.finish()?;
-    info!("[{}] 🔚 连接已关闭: {}", proxy_name, addr);
-
-    // 获取最终统计数据
-    let bytes_sent = {
-        let stats = sent_stats.read().await;
-        *stats
-    };
-    let bytes_received = {
-        let stats = received_stats.read().await;
-        *stats
-    };
-
-    // 记录流量统计到 TrafficManager
-    // bytes_sent: TCP -> QUIC (从用户到服务器) - 用户上传
-    // bytes_received: QUIC -> TCP (从服务器到用户) - 用户下载
-    if bytes_sent > 0 || bytes_received > 0 {
-        let client_id_num = client_id.parse::<i64>().unwrap_or(0);
-
-        // 查询绑定到该客户端的所有用户
-        let db = get_connection().await;
-        let user_clients = UserClient::find()
-            .filter(user_client::Column::ClientId.eq(client_id_num))
-            .all(db)
-            .await
-            .unwrap_or_default();
-
-        let user_count = user_clients.len();
-
-        // 为每个用户记录流量
-        for uc in user_clients {
-            traffic_manager.record_traffic(
-                proxy_id,
-                client_id_num,
-                Some(uc.user_id),
-                bytes_sent,
-                bytes_received,
-            ).await;
-        }
-
-        debug!("[{}] 流量统计: 发送={}, 接收={}, 关联用户数={}",
-               proxy_name, bytes_sent, bytes_received, user_count);
-    }
+    tunnel_send.finish()?;
 
     Ok(())
 }
@@ -986,5 +1078,338 @@ async fn handle_proxy_stream(
 
     quic_send.finish()?;
 
+    Ok(())
+}
+
+// ============== 统一版本的代理监听器（支持 QUIC 和 KCP）==============
+
+async fn run_tcp_proxy_listener_unified(
+    proxy_name: String,
+    client_id: String,
+    listen_addr: String,
+    target_addr: String,
+    conn_provider: ConnectionProvider,
+    proxy_id: i64,
+    traffic_manager: Arc<TrafficManager>,
+) -> Result<()> {
+    let listener = TcpListener::bind(&listen_addr).await?;
+    info!("[{}] 🔌 TCP监听端口: {} -> {}", proxy_name, listen_addr, target_addr);
+
+    loop {
+        match listener.accept().await {
+            Ok((tcp_stream, addr)) => {
+                info!("[{}] 📥 新连接来自: {}", proxy_name, addr);
+
+                let conn_provider_clone = conn_provider.clone();
+                let client_id = client_id.clone();
+                let target_addr = target_addr.clone();
+                let proxy_name = proxy_name.clone();
+                let traffic_manager = traffic_manager.clone();
+
+                tokio::spawn(async move {
+                    if let Err(e) = handle_tcp_to_tunnel_unified(
+                        tcp_stream,
+                        addr,
+                        target_addr,
+                        proxy_name,
+                        client_id,
+                        conn_provider_clone,
+                        proxy_id,
+                        traffic_manager,
+                    ).await {
+                        error!("❌ 处理连接错误: {}", e);
+                    }
+                });
+            }
+            Err(e) => {
+                error!("[{}] ❌ 接受连接失败: {}", proxy_name, e);
+            }
+        }
+    }
+}
+
+async fn run_udp_proxy_listener_unified(
+    proxy_name: String,
+    client_id: String,
+    listen_addr: String,
+    target_addr: String,
+    conn_provider: ConnectionProvider,
+    proxy_id: i64,
+    udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
+    traffic_manager: Arc<TrafficManager>,
+) -> Result<()> {
+    let socket = Arc::new(UdpSocket::bind(&listen_addr).await?);
+    info!("[{}] 🔌 UDP监听端口: {} -> {}", proxy_name, listen_addr, target_addr);
+
+    let mut buf = vec![0u8; 65535];
+    let session_timeout = Duration::from_secs(300);
+
+    // 启动会话清理任务
+    let udp_sessions_cleanup = udp_sessions.clone();
+    let client_id_clone = client_id.clone();
+    let proxy_name_clone = proxy_name.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            let mut sessions = udp_sessions_cleanup.write().await;
+            let key = (client_id_clone.clone(), proxy_id);
+            if let Some(session_map) = sessions.get_mut(&key) {
+                let now = tokio::time::Instant::now();
+                session_map.retain(|addr, session| {
+                    if now.duration_since(session.last_activity) > session_timeout {
+                        debug!("[{}] UDP会话超时: {}", proxy_name_clone, addr);
+                        false
+                    } else {
+                        true
+                    }
+                });
+            }
+        }
+    });
+
+    loop {
+        match socket.recv_from(&mut buf).await {
+            Ok((len, src_addr)) => {
+                let data = buf[..len].to_vec();
+                let conn_provider_clone = conn_provider.clone();
+                let client_id = client_id.clone();
+                let target_addr = target_addr.clone();
+                let proxy_name = proxy_name.clone();
+                let udp_sessions = udp_sessions.clone();
+                let socket = socket.clone();
+                let traffic_manager = traffic_manager.clone();
+
+                tokio::spawn(async move {
+                    if let Err(e) = handle_udp_to_tunnel_unified(
+                        socket,
+                        src_addr,
+                        data,
+                        target_addr,
+                        proxy_name,
+                        client_id,
+                        conn_provider_clone,
+                        proxy_id,
+                        udp_sessions,
+                        traffic_manager,
+                    ).await {
+                        error!("❌ 处理UDP错误: {}", e);
+                    }
+                });
+            }
+            Err(e) => {
+                error!("[{}] ❌ 接收UDP数据失败: {}", proxy_name, e);
+            }
+        }
+    }
+}
+
+async fn handle_tcp_to_tunnel_unified(
+    mut tcp_stream: TcpStream,
+    addr: std::net::SocketAddr,
+    target_addr: String,
+    proxy_name: String,
+    client_id: String,
+    conn_provider: ConnectionProvider,
+    proxy_id: i64,
+    traffic_manager: Arc<TrafficManager>,
+) -> Result<()> {
+    // 获取统一连接
+    let conn = match conn_provider.get_connection(&client_id).await {
+        Some(c) => c,
+        None => {
+            error!("[{}] ❌ 客户端未连接", proxy_name);
+            return Ok(());
+        }
+    };
+
+    // 打开双向流
+    let (mut tunnel_send, mut tunnel_recv) = conn.open_bi().await?;
+
+    info!("[{}] 🔗 隧道流已打开: {}", proxy_name, addr);
+
+    // 发送协议类型和目标地址 (格式: 1字节协议类型 + 2字节长度 + 地址)
+    tunnel_send.write_all(&[b't']).await?; // 't' 表示TCP
+    let target_bytes = target_addr.as_bytes();
+    let len = target_bytes.len() as u16;
+
+    tunnel_send.write_all(&len.to_be_bytes()).await?;
+    tunnel_send.write_all(target_bytes).await?;
+    tunnel_send.flush().await?;
+
+    let (mut tcp_read, mut tcp_write) = tcp_stream.split();
+
+    // 使用Arc<RwLock<>>来在两个方向上统计流量
+    let sent_stats = Arc::new(RwLock::new(0i64));
+    let received_stats = Arc::new(RwLock::new(0i64));
+
+    let sent_stats_clone = sent_stats.clone();
+    let received_stats_clone = received_stats.clone();
+
+    // TCP -> Tunnel
+    let tcp_to_tunnel = async {
+        let mut buf = vec![0u8; 8192];
+        loop {
+            let n = tcp_read.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+            tunnel_send.write_all(&buf[..n]).await?;
+            // 统计发送字节数
+            let mut stats = sent_stats_clone.write().await;
+            *stats += n as i64;
+        }
+        Ok::<_, anyhow::Error>(())
+    };
+
+    // Tunnel -> TCP
+    let tunnel_to_tcp = async {
+        let mut buf = vec![0u8; 8192];
+        loop {
+            match tunnel_recv.read(&mut buf).await? {
+                Some(n) => {
+                    if n == 0 {
+                        break;
+                    }
+                    tcp_write.write_all(&buf[..n]).await?;
+                    // 统计接收字节数
+                    let mut stats = received_stats_clone.write().await;
+                    *stats += n as i64;
+                }
+                None => break,
+            }
+        }
+        Ok::<_, anyhow::Error>(())
+    };
+
+    tokio::select! {
+        res = tcp_to_tunnel => {
+            if let Err(e) = res {
+                error!("[{}] TCP->Tunnel错误: {}", proxy_name, e);
+            }
+        }
+        res = tunnel_to_tcp => {
+            if let Err(e) = res {
+                error!("[{}] Tunnel->TCP错误: {}", proxy_name, e);
+            }
+        }
+    }
+
+    tunnel_send.finish()?;
+    info!("[{}] 🔚 连接已关闭: {}", proxy_name, addr);
+
+    // 获取最终统计数据
+    let bytes_sent = {
+        let stats = sent_stats.read().await;
+        *stats
+    };
+    let bytes_received = {
+        let stats = received_stats.read().await;
+        *stats
+    };
+
+    // 记录流量统计
+    if bytes_sent > 0 || bytes_received > 0 {
+        let client_id_num = client_id.parse::<i64>().unwrap_or(0);
+
+        let db = get_connection().await;
+        let user_clients = UserClient::find()
+            .filter(user_client::Column::ClientId.eq(client_id_num))
+            .all(db)
+            .await
+            .unwrap_or_default();
+
+        let user_count = user_clients.len();
+
+        for uc in user_clients {
+            traffic_manager.record_traffic(
+                proxy_id,
+                client_id_num,
+                Some(uc.user_id),
+                bytes_sent,
+                bytes_received,
+            ).await;
+        }
+
+        debug!("[{}] 流量统计: 发送={}, 接收={}, 关联用户数={}",
+               proxy_name, bytes_sent, bytes_received, user_count);
+    }
+
+    Ok(())
+}
+
+async fn handle_udp_to_tunnel_unified(
+    socket: Arc<UdpSocket>,
+    src_addr: SocketAddr,
+    data: Vec<u8>,
+    target_addr: String,
+    proxy_name: String,
+    client_id: String,
+    conn_provider: ConnectionProvider,
+    proxy_id: i64,
+    _udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
+    traffic_manager: Arc<TrafficManager>,
+) -> Result<()> {
+    // 获取统一连接
+    let conn = match conn_provider.get_connection(&client_id).await {
+        Some(c) => c,
+        None => {
+            error!("[{}] ❌ 客户端未连接", proxy_name);
+            return Ok(());
+        }
+    };
+
+    // 打开双向流
+    let (mut tunnel_send, mut tunnel_recv) = conn.open_bi().await?;
+
+    info!("[{}] 🔗 UDP隧道流已打开: {}", proxy_name, src_addr);
+
+    // 发送协议类型和目标地址 (格式: 1字节协议类型 + 2字节长度 + 地址)
+    tunnel_send.write_all(&[b'u']).await?; // 'u' 表示UDP
+    let target_bytes = target_addr.as_bytes();
+    let len = target_bytes.len() as u16;
+    tunnel_send.write_all(&len.to_be_bytes()).await?;
+    tunnel_send.write_all(target_bytes).await?;
+    tunnel_send.write_all(&data).await?;
+    tunnel_send.flush().await?;
+
+    // 统计发送字节数
+    traffic_manager.record_traffic(
+        proxy_id,
+        client_id.parse::<i64>().unwrap_or(0),
+        None,
+        data.len() as i64,
+        0,
+    ).await;
+
+    // 读取响应并转发回源
+    let mut recv_buf = vec![0u8; 65535];
+    let mut bytes_received = 0i64;
+
+    loop {
+        match tunnel_recv.read(&mut recv_buf).await? {
+            Some(n) => {
+                if n == 0 {
+                    break;
+                }
+                bytes_received += n as i64;
+                socket.send_to(&recv_buf[..n], src_addr).await?;
+            }
+            None => break,
+        }
+    }
+
+    // 统计接收字节数
+    if bytes_received > 0 {
+        traffic_manager.record_traffic(
+            proxy_id,
+            client_id.parse::<i64>().unwrap_or(0),
+            None,
+            0,
+            bytes_received,
+        ).await;
+    }
+
+    tunnel_send.finish()?;
     Ok(())
 }

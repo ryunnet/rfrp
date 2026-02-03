@@ -67,4 +67,16 @@ pub mod config_keys {
     pub const SYSTEM_NAME: &str = "system_name";
     /// 是否开启用户注册
     pub const ENABLE_REGISTRATION: &str = "enable_registration";
+
+    // KCP 协议配置
+    /// KCP 端口（0 表示禁用）
+    pub const KCP_PORT: &str = "kcp_port";
+    /// KCP 无延迟模式
+    pub const KCP_NODELAY: &str = "kcp_nodelay";
+    /// KCP 内部更新时钟间隔（毫秒）
+    pub const KCP_INTERVAL: &str = "kcp_interval";
+    /// KCP 快速重传触发次数
+    pub const KCP_RESEND: &str = "kcp_resend";
+    /// KCP 是否关闭拥塞控制
+    pub const KCP_NC: &str = "kcp_nc";
 }

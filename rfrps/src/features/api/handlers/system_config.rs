@@ -10,6 +10,7 @@ use crate::migration::get_connection;
 use crate::config_manager::ConfigManager;
 use crate::AppState;
 use crate::features::api::handlers::ApiResponse;
+use crate::middleware::AuthUser;
 
 #[derive(Debug, Serialize)]
 pub struct ConfigListResponse {
@@ -211,4 +212,95 @@ pub async fn batch_update_configs(
     }
 
     ApiResponse::success(ConfigListResponse { configs: updated_items })
+}
+
+/// 重启系统响应
+#[derive(Debug, Serialize)]
+pub struct RestartResponse {
+    pub message: String,
+}
+
+/// 重启系统（仅管理员可用）
+pub async fn restart_system(
+    Extension(auth_user): Extension<Option<AuthUser>>,
+) -> Json<ApiResponse<RestartResponse>> {
+    // 检查是否已登录
+    let auth_user = match auth_user {
+        Some(user) => user,
+        None => {
+            return ApiResponse::error("未登录，请先登录".to_string());
+        }
+    };
+
+    // 检查是否为管理员
+    if !auth_user.is_admin {
+        return ApiResponse::error("权限不足，仅管理员可以重启系统".to_string());
+    }
+
+    tracing::info!("管理员 {} 请求重启系统", auth_user.username);
+
+    // 获取当前可执行文件路径
+    let exe_path = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(e) => {
+            tracing::error!("无法获取可执行文件路径: {}", e);
+            return ApiResponse::error("无法获取可执行文件路径".to_string());
+        }
+    };
+
+    // 获取当前工作目录
+    let current_dir = std::env::current_dir().ok();
+
+    // 在后台线程中延迟重启
+    tokio::spawn(async move {
+        // 等待 300ms 让响应先发送
+        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+        tracing::info!("系统正在重启...");
+
+        // 构建启动命令，使用延迟启动让当前进程有时间退出并释放端口
+        #[cfg(windows)]
+        {
+            // Windows: 使用 cmd /c 延迟启动
+            let exe_path_str = exe_path.to_string_lossy().to_string();
+            let mut cmd = std::process::Command::new("cmd");
+            cmd.args(["/c", "timeout", "/t", "2", "/nobreak", ">nul", "&&", &exe_path_str]);
+            if let Some(dir) = current_dir {
+                cmd.current_dir(dir);
+            }
+            match cmd.spawn() {
+                Ok(_) => {
+                    tracing::info!("重启命令已发送，当前进程即将退出");
+                }
+                Err(e) => {
+                    tracing::error!("启动重启命令失败: {}", e);
+                }
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            // Linux/Unix: 使用 sh -c 延迟启动
+            let exe_path_str = exe_path.to_string_lossy().to_string();
+            let mut cmd = std::process::Command::new("sh");
+            cmd.args(["-c", &format!("sleep 2 && {}", exe_path_str)]);
+            if let Some(dir) = current_dir {
+                cmd.current_dir(dir);
+            }
+            match cmd.spawn() {
+                Ok(_) => {
+                    tracing::info!("重启命令已发送，当前进程即将退出");
+                }
+                Err(e) => {
+                    tracing::error!("启动重启命令失败: {}", e);
+                }
+            }
+        }
+
+        // 退出当前进程
+        std::process::exit(0);
+    });
+
+    ApiResponse::success(RestartResponse {
+        message: "系统将在 2 秒后重启".to_string(),
+    })
 }

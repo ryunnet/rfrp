@@ -1,3 +1,10 @@
 server_addr = "127.0.0.1"
-server_port = 7000
-token = "ff64436c-22eb-4da6-9c42-f00c2c692c86"
+server_port = 7001
+token = "your-token"
+protocol = "kcp"  # or "quic" (default)
+
+[kcp]
+nodelay = true
+interval = 10
+resend = 2
+nc = true

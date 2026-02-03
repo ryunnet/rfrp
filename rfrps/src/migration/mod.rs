@@ -8,6 +8,9 @@ mod m20250119_000001_init;
 mod m20250126_000001_add_traffic_limit;
 mod m20250126_000002_create_system_config;
 mod m20250128_000001_add_client_traffic_limit;
+mod m20250203_000001_add_kcp_config;
+mod m20250204_000001_add_kcp_enabled;
+mod m20250204_000002_remove_kcp_port;
 
 pub struct Migrator;
 
@@ -19,6 +22,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20250126_000001_add_traffic_limit::Migration),
             Box::new(m20250126_000002_create_system_config::Migration),
             Box::new(m20250128_000001_add_client_traffic_limit::Migration),
+            Box::new(m20250203_000001_add_kcp_config::Migration),
+            Box::new(m20250204_000001_add_kcp_enabled::Migration),
+            Box::new(m20250204_000002_remove_kcp_port::Migration),
         ]
     }
 }

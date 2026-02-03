@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use crate::{config_manager, server, traffic};
-use crate::server::ProxyServer;
 
 mod proxy;
 mod api;
@@ -17,6 +16,6 @@ pub async fn init_features() {
     let proxy_server = Arc::new(server::ProxyServer::new(traffic_manager.clone(), config_manager.clone()).unwrap());
 
     // 在此处初始化和注册各种功能模块
-    proxy::enable_proxy_feature(proxy_server.clone()).await;
+    proxy::enable_proxy_feature(proxy_server.clone(), config_manager.clone()).await;
     api::enable_api_feature(proxy_server.clone(), config_manager).await;
 }
