@@ -5,6 +5,8 @@
 
 pub mod tunnel;
 pub mod config;
+pub mod utils;
+
 
 pub use tunnel::{
     TunnelProtocol,
@@ -23,7 +25,6 @@ pub use tunnel::{
     KcpConnection,
     KcpConnector,
     KcpListener,
-    KcpMultiplexer,
 };
 
 pub use config::KcpConfig;

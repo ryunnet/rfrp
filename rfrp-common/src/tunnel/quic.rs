@@ -44,7 +44,7 @@ impl TunnelSendStream for QuicSendStream {
         Ok(())
     }
 
-    fn finish(&mut self) -> Result<()> {
+    async fn finish(&mut self) -> Result<()> {
         self.inner.finish()?;
         Ok(())
     }

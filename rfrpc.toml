@@ -1,6 +1,6 @@
 server_addr = "127.0.0.1"
 server_port = 7001
-token = "your-token"
+token = "b71dab31-ad3b-479d-b56b-eea52baf745e"
 protocol = "kcp"  # or "quic" (default)
 
 [kcp]

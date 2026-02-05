@@ -24,6 +24,7 @@ use rfrp_common::{
     TunnelConnection, TunnelSendStream, TunnelRecvStream,
     TunnelListener, KcpListener, QuicSendStream, QuicRecvStream
 };
+use rfrp_common::utils::create_configured_udp_socket;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -932,7 +933,7 @@ async fn handle_tunnel_client_auth(
 /// Handle heartbeat for tunnel connections
 async fn handle_tunnel_heartbeat(mut send: Box<dyn TunnelSendStream>) -> Result<()> {
     send.write_all(&[b'h']).await?;
-    send.finish()?;
+    send.finish().await?;
     Ok(())
 }
 
@@ -1000,7 +1001,7 @@ async fn handle_tunnel_proxy_stream(
         }
     }
 
-    tunnel_send.finish()?;
+    tunnel_send.finish().await?;
 
     Ok(())
 }
@@ -1138,7 +1139,7 @@ async fn run_udp_proxy_listener_unified(
     udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
     traffic_manager: Arc<TrafficManager>,
 ) -> Result<()> {
-    let socket = Arc::new(UdpSocket::bind(&listen_addr).await?);
+    let socket = Arc::new(create_configured_udp_socket(listen_addr.parse()?).await?);
     info!("[{}] 🔌 UDP监听端口: {} -> {}", proxy_name, listen_addr, target_addr);
 
     let mut buf = vec![0u8; 65535];
@@ -1295,7 +1296,7 @@ async fn handle_tcp_to_tunnel_unified(
         }
     }
 
-    tunnel_send.finish()?;
+    tunnel_send.finish().await?;
     info!("[{}] 🔚 连接已关闭: {}", proxy_name, addr);
 
     // 获取最终统计数据
@@ -1410,6 +1411,6 @@ async fn handle_udp_to_tunnel_unified(
         ).await;
     }
 
-    tunnel_send.finish()?;
+    tunnel_send.finish().await?;
     Ok(())
 }

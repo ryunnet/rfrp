@@ -10,6 +10,7 @@ use crate::log_collector::LogCollector;
 
 // 从共享库导入隧道模块
 use rfrp_common::{TunnelConnection, TunnelConnector, TunnelRecvStream, TunnelSendStream};
+use rfrp_common::utils::create_configured_udp_socket;
 
 // Heartbeat configuration
 const HEARTBEAT_INTERVAL_SECS: u64 = 10;
@@ -60,7 +61,7 @@ async fn connect_to_server(
     let len = token_bytes.len() as u16;
     uni_stream.write_all(&len.to_be_bytes()).await?;
     uni_stream.write_all(token_bytes).await?;
-    uni_stream.finish()?;
+    uni_stream.finish().await?;
 
     info!("Authentication successful");
     info!("Waiting for proxy requests...");
@@ -260,7 +261,7 @@ async fn handle_tcp_proxy(
     }
 
     // Close QUIC stream
-    quic_send.finish()?;
+    quic_send.finish().await?;
 
     Ok(())
 }
@@ -271,7 +272,7 @@ async fn handle_udp_proxy(
     target_addr: &str,
 ) -> Result<()> {
     // Bind a UDP socket
-    let socket = UdpSocket::bind("0.0.0.0:0").await?;
+    let socket = create_configured_udp_socket("0.0.0.0:0".parse()?).await?;
     let local_addr = socket.local_addr()?;
     info!("UDP Socket bound: {}", local_addr);
 
@@ -329,7 +330,7 @@ async fn handle_udp_proxy(
     }
 
     // Close QUIC stream
-    quic_send.finish()?;
+    quic_send.finish().await?;
 
     Ok(())
 }
@@ -359,7 +360,7 @@ async fn send_heartbeat(conn: &Arc<Box<dyn TunnelConnection>>) -> Result<()> {
     }
 
     // Close stream
-    send.finish()?;
+    send.finish().await?;
 
     Ok(())
 }
@@ -394,7 +395,7 @@ async fn handle_log_request(
 
     // Send log data
     quic_send.write_all(logs_bytes).await?;
-    quic_send.finish()?;
+    quic_send.finish().await?;
 
     info!("Sent {} logs ({} bytes)", logs.len(), logs_bytes.len());
 

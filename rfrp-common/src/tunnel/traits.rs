@@ -26,7 +26,7 @@ pub trait TunnelSendStream: Send + Sync {
     /// 结束流（发送结束信号）
     ///
     /// 通知对端此流不会再发送更多数据。
-    fn finish(&mut self) -> Result<()>;
+    async fn finish(&mut self) -> Result<()>;
 }
 
 /// 统一接收流接口
