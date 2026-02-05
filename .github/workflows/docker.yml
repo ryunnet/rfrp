@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY: harbor.yunnet.top
+  REGISTRY: docker.yunnet.top
   IMAGE_NAME: rfrp
 
 jobs:
