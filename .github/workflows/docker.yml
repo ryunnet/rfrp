@@ -26,6 +26,8 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
+        timeout-minutes: 5
+        continue-on-error: false
 
       - name: Build and push Docker image
         run: |
