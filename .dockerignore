@@ -35,7 +35,6 @@ data/
 .env
 .env.*
 admin_password.txt
-rfrpc.toml
 
 # 文档
 README.md
