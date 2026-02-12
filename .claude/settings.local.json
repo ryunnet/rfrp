@@ -7,22 +7,9 @@
       "Bash(test -d \"d:\\\\projects\\\\rfrp\\\\dashboard\")",
       "Bash(test -f \"d:\\\\projects\\\\rfrp\\\\dashboard\\\\package.json\")",
       "Bash(git push)",
-      "Bash(git add .dockerignore Dockerfile)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修复 Docker 构建时 rfrp-common 未重新编译的问题\n\n- 移除 .dockerignore 中对 Cargo.lock 的排除，确保依赖版本一致\n- Dockerfile 中复制 Cargo.lock 到构建环境\n- 复制真实源码后清除本地 crate 编译缓存，强制重新编译\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(git add rfrp-common/src/tunnel/kcp.rs)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修复 KCP yamux 心跳超时死锁问题\n\n重构 KcpConnection，将 yamux 连接驱动逻辑拆分为后台任务：\n- 新增 run_yamux_driver 后台任务独占 YamuxConnection，持续驱动 I/O\n- open_bi/open_uni 通过 channel 请求出站流，不再直接竞争锁\n- accept_bi/accept_uni 从 channel 接收入站流\n- close_reason 通过 watch channel 实时获取关闭原因\n- Drop 时自动 abort 后台任务\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git add rfrp-common/src/tunnel/kcp.rs docker-compose.yml)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修复 yamux 驱动任务未及时发送控制帧的问题\n\n- 在 poll_fn 中添加外层 progress 循环，确保 poll_new_outbound\n  创建流后立即再次调用 poll_next_inbound 发送 SYN 帧\n- 更新 docker-compose.yml：关闭 tokio_kcp 日志、移除强制 JWT 配置\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git add docker-compose.yml)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\ndebug: 临时开启 yamux 和 rfrp_common debug 日志用于排查心跳问题\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git add rfrps/src/server.rs)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修复服务端代理请求缺少消息类型前缀导致客户端无法转发流量\n\n服务端向客户端发起 TCP/UDP 代理请求时，直接发送协议类型字节\n\\(''t''/''u''\\)，但客户端协议约定第一个字节应为消息类型\\(''p''=代理\\),\n第二个字节才是协议类型。缺少 ''p'' 前缀导致客户端将 ''t''\\(ASCII 116\\)\n识别为未知消息类型并丢弃，代理流量无法转发。\n\nCo-Authored-By: Claude Opus 4.6 \\(1M context\\) <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(npx tsc --noEmit --pretty)",
-      "Bash(git add rfrps/src/server.rs rfrps/src/traffic.rs)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修复流量统计不准确的多个问题\n\n1. 将 tokio::select! 改为 tokio::join!，避免单方向被取消导致流量丢失\n2. 用 AtomicI64 替代 RwLock 统计字节数，消除不必要的锁开销\n3. 分离 proxy/client/daily 和 user 的流量记录，避免多用户关联同一节点时重复计算\n4. 修复 client 无关联用户时流量完全不记录的问题\n5. 修复 UDP 流量未关联 user_id 的问题\n6. 管理员总流量改为从 client 表统计，避免遗漏无用户关联的流量\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(where cargo)",
-      "Bash(git add dashboard/src/lib/services.ts dashboard/package-lock.json rfrps/src/features/api/handlers/traffic.rs rfrps/src/traffic.rs .claude/settings.local.json)"
+      "Bash(git push origin master)"
     ]
   }
 }
