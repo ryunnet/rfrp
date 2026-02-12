@@ -32,14 +32,8 @@ pub async fn get_traffic_overview_handler(
 
     let days = params.days.unwrap_or(30);
 
-    // 管理员可以查看所有流量，普通用户只能查看自己的流量
-    let user_id = if auth_user.is_admin {
-        None // 管理员模式，查看所有流量
-    } else {
-        Some(auth_user.id) // 普通用户只能查看自己的流量
-    };
-
-    match get_traffic_overview(user_id, days).await {
+    // 始终传入 user_id，在 get_traffic_overview 内部判断管理员权限
+    match get_traffic_overview(Some(auth_user.id), days).await {
         Ok(overview) => (StatusCode::OK, ApiResponse::success(overview)),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,

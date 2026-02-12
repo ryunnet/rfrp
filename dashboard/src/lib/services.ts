@@ -169,7 +169,7 @@ export const trafficService = {
   },
 
   async getUserTraffic(userId: number, days?: number): Promise<ApiResponse<TrafficOverview>> {
-    const response = await api.get<ApiResponse<TrafficOverview>>(`/traffic/user/${userId}`, {
+    const response = await api.get<ApiResponse<TrafficOverview>>(`/traffic/users/${userId}`, {
       params: { days },
     });
     return response.data;
@@ -179,7 +179,7 @@ export const trafficService = {
 // ============ Dashboard 服务 ============
 export const dashboardService = {
   async getDashboardStats(userId: number): Promise<ApiResponse<DashboardStats>> {
-    const response = await api.get<ApiResponse<DashboardStats>>(`/dashboard/${userId}`);
+    const response = await api.get<ApiResponse<DashboardStats>>(`/dashboard/stats/${userId}`);
     return response.data;
   },
 };

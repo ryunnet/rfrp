@@ -407,15 +407,23 @@ pub async fn get_traffic_overview(user_id: Option<i64>, days: i64) -> Result<Tra
     let mut proxies = Vec::new();
     let all_proxies = Proxy::find().all(db).await?;
     for proxy in all_proxies {
+        let proxy_client_id = match proxy.client_id.parse::<i64>() {
+            Ok(id) => id,
+            Err(_) => {
+                error!("代理 #{} 的 client_id '{}' 无法解析为整数，跳过", proxy.id, proxy.client_id);
+                continue;
+            }
+        };
+
         let total = proxy.total_bytes_sent + proxy.total_bytes_received;
         if !is_admin {
             // 如果不是管理员，只显示有权限的代理
-            if user_id.is_some() && !has_client_access(db, user_id.unwrap(), proxy.client_id.parse::<i64>().unwrap_or(0)).await? {
+            if user_id.is_some() && !has_client_access(db, user_id.unwrap(), proxy_client_id).await? {
                 continue;
             }
         }
 
-        let client_name = if let Some(client) = Client::find_by_id(proxy.client_id.parse::<i64>().unwrap_or(0)).one(db).await? {
+        let client_name = if let Some(client) = Client::find_by_id(proxy_client_id).one(db).await? {
             client.name
         } else {
             String::from("Unknown")
@@ -424,7 +432,7 @@ pub async fn get_traffic_overview(user_id: Option<i64>, days: i64) -> Result<Tra
         proxies.push(ProxyTraffic {
             proxy_id: proxy.id,
             proxy_name: proxy.name,
-            client_id: proxy.client_id.parse::<i64>().unwrap_or(0),
+            client_id: proxy_client_id,
             client_name,
             total_bytes_sent: proxy.total_bytes_sent,
             total_bytes_received: proxy.total_bytes_received,
