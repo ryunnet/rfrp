@@ -1229,7 +1229,8 @@ async fn handle_tcp_to_tunnel_unified(
 
     info!("[{}] 🔗 隧道流已打开: {}", proxy_name, addr);
 
-    // 发送协议类型和目标地址 (格式: 1字节协议类型 + 2字节长度 + 地址)
+    // 发送消息类型 + 协议类型 + 目标地址 (格式: 1字节消息类型'p' + 1字节协议类型 + 2字节长度 + 地址)
+    tunnel_send.write_all(&[b'p']).await?; // 'p' 表示代理请求
     tunnel_send.write_all(&[b't']).await?; // 't' 表示TCP
     let target_bytes = target_addr.as_bytes();
     let len = target_bytes.len() as u16;
@@ -1365,7 +1366,8 @@ async fn handle_udp_to_tunnel_unified(
 
     info!("[{}] 🔗 UDP隧道流已打开: {}", proxy_name, src_addr);
 
-    // 发送协议类型和目标地址 (格式: 1字节协议类型 + 2字节长度 + 地址)
+    // 发送消息类型 + 协议类型 + 目标地址 (格式: 1字节消息类型'p' + 1字节协议类型 + 2字节长度 + 地址)
+    tunnel_send.write_all(&[b'p']).await?; // 'p' 表示代理请求
     tunnel_send.write_all(&[b'u']).await?; // 'u' 表示UDP
     let target_bytes = target_addr.as_bytes();
     let len = target_bytes.len() as u16;
