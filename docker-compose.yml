@@ -29,7 +29,7 @@ services:
       - TZ=Asia/Shanghai
       # 日志级别: trace, debug, info, warn, error
       # tokio_kcp=off 过滤公网 UDP 扫描产生的无害错误日志
-      - RUST_LOG=info,tokio_kcp=off
+      - RUST_LOG=info,tokio_kcp=off,yamux=debug,rfrp_common=debug
     command: ["/app/rfrps"]
     # 健康检查 (用于监控服务状态)
     healthcheck:
