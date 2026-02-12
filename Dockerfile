@@ -26,40 +26,40 @@ WORKDIR /build
 
 # 先复制依赖文件，利用Docker缓存层
 COPY Cargo.toml Cargo.lock ./
-COPY rfrps/Cargo.toml ./rfrps/
-COPY rfrpc/Cargo.toml ./rfrpc/
-COPY rfrp-common/Cargo.toml ./rfrp-common/
+COPY agent/Cargo.toml ./agent/
+COPY common/Cargo.toml ./common/
+COPY controller/Cargo.toml ./controller/
 
 # 创建虚拟源文件以构建依赖
-RUN mkdir -p rfrps/src rfrpc/src rfrp-common/src && \
-    echo "fn main() {}" > rfrps/src/main.rs && \
-    echo "fn main() {}" > rfrpc/src/main.rs && \
-    echo "pub fn dummy() {}" > rfrp-common/src/lib.rs
+RUN mkdir -p agent/src common/src controller/src && \
+    echo "fn main() {}" > agent/src/main.rs && \
+    echo "fn main() {}" > controller/src/main.rs && \
+    echo "pub fn dummy() {}" > common/src/lib.rs
 
 # 构建依赖（这一层会被缓存）
-RUN cargo build --release -p rfrps && \
-    cargo build --release -p rfrpc && \
-    rm -rf rfrps/src rfrpc/src rfrp-common/src
+RUN cargo build --release -p agent && \
+    cargo build --release -p controller && \
+    rm -rf agent/src common/src controller/src
 
 # 复制实际源码
-COPY rfrps/src ./rfrps/src
-COPY rfrpc/src ./rfrpc/src
-COPY rfrp-common/src ./rfrp-common/src
+COPY agent/src ./agent/src
+COPY common/src ./common/src
+COPY controller/src ./controller/src
 
 # 复制前端构建产物到dist目录（前端构建输出到项目根目录的dist）
 COPY --from=web-builder /build/dist ./dist
 
 # 清除本地 crate 的编译缓存，确保使用真实源码重新编译
-RUN rm -rf target/release/.fingerprint/rfrp-common-* \
-           target/release/deps/librfrp_common-* \
-           target/release/.fingerprint/rfrps-* \
-           target/release/deps/rfrps-* \
-           target/release/.fingerprint/rfrpc-* \
-           target/release/deps/rfrpc-*
+RUN rm -rf target/release/.fingerprint/common-* \
+           target/release/deps/libcommon-* \
+           target/release/.fingerprint/agent-* \
+           target/release/deps/agent-* \
+           target/release/.fingerprint/controller-* \
+           target/release/deps/controller-*
 
 # 重新构建（只编译变更的代码）
-RUN cargo build --release -p rfrps && \
-    cargo build --release -p rfrpc
+RUN cargo build --release -p agent && \
+    cargo build --release -p controller
 
 # 阶段3: 最终镜像
 FROM alpine:latest
@@ -72,13 +72,12 @@ RUN apk add --no-cache libgcc ca-certificates && \
 WORKDIR /app
 
 # 从构建阶段复制二进制文件
-COPY --from=rust-builder /build/target/release/rfrps /app/
-COPY --from=rust-builder /build/target/release/rfrpc /app/
+COPY --from=rust-builder /build/target/release/agent /app/
+COPY --from=rust-builder /build/target/release/controller /app/
 COPY --from=rust-builder /build/dist /app/dist
 
 # 复制配置文件模板（使用示例后缀）
-COPY rfrps.toml /app/rfrps.toml.example
-COPY rfrpc.toml /app/rfrpc.toml.example
+COPY controller.toml /app/controller.toml.example
 
 # 创建数据目录并设置权限
 RUN mkdir -p /app/data && \
@@ -91,4 +90,4 @@ USER rfrp
 EXPOSE 7000 3000/tcp
 
 # 默认运行服务端
-CMD ["/app/rfrps"]
+CMD ["/app/agent", "server"]

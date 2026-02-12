@@ -9,6 +9,7 @@ import type {
   LoginRequest,
   LoginResponse,
   LogEntry,
+  Node,
 } from './types';
 
 // ============ 认证服务 ============
@@ -84,7 +85,7 @@ export const clientService = {
     return response.data;
   },
 
-  async createClient(data: { name: string; token?: string }): Promise<ApiResponse<Client>> {
+  async createClient(data: { name: string; token?: string; node_id?: number }): Promise<ApiResponse<Client>> {
     const response = await api.post<ApiResponse<Client>>('/clients', data);
     return response.data;
   },
@@ -198,6 +199,67 @@ export const systemService = {
 
   async restart(): Promise<ApiResponse<{ message: string }>> {
     const response = await api.post('/system/restart');
+    return response.data;
+  },
+};
+
+// ============ 节点服务 ============
+export const nodeService = {
+  async getNodes(): Promise<ApiResponse<Node[]>> {
+    const response = await api.get<ApiResponse<Node[]>>('/nodes');
+    return response.data;
+  },
+
+  async getNode(id: number): Promise<ApiResponse<Node>> {
+    const response = await api.get<ApiResponse<Node>>(`/nodes/${id}`);
+    return response.data;
+  },
+
+  async createNode(data: {
+    name: string;
+    url: string;
+    secret: string;
+    region?: string;
+    description?: string;
+    tunnelAddr?: string;
+    tunnelPort?: number;
+    tunnelProtocol?: string;
+    kcpConfig?: string;
+  }): Promise<ApiResponse<Node>> {
+    const response = await api.post<ApiResponse<Node>>('/nodes', data);
+    return response.data;
+  },
+
+  async updateNode(
+    id: number,
+    data: {
+      name?: string;
+      url?: string;
+      secret?: string;
+      region?: string;
+      description?: string;
+      tunnelAddr?: string;
+      tunnelPort?: number;
+      tunnelProtocol?: string;
+      kcpConfig?: string;
+    }
+  ): Promise<ApiResponse<Node>> {
+    const response = await api.put<ApiResponse<Node>>(`/nodes/${id}`, data);
+    return response.data;
+  },
+
+  async deleteNode(id: number): Promise<ApiResponse<string>> {
+    const response = await api.delete<ApiResponse<string>>(`/nodes/${id}`);
+    return response.data;
+  },
+
+  async testConnection(id: number): Promise<ApiResponse<any>> {
+    const response = await api.post<ApiResponse<any>>(`/nodes/${id}/test`);
+    return response.data;
+  },
+
+  async getNodeStatus(id: number): Promise<ApiResponse<any>> {
+    const response = await api.get<ApiResponse<any>>(`/nodes/${id}/status`);
     return response.data;
   },
 };

@@ -1,0 +1,19 @@
+# controller 配置文件
+
+# Web 管理界面端口
+web_port = 3000
+
+# 内部 API 端口（供 frps 调用）
+internal_port = 3100
+
+# 数据库路径
+db_path = "./data/rfrp.db"
+
+# JWT 过期时间（小时）
+jwt_expiration_hours = 24
+
+# frps 内部 API 地址
+frps_url = "http://127.0.0.1:7001"
+
+# frps 内部 API 共享密钥（需要与 rfrps.toml 中的配置一致）
+frps_secret = "shared-internal-secret"

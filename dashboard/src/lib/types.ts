@@ -31,6 +31,8 @@ export interface Client {
   name: string;
   token: string;
   is_online: boolean;
+  nodeId: number | null;
+  node_name?: string;
   total_bytes_sent: number;
   total_bytes_received: number;
   uploadLimitGb: number | null;
@@ -112,11 +114,30 @@ export interface DashboardStats {
   total_proxies: number;
   online_clients: number;
   enabled_proxies: number;
+  total_nodes: number;
+  online_nodes: number;
   user_traffic: {
     total_bytes_sent: number;
     total_bytes_received: number;
     total_bytes: number;
   };
+}
+
+// 节点类型
+export interface Node {
+  id: number;
+  name: string;
+  url: string;
+  secret: string;
+  isOnline: boolean;
+  region: string | null;
+  description: string | null;
+  tunnelAddr: string;
+  tunnelPort: number;
+  tunnelProtocol: string;
+  kcpConfig: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // 登录请求

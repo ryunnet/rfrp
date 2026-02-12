@@ -1,3 +1,3 @@
 [workspace]
-members = ["rfrpc", "rfrps", "rfrp-common"]
+members = ["agent", "common", "controller"]
 resolver = "3"

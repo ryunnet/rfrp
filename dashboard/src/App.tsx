@@ -10,6 +10,7 @@ import Proxies from './pages/Proxies';
 import Users from './pages/Users';
 import Traffic from './pages/Traffic';
 import Settings from './pages/Settings';
+import Nodes from './pages/Nodes';
 
 function App() {
   return (
@@ -41,6 +42,14 @@ function App() {
                         element={
                           <ProtectedRoute requireAdmin>
                             <Settings />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/nodes"
+                        element={
+                          <ProtectedRoute requireAdmin>
+                            <Nodes />
                           </ProtectedRoute>
                         }
                       />

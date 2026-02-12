@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { clientService } from '../lib/services';
-import type { Client, LogEntry } from '../lib/types';
+import { clientService, nodeService } from '../lib/services';
+import type { Client, LogEntry, Node } from '../lib/types';
 import { formatBytes, formatDate, copyToClipboard } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -12,6 +12,8 @@ export default function Clients() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newClientName, setNewClientName] = useState('');
+  const [newClientNodeId, setNewClientNodeId] = useState<number | undefined>(undefined);
+  const [nodes, setNodes] = useState<Node[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   // 日志相关状态
@@ -31,6 +33,7 @@ export default function Clients() {
 
   useEffect(() => {
     loadClients();
+    loadNodes();
   }, []);
 
   const loadClients = async () => {
@@ -48,6 +51,17 @@ export default function Clients() {
     }
   };
 
+  const loadNodes = async () => {
+    try {
+      const response = await nodeService.getNodes();
+      if (response.success && response.data) {
+        setNodes(response.data);
+      }
+    } catch (error) {
+      // 非管理员可能无权限，静默处理
+    }
+  };
+
   const handleCreateClient = async () => {
     if (!newClientName.trim()) {
       showToast('请输入客户端名称', 'error');
@@ -55,10 +69,11 @@ export default function Clients() {
     }
 
     try {
-      const response = await clientService.createClient({ name: newClientName });
+      const response = await clientService.createClient({ name: newClientName, node_id: newClientNodeId });
       if (response.success) {
         showToast('客户端创建成功', 'success');
         setNewClientName('');
+        setNewClientNodeId(undefined);
         setShowCreateModal(false);
         loadClients();
       } else {
@@ -73,7 +88,7 @@ export default function Clients() {
   const handleDeleteClient = (id: number) => {
     setConfirmDialog({
       open: true,
-      title: '删除节点',
+      title: '删除客户端',
       message: '确定要删除这个客户端吗？',
       onConfirm: async () => {
         try {
@@ -165,7 +180,7 @@ export default function Clients() {
     setConfirmDialog({
       open: true,
       title: '重置流量超限',
-      message: '确定要重置该节点的流量超限状态吗？',
+      message: '确定要重置该客户端的流量超限状态吗？',
       onConfirm: async () => {
         try {
           const response = await clientService.updateClient(client.id, {
@@ -206,8 +221,8 @@ export default function Clients() {
       {/* 页面标题 */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">节点管理</h2>
-          <p className="mt-1 text-sm text-gray-500">管理所有客户端节点连接</p>
+          <h2 className="text-2xl font-bold text-gray-900">客户端管理</h2>
+          <p className="mt-1 text-sm text-gray-500">管理所有客户端连接</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -216,7 +231,7 @@ export default function Clients() {
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
-          新建节点
+          新建客户端
         </button>
       </div>
 
@@ -232,6 +247,9 @@ export default function Clients() {
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   名称
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  所属节点
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Token
@@ -253,19 +271,19 @@ export default function Clients() {
             <tbody className="divide-y divide-gray-100">
               {clients.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
                         </svg>
                       </div>
-                      <p className="text-gray-500">暂无节点数据</p>
+                      <p className="text-gray-500">暂无客户端数据</p>
                       <button
                         onClick={() => setShowCreateModal(true)}
                         className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                       >
-                        创建第一个节点
+                        创建第一个客户端
                       </button>
                     </div>
                   </td>
@@ -293,6 +311,15 @@ export default function Clients() {
                         </div>
                         <span className="text-sm font-semibold text-gray-900">{client.name}</span>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {client.nodeId ? (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-700">
+                          {nodes.find(n => n.id === client.nodeId)?.name || `节点 #${client.nodeId}`}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">未分配</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
@@ -433,29 +460,47 @@ export default function Clients() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">创建新节点</h3>
-                  <p className="text-sm text-gray-500">添加一个新的客户端节点</p>
+                  <h3 className="text-lg font-bold text-gray-900">创建新客户端</h3>
+                  <p className="text-sm text-gray-500">添加一个新的客户端</p>
                 </div>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">节点名称</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">客户端名称</label>
                   <input
                     type="text"
                     value={newClientName}
                     onChange={(e) => setNewClientName(e.target.value)}
-                    placeholder="请输入节点名称"
+                    placeholder="请输入客户端名称"
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && handleCreateClient()}
                   />
                 </div>
+                {nodes.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">所属节点</label>
+                    <select
+                      value={newClientNodeId ?? ''}
+                      onChange={(e) => setNewClientNodeId(e.target.value ? Number(e.target.value) : undefined)}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    >
+                      <option value="">不指定节点</option>
+                      {nodes.map((node) => (
+                        <option key={node.id} value={node.id}>
+                          {node.name}{node.region ? ` (${node.region})` : ''}{node.isOnline ? '' : ' [离线]'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
               <div className="mt-6 flex gap-3">
                 <button
                   onClick={() => {
                     setShowCreateModal(false);
                     setNewClientName('');
+                    setNewClientNodeId(undefined);
                   }}
                   className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
                 >
@@ -485,7 +530,7 @@ export default function Clients() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">节点日志</h3>
+                  <h3 className="text-lg font-bold text-gray-900">客户端日志</h3>
                   <p className="text-sm text-gray-500">{selectedClient.name}</p>
                 </div>
               </div>

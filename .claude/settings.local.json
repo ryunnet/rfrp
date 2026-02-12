@@ -9,7 +9,16 @@
       "Bash(git push)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(where cargo)",
-      "Bash(git push origin master)"
+      "Bash(git push origin master)",
+      "Bash(dir /b c:Projectsrfrp)",
+      "Bash(copy \"c:\\\\Projects\\\\rfrp\\\\rfrps\\\\src\\\\entity.rs\" \"c:\\\\Projects\\\\rfrp\\\\rfrp-controller\\\\src\\\\entity.rs\")",
+      "Bash(copy \"c:\\\\Projects\\\\rfrp\\\\rfrps\\\\src\\\\entity\\\\client.rs\" \"c:\\\\Projects\\\\rfrp\\\\rfrp-controller\\\\src\\\\entity\\\\client.rs\")",
+      "Bash(copy \"c:\\\\Projects\\\\rfrp\\\\rfrps\\\\src\\\\entity\\\\proxy.rs\" \"c:\\\\Projects\\\\rfrp\\\\rfrp-controller\\\\src\\\\entity\\\\proxy.rs\")",
+      "Bash(copy \"c:\\\\Projects\\\\rfrp\\\\rfrps\\\\src\\\\entity\\\\user.rs\" \"c:\\\\Projects\\\\rfrp\\\\rfrp-controller\\\\src\\\\entity\\\\user.rs\")",
+      "Bash(copy \"c:\\\\Projects\\\\rfrp\\\\rfrps\\\\src\\\\entity\\\\user_client.rs\" \"c:\\\\Projects\\\\rfrp\\\\rfrp-controller\\\\src\\\\entity\\\\user_client.rs\")",
+      "Bash(copy \"c:\\\\Projects\\\\rfrp\\\\rfrps\\\\src\\\\entity\\\\traffic_daily.rs\" \"c:\\\\Projects\\\\rfrp\\\\rfrp-controller\\\\src\\\\entity\\\\traffic_daily.rs\")",
+      "Bash(copy \"c:\\\\Projects\\\\rfrp\\\\rfrps\\\\src\\\\entity\\\\system_config.rs\" \"c:\\\\Projects\\\\rfrp\\\\rfrp-controller\\\\src\\\\entity\\\\system_config.rs\")",
+      "Bash(dir c:Projectsrfrprfrpssrc)"
     ]
   }
 }

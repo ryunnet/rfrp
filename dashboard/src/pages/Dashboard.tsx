@@ -4,9 +4,11 @@ import { dashboardService } from '../lib/services';
 import type { DashboardStats } from '../lib/types';
 import { formatBytes } from '../lib/utils';
 import { DashboardSkeleton } from '../components/Skeleton';
+import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -54,7 +56,7 @@ export default function Dashboard() {
       {/* 统计卡片 */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="总节点"
+          title="总客户端"
           value={stats?.total_clients || 0}
           icon={
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -64,7 +66,7 @@ export default function Dashboard() {
           color="blue"
         />
         <StatCard
-          title="在线节点"
+          title="在线客户端"
           value={stats?.online_clients || 0}
           icon={
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -94,6 +96,48 @@ export default function Dashboard() {
           color="amber"
         />
       </div>
+
+      {/* 节点统计卡片（仅管理员可见） */}
+      {isAdmin && (
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-2">
+          <div
+            onClick={() => navigate('/nodes')}
+            className="bg-white rounded-2xl p-5 shadow-sm border border-teal-100 hover:shadow-md transition-shadow cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">总节点</p>
+                <p className="mt-2 text-3xl font-bold text-gray-900">{stats?.total_nodes || 0}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-teal-50">
+                <span className="text-teal-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </div>
+          <div
+            onClick={() => navigate('/nodes')}
+            className="bg-white rounded-2xl p-5 shadow-sm border border-emerald-100 hover:shadow-md transition-shadow cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">在线节点</p>
+                <p className="mt-2 text-3xl font-bold text-gray-900">{stats?.online_nodes || 0}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-emerald-50">
+                <span className="text-emerald-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 流量统计 */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
