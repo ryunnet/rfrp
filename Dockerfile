@@ -46,8 +46,8 @@ COPY rfrps/src ./rfrps/src
 COPY rfrpc/src ./rfrpc/src
 COPY rfrp-common/src ./rfrp-common/src
 
-# 复制前端构建产物到dist目录
-COPY --from=web-builder /build/dashboard/dist ./dist
+# 复制前端构建产物到dist目录（前端构建输出到项目根目录的dist）
+COPY --from=web-builder /build/dist ./dist
 
 # 重新构建（只编译变更的代码）
 RUN cargo build --release -p rfrps && \

@@ -3,7 +3,9 @@
     "allow": [
       "Bash(cargo:*)",
       "Bash(python:*)",
-      "Bash(test -f \"d:/projects/rfrp/.dockerignore\")"
+      "Bash(test -f \"d:/projects/rfrp/.dockerignore\")",
+      "Bash(test -d \"d:\\\\projects\\\\rfrp\\\\dashboard\")",
+      "Bash(test -f \"d:\\\\projects\\\\rfrp\\\\dashboard\\\\package.json\")"
     ]
   }
 }
