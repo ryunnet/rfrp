@@ -70,7 +70,30 @@ async fn main() -> Result<()> {
 
     features::init_features().await;
 
-    tokio::signal::ctrl_c().await?;
+    // 等待终止信号
+    info!("✅ 所有服务已启动，等待终止信号...");
+
+    // 使用 select! 来同时监听多个信号
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            info!("收到 Ctrl+C 信号，正在关闭服务...");
+        }
+        _ = async {
+            #[cfg(unix)]
+            {
+                use tokio::signal::unix::{signal, SignalKind};
+                let mut sigterm = signal(SignalKind::terminate()).expect("failed to listen for SIGTERM");
+                sigterm.recv().await;
+            }
+            #[cfg(not(unix))]
+            {
+                std::future::pending::<()>().await;
+            }
+        } => {
+            info!("收到 SIGTERM 信号，正在关闭服务...");
+        }
+    }
+
     Ok(())
 }
 

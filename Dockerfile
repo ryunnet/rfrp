@@ -80,7 +80,7 @@ RUN mkdir -p /app/data && \
 USER rfrp
 
 # 暴露端口
-EXPOSE 7000/udp 3000/tcp
+EXPOSE 7000 3000/tcp
 
 # 默认运行服务端
 CMD ["/app/rfrps"]
