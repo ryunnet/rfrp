@@ -11,9 +11,11 @@ use async_trait::async_trait;
 use futures::{AsyncReadExt, AsyncWriteExt};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::task::Poll;
+use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio_kcp::{KcpConfig as TokioKcpConfig, KcpListener as TokioKcpListener, KcpStream};
 use tokio_util::compat::TokioAsyncReadCompatExt;
+use tracing::{debug, warn};
 use yamux::{Config as YamuxConfig, Connection as YamuxConnection, Mode, Stream as YamuxStream};
 
 use super::traits::{TunnelConnection, TunnelConnector, TunnelListener, TunnelRecvStream, TunnelSendStream};
@@ -88,11 +90,26 @@ impl TunnelRecvStream for KcpRecvStream {
 /// Compat 包装器，将 tokio KcpStream 转换为 futures AsyncRead/AsyncWrite
 type CompatKcpStream = tokio_util::compat::Compat<KcpStream>;
 
+/// 出站流请求，通过 channel 发送给后台驱动任务
+struct OutboundRequest {
+    response_tx: oneshot::Sender<Result<YamuxStream>>,
+}
+
 /// KCP 连接包装器
 ///
 /// 使用 yamux 进行多路复用的 KCP 连接。
+/// 通过后台驱动任务持续调用 yamux 的 poll_next_inbound 来驱动连接 I/O，
+/// 避免 open_bi 和 accept_bi 之间的死锁。
 pub struct KcpConnection {
-    connection: Arc<Mutex<YamuxConnection<CompatKcpStream>>>,
+    /// 接收入站流的 channel
+    inbound_rx: Mutex<mpsc::Receiver<YamuxStream>>,
+    /// 向后台任务发送出站流请求的 channel
+    outbound_tx: mpsc::Sender<OutboundRequest>,
+    /// 连接关闭原因
+    close_reason_rx: watch::Receiver<Option<String>>,
+    /// 后台驱动任务句柄
+    _driver_handle: tokio::task::JoinHandle<()>,
+    /// 远端地址
     remote_addr: SocketAddr,
 }
 
@@ -104,24 +121,115 @@ impl KcpConnection {
         let config = YamuxConfig::default();
         let connection = YamuxConnection::new(compat_stream, config, mode);
 
+        let (inbound_tx, inbound_rx) = mpsc::channel::<YamuxStream>(32);
+        let (outbound_tx, outbound_rx) = mpsc::channel::<OutboundRequest>(32);
+        let (close_reason_tx, close_reason_rx) = watch::channel(None);
+
+        let driver_handle = tokio::spawn(run_yamux_driver(
+            connection,
+            inbound_tx,
+            outbound_rx,
+            close_reason_tx,
+        ));
+
         Self {
-            connection: Arc::new(Mutex::new(connection)),
+            inbound_rx: Mutex::new(inbound_rx),
+            outbound_tx,
+            close_reason_rx,
+            _driver_handle: driver_handle,
             remote_addr,
         }
     }
 }
 
+impl Drop for KcpConnection {
+    fn drop(&mut self) {
+        self._driver_handle.abort();
+    }
+}
+
+/// yamux 连接后台驱动任务
+///
+/// 独占 YamuxConnection，持续调用 poll_next_inbound 驱动连接 I/O，
+/// 同时处理出站流请求。
+async fn run_yamux_driver(
+    mut connection: YamuxConnection<CompatKcpStream>,
+    inbound_tx: mpsc::Sender<YamuxStream>,
+    mut outbound_rx: mpsc::Receiver<OutboundRequest>,
+    close_reason_tx: watch::Sender<Option<String>>,
+) {
+    let mut pending_outbound: Vec<OutboundRequest> = Vec::new();
+
+    let reason = std::future::poll_fn(|cx| {
+        // 1. 持续驱动 poll_next_inbound（这是驱动整个连接 I/O 的核心）
+        loop {
+            match connection.poll_next_inbound(cx) {
+                Poll::Ready(Some(Ok(stream))) => {
+                    if inbound_tx.try_send(stream).is_err() {
+                        warn!("yamux driver: inbound channel full or closed");
+                    }
+                    continue;
+                }
+                Poll::Ready(Some(Err(e))) => {
+                    return Poll::Ready(format!("yamux error: {}", e));
+                }
+                Poll::Ready(None) => {
+                    return Poll::Ready("connection closed by peer".to_string());
+                }
+                Poll::Pending => break,
+            }
+        }
+
+        // 2. 接收新的出站流请求
+        while let Poll::Ready(Some(req)) = outbound_rx.poll_recv(cx) {
+            pending_outbound.push(req);
+        }
+
+        // 3. 处理待完成的出站流请求
+        while !pending_outbound.is_empty() {
+            match connection.poll_new_outbound(cx) {
+                Poll::Ready(Ok(stream)) => {
+                    let req = pending_outbound.swap_remove(0);
+                    let _ = req.response_tx.send(Ok(stream));
+                }
+                Poll::Ready(Err(e)) => {
+                    let req = pending_outbound.swap_remove(0);
+                    let _ = req.response_tx.send(Err(anyhow!("outbound error: {}", e)));
+                }
+                Poll::Pending => {
+                    break;
+                }
+            }
+        }
+
+        // 4. 检查是否所有前端句柄都已关闭
+        if outbound_rx.is_closed() && pending_outbound.is_empty() && inbound_tx.is_closed() {
+            return Poll::Ready("all handles dropped".to_string());
+        }
+
+        Poll::Pending
+    })
+    .await;
+
+    debug!("yamux driver ended: {}", reason);
+    let _ = close_reason_tx.send(Some(reason));
+}
+
 #[async_trait]
 impl TunnelConnection for KcpConnection {
     async fn open_bi(&self) -> Result<(Box<dyn TunnelSendStream>, Box<dyn TunnelRecvStream>)> {
-        let stream = {
-            let mut conn = self.connection.lock().await;
-            std::future::poll_fn(|cx| conn.poll_new_outbound(cx)).await?
-        };
+        let (response_tx, response_rx) = oneshot::channel();
 
-        // 使用 Arc<Mutex> 共享 stream 用于读写
+        self.outbound_tx
+            .send(OutboundRequest { response_tx })
+            .await
+            .map_err(|_| anyhow!("connection driver closed"))?;
+
+        let stream = response_rx
+            .await
+            .map_err(|_| anyhow!("connection driver closed"))??;
+
         let shared_stream = Arc::new(Mutex::new(stream));
-
         Ok((
             Box::new(KcpSendStream::new(shared_stream.clone())),
             Box::new(KcpRecvStream::new(shared_stream)),
@@ -130,17 +238,11 @@ impl TunnelConnection for KcpConnection {
 
     async fn accept_bi(&self) -> Result<(Box<dyn TunnelSendStream>, Box<dyn TunnelRecvStream>)> {
         let stream = {
-            let mut conn = self.connection.lock().await;
-            match std::future::poll_fn(|cx| conn.poll_next_inbound(cx)).await {
-                Some(Ok(stream)) => stream,
-                Some(Err(e)) => return Err(anyhow!("Accept error: {}", e)),
-                None => return Err(anyhow!("Connection closed")),
-            }
+            let mut rx = self.inbound_rx.lock().await;
+            rx.recv().await.ok_or_else(|| anyhow!("connection closed"))?
         };
 
-        // 使用 Arc<Mutex> 共享 stream 用于读写
         let shared_stream = Arc::new(Mutex::new(stream));
-
         Ok((
             Box::new(KcpSendStream::new(shared_stream.clone())),
             Box::new(KcpRecvStream::new(shared_stream)),
@@ -148,22 +250,24 @@ impl TunnelConnection for KcpConnection {
     }
 
     async fn open_uni(&self) -> Result<Box<dyn TunnelSendStream>> {
-        let stream = {
-            let mut conn = self.connection.lock().await;
-            std::future::poll_fn(|cx| conn.poll_new_outbound(cx)).await?
-        };
+        let (response_tx, response_rx) = oneshot::channel();
+
+        self.outbound_tx
+            .send(OutboundRequest { response_tx })
+            .await
+            .map_err(|_| anyhow!("connection driver closed"))?;
+
+        let stream = response_rx
+            .await
+            .map_err(|_| anyhow!("connection driver closed"))??;
 
         Ok(Box::new(KcpSendStream::new(Arc::new(Mutex::new(stream)))))
     }
 
     async fn accept_uni(&self) -> Result<Box<dyn TunnelRecvStream>> {
         let stream = {
-            let mut conn = self.connection.lock().await;
-            match std::future::poll_fn(|cx| conn.poll_next_inbound(cx)).await {
-                Some(Ok(stream)) => stream,
-                Some(Err(e)) => return Err(anyhow!("Accept error: {}", e)),
-                None => return Err(anyhow!("Connection closed")),
-            }
+            let mut rx = self.inbound_rx.lock().await;
+            rx.recv().await.ok_or_else(|| anyhow!("connection closed"))?
         };
 
         Ok(Box::new(KcpRecvStream::new(Arc::new(Mutex::new(stream)))))
@@ -174,7 +278,7 @@ impl TunnelConnection for KcpConnection {
     }
 
     fn close_reason(&self) -> Option<String> {
-        None
+        self.close_reason_rx.borrow().clone()
     }
 }
 
