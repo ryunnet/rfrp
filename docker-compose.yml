@@ -23,13 +23,13 @@ services:
       - ./data:/app/data
     # 环境变量配置
     environment:
-      # JWT 密钥（必须设置！）
-      # 生成方法: openssl rand -base64 32
-      - JWT_SECRET=${JWT_SECRET:-please-change-this-secret-key}
+      # JWT 密钥（可选，不设置则系统自动生成并保存到 ./data/jwt_secret.key）
+      # - JWT_SECRET=your-secret-key
       # 时区设置
       - TZ=Asia/Shanghai
       # 日志级别: trace, debug, info, warn, error
-      - RUST_LOG=info
+      # tokio_kcp=off 过滤公网 UDP 扫描产生的无害错误日志
+      - RUST_LOG=info,tokio_kcp=off
     command: ["/app/rfrps"]
     # 健康检查 (用于监控服务状态)
     healthcheck:

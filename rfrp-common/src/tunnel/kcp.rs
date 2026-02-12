@@ -161,45 +161,61 @@ async fn run_yamux_driver(
     let mut pending_outbound: Vec<OutboundRequest> = Vec::new();
 
     let reason = std::future::poll_fn(|cx| {
-        // 1. 持续驱动 poll_next_inbound（这是驱动整个连接 I/O 的核心）
+        // 外层循环：确保在处理完 outbound 请求后，再次驱动 poll_next_inbound
+        // 来发送 yamux 控制帧（如 SYN、数据帧等）
         loop {
-            match connection.poll_next_inbound(cx) {
-                Poll::Ready(Some(Ok(stream))) => {
-                    if inbound_tx.try_send(stream).is_err() {
-                        warn!("yamux driver: inbound channel full or closed");
+            let mut progress = false;
+
+            // 1. 持续驱动 poll_next_inbound（这是驱动整个连接 I/O 的核心）
+            loop {
+                match connection.poll_next_inbound(cx) {
+                    Poll::Ready(Some(Ok(stream))) => {
+                        if inbound_tx.try_send(stream).is_err() {
+                            warn!("yamux driver: inbound channel full or closed");
+                        }
+                        progress = true;
+                        continue;
                     }
-                    continue;
-                }
-                Poll::Ready(Some(Err(e))) => {
-                    return Poll::Ready(format!("yamux error: {}", e));
-                }
-                Poll::Ready(None) => {
-                    return Poll::Ready("connection closed by peer".to_string());
-                }
-                Poll::Pending => break,
-            }
-        }
-
-        // 2. 接收新的出站流请求
-        while let Poll::Ready(Some(req)) = outbound_rx.poll_recv(cx) {
-            pending_outbound.push(req);
-        }
-
-        // 3. 处理待完成的出站流请求
-        while !pending_outbound.is_empty() {
-            match connection.poll_new_outbound(cx) {
-                Poll::Ready(Ok(stream)) => {
-                    let req = pending_outbound.swap_remove(0);
-                    let _ = req.response_tx.send(Ok(stream));
-                }
-                Poll::Ready(Err(e)) => {
-                    let req = pending_outbound.swap_remove(0);
-                    let _ = req.response_tx.send(Err(anyhow!("outbound error: {}", e)));
-                }
-                Poll::Pending => {
-                    break;
+                    Poll::Ready(Some(Err(e))) => {
+                        return Poll::Ready(format!("yamux error: {}", e));
+                    }
+                    Poll::Ready(None) => {
+                        return Poll::Ready("connection closed by peer".to_string());
+                    }
+                    Poll::Pending => break,
                 }
             }
+
+            // 2. 接收新的出站流请求
+            while let Poll::Ready(Some(req)) = outbound_rx.poll_recv(cx) {
+                pending_outbound.push(req);
+                progress = true;
+            }
+
+            // 3. 处理待完成的出站流请求
+            while !pending_outbound.is_empty() {
+                match connection.poll_new_outbound(cx) {
+                    Poll::Ready(Ok(stream)) => {
+                        let req = pending_outbound.swap_remove(0);
+                        let _ = req.response_tx.send(Ok(stream));
+                        progress = true;
+                    }
+                    Poll::Ready(Err(e)) => {
+                        let req = pending_outbound.swap_remove(0);
+                        let _ = req.response_tx.send(Err(anyhow!("outbound error: {}", e)));
+                        progress = true;
+                    }
+                    Poll::Pending => {
+                        break;
+                    }
+                }
+            }
+
+            // 如果没有任何进展，退出循环返回 Pending
+            if !progress {
+                break;
+            }
+            // 有进展则继续循环，再次驱动 poll_next_inbound 发送 pending 帧
         }
 
         // 4. 检查是否所有前端句柄都已关闭
