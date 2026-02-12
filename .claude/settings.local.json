@@ -18,7 +18,9 @@
       "Bash(git commit -m \"$\\(cat <<''EOF''\ndebug: 临时开启 yamux 和 rfrp_common debug 日志用于排查心跳问题\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git add rfrps/src/server.rs)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修复服务端代理请求缺少消息类型前缀导致客户端无法转发流量\n\n服务端向客户端发起 TCP/UDP 代理请求时，直接发送协议类型字节\n\\(''t''/''u''\\)，但客户端协议约定第一个字节应为消息类型\\(''p''=代理\\),\n第二个字节才是协议类型。缺少 ''p'' 前缀导致客户端将 ''t''\\(ASCII 116\\)\n识别为未知消息类型并丢弃，代理流量无法转发。\n\nCo-Authored-By: Claude Opus 4.6 \\(1M context\\) <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(npx tsc --noEmit --pretty)"
+      "Bash(npx tsc --noEmit --pretty)",
+      "Bash(git add rfrps/src/server.rs rfrps/src/traffic.rs)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修复流量统计不准确的多个问题\n\n1. 将 tokio::select! 改为 tokio::join!，避免单方向被取消导致流量丢失\n2. 用 AtomicI64 替代 RwLock 统计字节数，消除不必要的锁开销\n3. 分离 proxy/client/daily 和 user 的流量记录，避免多用户关联同一节点时重复计算\n4. 修复 client 无关联用户时流量完全不记录的问题\n5. 修复 UDP 流量未关联 user_id 的问题\n6. 管理员总流量改为从 client 表统计，避免遗漏无用户关联的流量\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }
