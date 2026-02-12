@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(cargo:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(test -f \"d:/projects/rfrp/.dockerignore\")"
     ]
   }
 }

@@ -10,6 +10,7 @@ use crate::{
     jwt::generate_token,
     middleware::AuthUser,
     migration::get_connection,
+    AppState,
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
@@ -36,7 +37,10 @@ pub struct LoginRequest {
 }
 
 /// POST /api/auth/login - User login
-pub async fn login(Json(req): Json<LoginRequest>) -> impl IntoResponse {
+pub async fn login(
+    Extension(app_state): Extension<AppState>,
+    Json(req): Json<LoginRequest>,
+) -> impl IntoResponse {
     let db = get_connection().await;
 
     // Find user by username
@@ -81,8 +85,25 @@ pub async fn login(Json(req): Json<LoginRequest>) -> impl IntoResponse {
         }
     };
 
+    // Get JWT secret from config
+    let jwt_secret = match app_state.config.get_jwt_secret() {
+        Ok(secret) => secret,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ApiResponse::<LoginResponse>::error(format!("JWT configuration error: {}", e)),
+            )
+        }
+    };
+
     // Generate JWT token
-    let token = match generate_token(user.id, &user.username, user.is_admin) {
+    let token = match generate_token(
+        user.id,
+        &user.username,
+        user.is_admin,
+        &jwt_secret,
+        app_state.config.jwt_expiration_hours,
+    ) {
         Ok(token) => token,
         Err(e) => {
             return (

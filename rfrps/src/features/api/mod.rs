@@ -13,10 +13,14 @@ use crate::server::ProxyServer;
 mod handlers;
 
 pub async fn enable_api_feature(proxy_server: Arc<ProxyServer>, config_manager: Arc<ConfigManager>)  {
+    // 获取配置
+    let config = Arc::new(crate::config::get_config().await.clone());
+
     // 创建应用状态
     let app_state = AppState {
         proxy_server: proxy_server.clone(),
         config_manager: config_manager.clone(),
+        config: config.clone(),
     };
 
 

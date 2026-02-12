@@ -1,4 +1,38 @@
+# Rust
 /target
+Cargo.lock
+
+# IDE
 .idea
+.vscode
+*.swp
+*.swo
+*~
+
+# 前端构建产物
 dist
+node_modules
+
+# 数据库和数据文件
 data
+*.db
+*.db-shm
+*.db-wal
+
+# 日志文件
+*.log
+
+# 配置文件（包含敏感信息）
+.env
+.env.*
+admin_password.txt
+
+# Python
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# 操作系统
+.DS_Store
+Thumbs.db
+Desktop.ini

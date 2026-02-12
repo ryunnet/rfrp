@@ -27,6 +27,7 @@ use crate::config::get_config;
 pub struct AppState {
     pub proxy_server: Arc<server::ProxyServer>,
     pub config_manager: Arc<config_manager::ConfigManager>,
+    pub config: Arc<config::Config>,
 }
 
 #[tokio::main]

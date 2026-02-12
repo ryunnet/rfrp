@@ -1,10 +1,12 @@
 use axum::{
-    extract::{Path, Query},
-    response::Json,
+    extract::{Extension, Path, Query},
+    http::StatusCode,
+    response::{IntoResponse, Json},
 };
 use serde::Deserialize;
 
 use crate::features::api::handlers::ApiResponse;
+use crate::middleware::AuthUser;
 use crate::traffic::{get_traffic_overview, TrafficOverview};
 
 #[derive(Debug, Deserialize)]
@@ -14,29 +16,70 @@ pub struct TrafficQuery {
 
 /// 获取流量总览
 pub async fn get_traffic_overview_handler(
+    Extension(auth_user): Extension<Option<AuthUser>>,
     Query(params): Query<TrafficQuery>,
-) -> Json<ApiResponse<TrafficOverview>> {
+) -> impl IntoResponse {
+    // 验证用户是否已认证
+    let auth_user = match auth_user {
+        Some(user) => user,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                ApiResponse::<TrafficOverview>::error("未认证，请先登录".to_string()),
+            )
+        }
+    };
+
     let days = params.days.unwrap_or(30);
 
-    // TODO: 从JWT中获取用户ID
-    // 现在先返回所有数据（管理员视图）
-    let user_id = None; // None表示管理员模式
+    // 管理员可以查看所有流量，普通用户只能查看自己的流量
+    let user_id = if auth_user.is_admin {
+        None // 管理员模式，查看所有流量
+    } else {
+        Some(auth_user.id) // 普通用户只能查看自己的流量
+    };
 
     match get_traffic_overview(user_id, days).await {
-        Ok(overview) => ApiResponse::success(overview),
-        Err(e) => ApiResponse::error(format!("获取流量统计失败: {}", e)),
+        Ok(overview) => (StatusCode::OK, ApiResponse::success(overview)),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ApiResponse::error(format!("获取流量统计失败: {}", e)),
+        ),
     }
 }
 
 /// 获取指定用户的流量统计
 pub async fn get_user_traffic_handler(
+    Extension(auth_user): Extension<Option<AuthUser>>,
     Path(user_id): Path<i64>,
     Query(params): Query<TrafficQuery>,
-) -> Json<ApiResponse<TrafficOverview>> {
+) -> impl IntoResponse {
+    // 验证用户是否已认证
+    let auth_user = match auth_user {
+        Some(user) => user,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                ApiResponse::<TrafficOverview>::error("未认证，请先登录".to_string()),
+            )
+        }
+    };
+
+    // 权限检查：只有管理员或用户本人可以查看
+    if !auth_user.is_admin && auth_user.id != user_id {
+        return (
+            StatusCode::FORBIDDEN,
+            ApiResponse::<TrafficOverview>::error("无权查看其他用户的流量统计".to_string()),
+        );
+    }
+
     let days = params.days.unwrap_or(30);
 
     match get_traffic_overview(Some(user_id), days).await {
-        Ok(overview) => ApiResponse::success(overview),
-        Err(e) => ApiResponse::error(format!("获取用户流量统计失败: {}", e)),
+        Ok(overview) => (StatusCode::OK, ApiResponse::success(overview)),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ApiResponse::error(format!("获取用户流量统计失败: {}", e)),
+        ),
     }
 }

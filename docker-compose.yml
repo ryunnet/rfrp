@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   # ==================== RFRP 服务端 ====================
   # 反向代理服务端，提供 QUIC 协议支持和 Web 管理界面
@@ -21,6 +23,9 @@ services:
       - ./data:/app/data
     # 环境变量配置
     environment:
+      # JWT 密钥（必须设置！）
+      # 生成方法: openssl rand -base64 32
+      - JWT_SECRET=${JWT_SECRET:-please-change-this-secret-key}
       # 时区设置
       - TZ=Asia/Shanghai
       # 日志级别: trace, debug, info, warn, error
@@ -28,21 +33,22 @@ services:
     command: ["/app/rfrps"]
     # 健康检查 (用于监控服务状态)
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+
   # ==================== RFRP 客户端 (可选) ====================
   # 如果需要在同一台机器上运行客户端，取消下面的注释
   # 通常客户端部署在需要被访问的内网机器上
-  rfrpc:
-    image: docker.yunnet.top/all/rfrp:latest
-    container_name: rfrpc
-    restart: unless-stopped
-    volumes:
-      - ./rfrpc.toml:/app/rfrpc.toml:ro
-    environment:
-      - TZ=Asia/Shanghai
-      - RUST_LOG=info
-    command: ["/app/rfrpc"]
+  # rfrpc:
+  #   image: docker.yunnet.top/all/rfrp:latest
+  #   container_name: rfrpc
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./rfrpc.toml:/app/rfrpc.toml:ro
+  #   environment:
+  #     - TZ=Asia/Shanghai
+  #     - RUST_LOG=info
+  #   command: ["/app/rfrpc"]

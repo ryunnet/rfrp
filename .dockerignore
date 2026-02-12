@@ -1,11 +1,62 @@
-# Docker相关文件
+# Rust 构建产物
 target/
-dist/
+**/*.rs.bk
+Cargo.lock
 
-# 临时文件
-*.log
-*.tmp
+# Git
+.git/
+.gitignore
+.gitattributes
 
 # IDE配置
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# 前端构建产物
+dist/
+node_modules/
+dashboard/node_modules/
+dashboard/dist/
+
+# 数据库和数据文件
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# 日志和临时文件
+*.log
+*.tmp
+
+# 环境变量和敏感配置
+.env
+.env.*
+admin_password.txt
+rfrpc.toml
+
+# 文档
+README.md
+LICENSE
+*.md
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Python
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# 操作系统
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# 测试
+tests/
+**/*_test.rs
