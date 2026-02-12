@@ -9,8 +9,8 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::{AsyncReadExt, AsyncWriteExt};
+use futures::io::{ReadHalf, WriteHalf};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::task::Poll;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio_kcp::{KcpConfig as TokioKcpConfig, KcpListener as TokioKcpListener, KcpStream};
@@ -24,62 +24,62 @@ use crate::utils::create_configured_udp_socket;
 
 /// KCP 发送流
 ///
-/// 基于 yamux Stream 的发送流包装器。
+/// 基于 yamux Stream 拆分后的写半流，与 KcpRecvStream 互不阻塞。
 pub struct KcpSendStream {
-    stream: Arc<Mutex<YamuxStream>>,
+    writer: Mutex<WriteHalf<YamuxStream>>,
 }
 
 impl KcpSendStream {
-    fn new(stream: Arc<Mutex<YamuxStream>>) -> Self {
-        Self { stream }
+    fn new(writer: WriteHalf<YamuxStream>) -> Self {
+        Self { writer: Mutex::new(writer) }
     }
 }
 
 #[async_trait]
 impl TunnelSendStream for KcpSendStream {
     async fn write_all(&mut self, buf: &[u8]) -> Result<()> {
-        let mut stream = self.stream.lock().await;
-        stream.write_all(buf).await?;
+        let writer = self.writer.get_mut();
+        writer.write_all(buf).await?;
         Ok(())
     }
 
     async fn flush(&mut self) -> Result<()> {
-        let mut stream = self.stream.lock().await;
-        stream.flush().await?;
+        let writer = self.writer.get_mut();
+        writer.flush().await?;
         Ok(())
     }
 
     async fn finish(&mut self) -> Result<()> {
-        let mut stream = self.stream.lock().await;
-        stream.close().await?;
+        let writer = self.writer.get_mut();
+        writer.close().await?;
         Ok(())
     }
 }
 
 /// KCP 接收流
 ///
-/// 基于 yamux Stream 的接收流包装器。
+/// 基于 yamux Stream 拆分后的读半流，与 KcpSendStream 互不阻塞。
 pub struct KcpRecvStream {
-    stream: Arc<Mutex<YamuxStream>>,
+    reader: Mutex<ReadHalf<YamuxStream>>,
 }
 
 impl KcpRecvStream {
-    fn new(stream: Arc<Mutex<YamuxStream>>) -> Self {
-        Self { stream }
+    fn new(reader: ReadHalf<YamuxStream>) -> Self {
+        Self { reader: Mutex::new(reader) }
     }
 }
 
 #[async_trait]
 impl TunnelRecvStream for KcpRecvStream {
     async fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
-        let mut stream = self.stream.lock().await;
-        stream.read_exact(buf).await?;
+        let reader = self.reader.get_mut();
+        reader.read_exact(buf).await?;
         Ok(())
     }
 
     async fn read(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
-        let mut stream = self.stream.lock().await;
-        match stream.read(buf).await {
+        let reader = self.reader.get_mut();
+        match reader.read(buf).await {
             Ok(0) => Ok(None),
             Ok(n) => Ok(Some(n)),
             Err(e) => Err(anyhow!("Read error: {}", e)),
@@ -245,10 +245,10 @@ impl TunnelConnection for KcpConnection {
             .await
             .map_err(|_| anyhow!("connection driver closed"))??;
 
-        let shared_stream = Arc::new(Mutex::new(stream));
+        let (reader, writer) = stream.split();
         Ok((
-            Box::new(KcpSendStream::new(shared_stream.clone())),
-            Box::new(KcpRecvStream::new(shared_stream)),
+            Box::new(KcpSendStream::new(writer)),
+            Box::new(KcpRecvStream::new(reader)),
         ))
     }
 
@@ -258,10 +258,10 @@ impl TunnelConnection for KcpConnection {
             rx.recv().await.ok_or_else(|| anyhow!("connection closed"))?
         };
 
-        let shared_stream = Arc::new(Mutex::new(stream));
+        let (reader, writer) = stream.split();
         Ok((
-            Box::new(KcpSendStream::new(shared_stream.clone())),
-            Box::new(KcpRecvStream::new(shared_stream)),
+            Box::new(KcpSendStream::new(writer)),
+            Box::new(KcpRecvStream::new(reader)),
         ))
     }
 
@@ -277,7 +277,8 @@ impl TunnelConnection for KcpConnection {
             .await
             .map_err(|_| anyhow!("connection driver closed"))??;
 
-        Ok(Box::new(KcpSendStream::new(Arc::new(Mutex::new(stream)))))
+        let (_reader, writer) = stream.split();
+        Ok(Box::new(KcpSendStream::new(writer)))
     }
 
     async fn accept_uni(&self) -> Result<Box<dyn TunnelRecvStream>> {
@@ -286,7 +287,8 @@ impl TunnelConnection for KcpConnection {
             rx.recv().await.ok_or_else(|| anyhow!("connection closed"))?
         };
 
-        Ok(Box::new(KcpRecvStream::new(Arc::new(Mutex::new(stream)))))
+        let (reader, _writer) = stream.split();
+        Ok(Box::new(KcpRecvStream::new(reader)))
     }
 
     fn remote_address(&self) -> SocketAddr {
