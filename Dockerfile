@@ -25,7 +25,7 @@ RUN apk add --no-cache musl-dev openssl-dev pkgconfig
 WORKDIR /build
 
 # 先复制依赖文件，利用Docker缓存层
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 COPY rfrps/Cargo.toml ./rfrps/
 COPY rfrpc/Cargo.toml ./rfrpc/
 COPY rfrp-common/Cargo.toml ./rfrp-common/
@@ -48,6 +48,14 @@ COPY rfrp-common/src ./rfrp-common/src
 
 # 复制前端构建产物到dist目录（前端构建输出到项目根目录的dist）
 COPY --from=web-builder /build/dist ./dist
+
+# 清除本地 crate 的编译缓存，确保使用真实源码重新编译
+RUN rm -rf target/release/.fingerprint/rfrp-common-* \
+           target/release/deps/librfrp_common-* \
+           target/release/.fingerprint/rfrps-* \
+           target/release/deps/rfrps-* \
+           target/release/.fingerprint/rfrpc-* \
+           target/release/deps/rfrpc-*
 
 # 重新构建（只编译变更的代码）
 RUN cargo build --release -p rfrps && \
