@@ -1241,15 +1241,16 @@ async fn handle_tcp_to_tunnel_unified(
 
     let (mut tcp_read, mut tcp_write) = tcp_stream.split();
 
-    // 使用Arc<RwLock<>>来在两个方向上统计流量
-    let sent_stats = Arc::new(RwLock::new(0i64));
-    let received_stats = Arc::new(RwLock::new(0i64));
+    // 使用 AtomicI64 在两个方向上统计流量（无锁，性能更好）
+    let sent_stats = Arc::new(std::sync::atomic::AtomicI64::new(0));
+    let received_stats = Arc::new(std::sync::atomic::AtomicI64::new(0));
 
     let sent_stats_clone = sent_stats.clone();
     let received_stats_clone = received_stats.clone();
 
     // TCP -> Tunnel
-    let tcp_to_tunnel = async {
+    let proxy_name_t2t = proxy_name.clone();
+    let tcp_to_tunnel = async move {
         let mut buf = vec![0u8; 8192];
         loop {
             let n = tcp_read.read(&mut buf).await?;
@@ -1257,15 +1258,16 @@ async fn handle_tcp_to_tunnel_unified(
                 break;
             }
             tunnel_send.write_all(&buf[..n]).await?;
-            // 统计发送字节数
-            let mut stats = sent_stats_clone.write().await;
-            *stats += n as i64;
+            sent_stats_clone.fetch_add(n as i64, std::sync::atomic::Ordering::Relaxed);
         }
+        // 关闭发送端，通知对端不再有数据
+        let _ = tunnel_send.finish().await;
         Ok::<_, anyhow::Error>(())
     };
 
     // Tunnel -> TCP
-    let tunnel_to_tcp = async {
+    let proxy_name_t2c = proxy_name.clone();
+    let tunnel_to_tcp = async move {
         let mut buf = vec![0u8; 8192];
         loop {
             match tunnel_recv.read(&mut buf).await? {
@@ -1274,9 +1276,7 @@ async fn handle_tcp_to_tunnel_unified(
                         break;
                     }
                     tcp_write.write_all(&buf[..n]).await?;
-                    // 统计接收字节数
-                    let mut stats = received_stats_clone.write().await;
-                    *stats += n as i64;
+                    received_stats_clone.fetch_add(n as i64, std::sync::atomic::Ordering::Relaxed);
                 }
                 None => break,
             }
@@ -1284,36 +1284,35 @@ async fn handle_tcp_to_tunnel_unified(
         Ok::<_, anyhow::Error>(())
     };
 
-    tokio::select! {
-        res = tcp_to_tunnel => {
-            if let Err(e) = res {
-                error!("[{}] TCP->Tunnel错误: {}", proxy_name, e);
-            }
-        }
-        res = tunnel_to_tcp => {
-            if let Err(e) = res {
-                error!("[{}] Tunnel->TCP错误: {}", proxy_name, e);
-            }
-        }
+    // 使用 join! 确保两个方向都完成，避免 select! 取消导致流量统计丢失
+    let (res_t2t, res_t2c) = tokio::join!(tcp_to_tunnel, tunnel_to_tcp);
+    if let Err(e) = res_t2t {
+        debug!("[{}] TCP->Tunnel结束: {}", proxy_name_t2t, e);
+    }
+    if let Err(e) = res_t2c {
+        debug!("[{}] Tunnel->TCP结束: {}", proxy_name_t2c, e);
     }
 
-    tunnel_send.finish().await?;
     info!("[{}] 🔚 连接已关闭: {}", proxy_name, addr);
 
     // 获取最终统计数据
-    let bytes_sent = {
-        let stats = sent_stats.read().await;
-        *stats
-    };
-    let bytes_received = {
-        let stats = received_stats.read().await;
-        *stats
-    };
+    let bytes_sent = sent_stats.load(std::sync::atomic::Ordering::Relaxed);
+    let bytes_received = received_stats.load(std::sync::atomic::Ordering::Relaxed);
 
     // 记录流量统计
     if bytes_sent > 0 || bytes_received > 0 {
         let client_id_num = client_id.parse::<i64>().unwrap_or(0);
 
+        // 1. 先记录 proxy/client/daily 维度的流量（user_id=None，只写一次）
+        traffic_manager.record_traffic(
+            proxy_id,
+            client_id_num,
+            None,
+            bytes_sent,
+            bytes_received,
+        ).await;
+
+        // 2. 再为每个关联用户记录用户维度的流量
         let db = get_connection().await;
         let user_clients = UserClient::find()
             .filter(user_client::Column::ClientId.eq(client_id_num))
@@ -1376,14 +1375,7 @@ async fn handle_udp_to_tunnel_unified(
     tunnel_send.write_all(&data).await?;
     tunnel_send.flush().await?;
 
-    // 统计发送字节数
-    traffic_manager.record_traffic(
-        proxy_id,
-        client_id.parse::<i64>().unwrap_or(0),
-        None,
-        data.len() as i64,
-        0,
-    ).await;
+    let bytes_sent = data.len() as i64;
 
     // 读取响应并转发回源
     let mut recv_buf = vec![0u8; 65535];
@@ -1402,17 +1394,39 @@ async fn handle_udp_to_tunnel_unified(
         }
     }
 
-    // 统计接收字节数
-    if bytes_received > 0 {
+    tunnel_send.finish().await?;
+
+    // 统一记录流量
+    if bytes_sent > 0 || bytes_received > 0 {
+        let client_id_num = client_id.parse::<i64>().unwrap_or(0);
+
+        // 1. 记录 proxy/client/daily 维度的流量（user_id=None）
         traffic_manager.record_traffic(
             proxy_id,
-            client_id.parse::<i64>().unwrap_or(0),
+            client_id_num,
             None,
-            0,
+            bytes_sent,
             bytes_received,
         ).await;
+
+        // 2. 为每个关联用户记录用户维度的流量
+        let db = get_connection().await;
+        let user_clients = UserClient::find()
+            .filter(user_client::Column::ClientId.eq(client_id_num))
+            .all(db)
+            .await
+            .unwrap_or_default();
+
+        for uc in user_clients {
+            traffic_manager.record_traffic(
+                proxy_id,
+                client_id_num,
+                Some(uc.user_id),
+                bytes_sent,
+                bytes_received,
+            ).await;
+        }
     }
 
-    tunnel_send.finish().await?;
     Ok(())
 }

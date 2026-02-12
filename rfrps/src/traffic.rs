@@ -70,137 +70,20 @@ impl TrafficManager {
                 continue;
             }
 
-            // 更新代理流量
-            if let Ok(Some(proxy)) = Proxy::find_by_id(proxy_id).one(db).await {
-                let mut proxy_active: proxy::ActiveModel = proxy.into();
-                proxy_active.total_bytes_sent = Set(proxy_active.total_bytes_sent.unwrap() + bytes_sent);
-                proxy_active.total_bytes_received = Set(proxy_active.total_bytes_received.unwrap() + bytes_received);
-                proxy_active.updated_at = Set(now);
-                if let Err(e) = proxy_active.update(db).await {
-                    error!("更新代理流量失败: {}", e);
-                }
-
-                // 更新每日流量统计
-                match TrafficDaily::find()
-                    .filter(traffic_daily::Column::ProxyId.eq(proxy_id))
-                    .filter(traffic_daily::Column::Date.eq(&today))
-                    .one(db)
-                    .await
-                {
-                    Ok(Some(existing)) => {
-                        let mut daily_active: traffic_daily::ActiveModel = existing.into();
-                        daily_active.bytes_sent = Set(daily_active.bytes_sent.unwrap() + bytes_sent);
-                        daily_active.bytes_received = Set(daily_active.bytes_received.unwrap() + bytes_received);
-                        daily_active.updated_at = Set(now);
-                        if let Err(e) = daily_active.update(db).await {
-                            error!("更新每日流量统计失败: {}", e);
-                        }
-                    }
-                    Ok(None) => {
-                        let daily = traffic_daily::ActiveModel {
-                            id: Set(0),
-                            proxy_id: Set(proxy_id),
-                            client_id: Set(client_id),
-                            bytes_sent: Set(bytes_sent),
-                            bytes_received: Set(bytes_received),
-                            date: Set(today.clone()),
-                            created_at: Set(now),
-                            updated_at: Set(now),
-                        };
-                        if let Err(e) = daily.insert(db).await {
-                            error!("插入每日流量统计失败: {}", e);
-                        }
-                    }
-                    Err(e) => {
-                        error!("查询每日流量统计失败: {}", e);
-                    }
-                }
-            }
-
-            // 更新客户端流量
-            if let Ok(Some(client)) = Client::find_by_id(client_id).one(db).await {
-                // 检查是否需要重置流量
-                let needs_reset = crate::traffic_limiter::should_reset_client_traffic(&client);
-
-                let mut client_active: client::ActiveModel = client.clone().into();
-
-                if needs_reset {
-                    // 重置流量统计
-                    client_active.total_bytes_sent = Set(bytes_sent);
-                    client_active.total_bytes_received = Set(bytes_received);
-                    client_active.is_traffic_exceeded = Set(false);
-                    client_active.last_reset_at = Set(Some(now));
-                    info!("🔄 节点 #{} ({}) 流量已自动重置", client_id, client.name);
-                } else {
-                    // 累加流量
-                    client_active.total_bytes_sent = Set(client_active.total_bytes_sent.unwrap() + bytes_sent);
-                    client_active.total_bytes_received = Set(client_active.total_bytes_received.unwrap() + bytes_received);
-                }
-
-                client_active.updated_at = Set(now);
-
-                if let Err(e) = client_active.update(db).await {
-                    error!("更新客户端流量失败: {}", e);
-                } else {
-                    // 更新成功后，检查节点是否超限
-                    let new_sent = if needs_reset { bytes_sent } else { client.total_bytes_sent + bytes_sent };
-                    let new_received = if needs_reset { bytes_received } else { client.total_bytes_received + bytes_received };
-
-                    // 检查上传流量限制
-                    if let Some(upload_limit_gb) = client.upload_limit_gb {
-                        let upload_limit_bytes = crate::traffic_limiter::gb_to_bytes(upload_limit_gb);
-                        if new_sent >= upload_limit_bytes && !client.is_traffic_exceeded {
-                            // 标记为超限
-                            if let Ok(Some(c)) = Client::find_by_id(client_id).one(db).await {
-                                let mut c_active: client::ActiveModel = c.into();
-                                c_active.is_traffic_exceeded = Set(true);
-                                c_active.updated_at = Set(now);
-                                let _ = c_active.update(db).await;
-                                error!("⚠️ 节点 #{} ({}) 上传流量超限: {:.2} GB / {:.2} GB",
-                                    client_id, client.name,
-                                    crate::traffic_limiter::bytes_to_gb(new_sent),
-                                    upload_limit_gb);
-                            }
-                        }
-                    }
-
-                    // 检查下载流量限制
-                    if let Some(download_limit_gb) = client.download_limit_gb {
-                        let download_limit_bytes = crate::traffic_limiter::gb_to_bytes(download_limit_gb);
-                        if new_received >= download_limit_bytes && !client.is_traffic_exceeded {
-                            // 标记为超限
-                            if let Ok(Some(c)) = Client::find_by_id(client_id).one(db).await {
-                                let mut c_active: client::ActiveModel = c.into();
-                                c_active.is_traffic_exceeded = Set(true);
-                                c_active.updated_at = Set(now);
-                                let _ = c_active.update(db).await;
-                                error!("⚠️ 节点 #{} ({}) 下载流量超限: {:.2} GB / {:.2} GB",
-                                    client_id, client.name,
-                                    crate::traffic_limiter::bytes_to_gb(new_received),
-                                    download_limit_gb);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 更新用户流量
             if let Some(uid) = user_id {
+                // user_id=Some: 只更新用户表
                 if let Ok(Some(user)) = User::find_by_id(uid).one(db).await {
-                    // 检查是否需要重置流量
                     let needs_reset = crate::traffic_limiter::should_reset_traffic(&user);
 
                     let mut user_active: user::ActiveModel = user.clone().into();
 
                     if needs_reset {
-                        // 重置流量统计
                         user_active.total_bytes_sent = Set(bytes_sent);
                         user_active.total_bytes_received = Set(bytes_received);
                         user_active.is_traffic_exceeded = Set(false);
                         user_active.last_reset_at = Set(Some(now));
                         info!("🔄 用户 #{} ({}) 流量已自动重置", uid, user.username);
                     } else {
-                        // 累加流量
                         user_active.total_bytes_sent = Set(user_active.total_bytes_sent.unwrap() + bytes_sent);
                         user_active.total_bytes_received = Set(user_active.total_bytes_received.unwrap() + bytes_received);
                     }
@@ -210,15 +93,12 @@ impl TrafficManager {
                     if let Err(e) = user_active.update(db).await {
                         error!("更新用户流量失败: {}", e);
                     } else {
-                        // 更新成功后，检查是否超限
                         let new_sent = if needs_reset { bytes_sent } else { user.total_bytes_sent + bytes_sent };
                         let new_received = if needs_reset { bytes_received } else { user.total_bytes_received + bytes_received };
 
-                        // 检查上传流量限制
                         if let Some(upload_limit_gb) = user.upload_limit_gb {
                             let upload_limit_bytes = crate::traffic_limiter::gb_to_bytes(upload_limit_gb);
                             if new_sent >= upload_limit_bytes && !user.is_traffic_exceeded {
-                                // 标记为超限
                                 if let Ok(Some(u)) = User::find_by_id(uid).one(db).await {
                                     let mut u_active: user::ActiveModel = u.into();
                                     u_active.is_traffic_exceeded = Set(true);
@@ -232,11 +112,9 @@ impl TrafficManager {
                             }
                         }
 
-                        // 检查下载流量限制
                         if let Some(download_limit_gb) = user.download_limit_gb {
                             let download_limit_bytes = crate::traffic_limiter::gb_to_bytes(download_limit_gb);
                             if new_received >= download_limit_bytes && !user.is_traffic_exceeded {
-                                // 标记为超限
                                 if let Ok(Some(u)) = User::find_by_id(uid).one(db).await {
                                     let mut u_active: user::ActiveModel = u.into();
                                     u_active.is_traffic_exceeded = Set(true);
@@ -244,6 +122,114 @@ impl TrafficManager {
                                     let _ = u_active.update(db).await;
                                     error!("⚠️ 用户 #{} ({}) 下载流量超限: {:.2} GB / {:.2} GB",
                                         uid, user.username,
+                                        crate::traffic_limiter::bytes_to_gb(new_received),
+                                        download_limit_gb);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // user_id=None: 更新 proxy、client、daily 表（每个连接只记录一次）
+
+                // 更新代理流量
+                if let Ok(Some(proxy)) = Proxy::find_by_id(proxy_id).one(db).await {
+                    let mut proxy_active: proxy::ActiveModel = proxy.into();
+                    proxy_active.total_bytes_sent = Set(proxy_active.total_bytes_sent.unwrap() + bytes_sent);
+                    proxy_active.total_bytes_received = Set(proxy_active.total_bytes_received.unwrap() + bytes_received);
+                    proxy_active.updated_at = Set(now);
+                    if let Err(e) = proxy_active.update(db).await {
+                        error!("更新代理流量失败: {}", e);
+                    }
+
+                    // 更新每日流量统计
+                    match TrafficDaily::find()
+                        .filter(traffic_daily::Column::ProxyId.eq(proxy_id))
+                        .filter(traffic_daily::Column::Date.eq(&today))
+                        .one(db)
+                        .await
+                    {
+                        Ok(Some(existing)) => {
+                            let mut daily_active: traffic_daily::ActiveModel = existing.into();
+                            daily_active.bytes_sent = Set(daily_active.bytes_sent.unwrap() + bytes_sent);
+                            daily_active.bytes_received = Set(daily_active.bytes_received.unwrap() + bytes_received);
+                            daily_active.updated_at = Set(now);
+                            if let Err(e) = daily_active.update(db).await {
+                                error!("更新每日流量统计失败: {}", e);
+                            }
+                        }
+                        Ok(None) => {
+                            let daily = traffic_daily::ActiveModel {
+                                id: Set(0),
+                                proxy_id: Set(proxy_id),
+                                client_id: Set(client_id),
+                                bytes_sent: Set(bytes_sent),
+                                bytes_received: Set(bytes_received),
+                                date: Set(today.clone()),
+                                created_at: Set(now),
+                                updated_at: Set(now),
+                            };
+                            if let Err(e) = daily.insert(db).await {
+                                error!("插入每日流量统计失败: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            error!("查询每日流量统计失败: {}", e);
+                        }
+                    }
+                }
+
+                // 更新客户端流量
+                if let Ok(Some(client)) = Client::find_by_id(client_id).one(db).await {
+                    let needs_reset = crate::traffic_limiter::should_reset_client_traffic(&client);
+
+                    let mut client_active: client::ActiveModel = client.clone().into();
+
+                    if needs_reset {
+                        client_active.total_bytes_sent = Set(bytes_sent);
+                        client_active.total_bytes_received = Set(bytes_received);
+                        client_active.is_traffic_exceeded = Set(false);
+                        client_active.last_reset_at = Set(Some(now));
+                        info!("🔄 节点 #{} ({}) 流量已自动重置", client_id, client.name);
+                    } else {
+                        client_active.total_bytes_sent = Set(client_active.total_bytes_sent.unwrap() + bytes_sent);
+                        client_active.total_bytes_received = Set(client_active.total_bytes_received.unwrap() + bytes_received);
+                    }
+
+                    client_active.updated_at = Set(now);
+
+                    if let Err(e) = client_active.update(db).await {
+                        error!("更新客户端流量失败: {}", e);
+                    } else {
+                        let new_sent = if needs_reset { bytes_sent } else { client.total_bytes_sent + bytes_sent };
+                        let new_received = if needs_reset { bytes_received } else { client.total_bytes_received + bytes_received };
+
+                        if let Some(upload_limit_gb) = client.upload_limit_gb {
+                            let upload_limit_bytes = crate::traffic_limiter::gb_to_bytes(upload_limit_gb);
+                            if new_sent >= upload_limit_bytes && !client.is_traffic_exceeded {
+                                if let Ok(Some(c)) = Client::find_by_id(client_id).one(db).await {
+                                    let mut c_active: client::ActiveModel = c.into();
+                                    c_active.is_traffic_exceeded = Set(true);
+                                    c_active.updated_at = Set(now);
+                                    let _ = c_active.update(db).await;
+                                    error!("⚠️ 节点 #{} ({}) 上传流量超限: {:.2} GB / {:.2} GB",
+                                        client_id, client.name,
+                                        crate::traffic_limiter::bytes_to_gb(new_sent),
+                                        upload_limit_gb);
+                                }
+                            }
+                        }
+
+                        if let Some(download_limit_gb) = client.download_limit_gb {
+                            let download_limit_bytes = crate::traffic_limiter::gb_to_bytes(download_limit_gb);
+                            if new_received >= download_limit_bytes && !client.is_traffic_exceeded {
+                                if let Ok(Some(c)) = Client::find_by_id(client_id).one(db).await {
+                                    let mut c_active: client::ActiveModel = c.into();
+                                    c_active.is_traffic_exceeded = Set(true);
+                                    c_active.updated_at = Set(now);
+                                    let _ = c_active.update(db).await;
+                                    error!("⚠️ 节点 #{} ({}) 下载流量超限: {:.2} GB / {:.2} GB",
+                                        client_id, client.name,
                                         crate::traffic_limiter::bytes_to_gb(new_received),
                                         download_limit_gb);
                                 }
@@ -369,8 +355,6 @@ pub async fn get_traffic_overview(user_id: Option<i64>, days: i64) -> Result<Tra
         let all_users = User::find().all(db).await?;
         for user in all_users {
             let total = user.total_bytes_sent + user.total_bytes_received;
-            total_sent += user.total_bytes_sent;
-            total_received += user.total_bytes_received;
             users.push(UserTraffic {
                 user_id: user.id,
                 username: user.username,
@@ -404,6 +388,11 @@ pub async fn get_traffic_overview(user_id: Option<i64>, days: i64) -> Result<Tra
             if user_id.is_some() && !has_client_access(db, user_id.unwrap(), client.id).await? {
                 continue;
             }
+        }
+        // 管理员模式下从 client 表统计总流量（避免从 user 表统计导致遗漏无关联用户的流量）
+        if is_admin {
+            total_sent += client.total_bytes_sent;
+            total_received += client.total_bytes_received;
         }
         clients.push(ClientTraffic {
             client_id: client.id,
