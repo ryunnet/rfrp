@@ -2,8 +2,12 @@ import { useEffect, useState } from 'react';
 import { userService, clientService } from '../lib/services';
 import type { UserWithClientCount, Client } from '../lib/types';
 import { formatDate, formatBytes } from '../lib/utils';
+import { useToast } from '../contexts/ToastContext';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { TableSkeleton } from '../components/Skeleton';
 
 export default function Users() {
+  const { showToast } = useToast();
   const [users, setUsers] = useState<UserWithClientCount[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -12,8 +16,8 @@ export default function Users() {
   const [showTrafficModal, setShowTrafficModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithClientCount | null>(null);
   const [userClients, setUserClients] = useState<Client[]>([]);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [trafficSaving, setTrafficSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'info'; confirmText: string; onConfirm: () => void }>({ open: false, title: '', message: '', variant: 'danger', confirmText: '确定', onConfirm: () => {} });
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -86,21 +90,28 @@ export default function Users() {
     }
   };
 
-  const handleDeleteUser = async (id: number) => {
-    if (!confirm('确定要删除这个用户吗？')) return;
-
-    try {
-      const response = await userService.deleteUser(id);
-      if (response.success) {
-        showToast('用户删除成功', 'success');
-        loadUsers();
-      } else {
-        showToast(response.message || '删除失败', 'error');
-      }
-    } catch (error) {
-      console.error('删除用户失败:', error);
-      showToast('删除失败', 'error');
-    }
+  const handleDeleteUser = (id: number) => {
+    setConfirmDialog({
+      open: true,
+      title: '删除用户',
+      message: '确定要删除这个用户吗？',
+      variant: 'danger',
+      confirmText: '删除',
+      onConfirm: async () => {
+        try {
+          const response = await userService.deleteUser(id);
+          if (response.success) {
+            showToast('用户删除成功', 'success');
+            loadUsers();
+          } else {
+            showToast(response.message || '删除失败', 'error');
+          }
+        } catch (error) {
+          console.error('删除用户失败:', error);
+          showToast('删除失败', 'error');
+        }
+      },
+    });
   };
 
   const handleToggleAdmin = async (user: UserWithClientCount) => {
@@ -213,29 +224,30 @@ export default function Users() {
     }
   };
 
-  const handleResetTrafficExceeded = async (user: UserWithClientCount) => {
-    if (!confirm('确定要重置该用户的超限状态吗？')) return;
-
-    try {
-      const response = await userService.updateUser(user.id, {
-        is_traffic_exceeded: false,
-      });
-
-      if (response.success) {
-        showToast('超限状态已重置', 'success');
-        loadUsers();
-      } else {
-        showToast(response.message || '重置失败', 'error');
-      }
-    } catch (error) {
-      console.error('重置超限状态失败:', error);
-      showToast('重置失败', 'error');
-    }
-  };
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+  const handleResetTrafficExceeded = (user: UserWithClientCount) => {
+    setConfirmDialog({
+      open: true,
+      title: '重置超限状态',
+      message: '确定要重置该用户的超限状态吗？',
+      variant: 'warning',
+      confirmText: '重置',
+      onConfirm: async () => {
+        try {
+          const response = await userService.updateUser(user.id, {
+            is_traffic_exceeded: false,
+          });
+          if (response.success) {
+            showToast('超限状态已重置', 'success');
+            loadUsers();
+          } else {
+            showToast(response.message || '重置失败', 'error');
+          }
+        } catch (error) {
+          console.error('重置超限状态失败:', error);
+          showToast('重置失败', 'error');
+        }
+      },
+    });
   };
 
   return (
@@ -261,12 +273,7 @@ export default function Users() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-            <span className="text-sm text-gray-500">加载中...</span>
-          </div>
-        </div>
+        <TableSkeleton rows={5} cols={7} />
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <table className="min-w-full">
@@ -720,25 +727,18 @@ export default function Users() {
         </div>
       )}
 
-      {/* Toast 通知 */}
-      {toast && (
-        <div className={`fixed bottom-6 right-6 flex items-center gap-3 px-5 py-3 rounded-xl text-white shadow-lg transform transition-all duration-300 ${
-          toast.type === 'success'
-            ? 'bg-gradient-to-r from-green-500 to-emerald-600'
-            : 'bg-gradient-to-r from-red-500 to-rose-600'
-        }`}>
-          {toast.type === 'success' ? (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-            </svg>
-          )}
-          <span className="font-medium">{toast.message}</span>
-        </div>
-      )}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant={confirmDialog.variant}
+        confirmText={confirmDialog.confirmText}
+        onConfirm={() => {
+          confirmDialog.onConfirm();
+          setConfirmDialog(prev => ({ ...prev, open: false }));
+        }}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }

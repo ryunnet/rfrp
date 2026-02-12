@@ -183,3 +183,21 @@ export const dashboardService = {
     return response.data;
   },
 };
+
+// ============ 系统配置服务 ============
+export const systemService = {
+  async getConfigs(): Promise<ApiResponse<{ configs: Array<{ id: number; key: string; value: number | string | boolean; description: string; valueType: 'number' | 'string' | 'boolean' }> }>> {
+    const response = await api.get('/system/configs');
+    return response.data;
+  },
+
+  async batchUpdateConfigs(configs: Array<{ key: string; value: any }>): Promise<ApiResponse<any>> {
+    const response = await api.post('/system/configs/batch', { configs });
+    return response.data;
+  },
+
+  async restart(): Promise<ApiResponse<{ message: string }>> {
+    const response = await api.post('/system/restart');
+    return response.data;
+  },
+};

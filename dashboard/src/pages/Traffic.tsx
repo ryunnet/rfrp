@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { trafficService } from '../lib/services';
 import type { TrafficOverview } from '../lib/types';
 import { formatBytes, formatShortDate } from '../lib/utils';
+import SkeletonBlock, { CardSkeleton } from '../components/Skeleton';
 
 export default function Traffic() {
   const { user } = useAuth();
@@ -71,8 +72,31 @@ export default function Traffic() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="space-y-2">
+            <SkeletonBlock className="h-8 w-32" />
+            <SkeletonBlock className="h-4 w-48" />
+          </div>
+          <SkeletonBlock className="h-10 w-36 rounded-xl" />
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <SkeletonBlock className="h-5 w-24 mb-4" />
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-3">
+          <SkeletonBlock className="h-5 w-28 mb-4" />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4">
+              <SkeletonBlock className="h-4 w-20" />
+              <SkeletonBlock className="h-8 flex-1 rounded-full" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

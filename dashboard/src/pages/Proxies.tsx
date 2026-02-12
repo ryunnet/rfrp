@@ -2,14 +2,18 @@ import { useEffect, useState } from 'react';
 import { proxyService, clientService } from '../lib/services';
 import type { Proxy, Client } from '../lib/types';
 import { formatBytes } from '../lib/utils';
+import { useToast } from '../contexts/ToastContext';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { TableSkeleton } from '../components/Skeleton';
 
 export default function Proxies() {
+  const { showToast } = useToast();
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProxy, setEditingProxy] = useState<Proxy | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
   const [formData, setFormData] = useState({
     client_id: '',
     name: '',
@@ -124,21 +128,26 @@ export default function Proxies() {
     setShowCreateModal(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除这个代理吗？')) return;
-
-    try {
-      const response = await proxyService.deleteProxy(id);
-      if (response.success) {
-        showToast('代理删除成功', 'success');
-        loadData();
-      } else {
-        showToast(response.message || '删除失败', 'error');
-      }
-    } catch (error) {
-      console.error('删除代理失败:', error);
-      showToast('删除失败', 'error');
-    }
+  const handleDelete = (id: number) => {
+    setConfirmDialog({
+      open: true,
+      title: '删除代理',
+      message: '确定要删除这个代理吗？',
+      onConfirm: async () => {
+        try {
+          const response = await proxyService.deleteProxy(id);
+          if (response.success) {
+            showToast('代理删除成功', 'success');
+            loadData();
+          } else {
+            showToast(response.message || '删除失败', 'error');
+          }
+        } catch (error) {
+          console.error('删除代理失败:', error);
+          showToast('删除失败', 'error');
+        }
+      },
+    });
   };
 
   const handleToggleEnabled = async (proxy: Proxy) => {
@@ -159,11 +168,6 @@ export default function Proxies() {
   const getClientName = (clientId: string) => {
     const client = clients.find((c) => c.id.toString() === clientId);
     return client?.name || clientId;
-  };
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
   };
 
   return (
@@ -189,12 +193,7 @@ export default function Proxies() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-            <span className="text-sm text-gray-500">加载中...</span>
-          </div>
-        </div>
+        <TableSkeleton rows={5} cols={7} />
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <table className="min-w-full">
@@ -466,25 +465,18 @@ export default function Proxies() {
         </div>
       )}
 
-      {/* Toast 通知 */}
-      {toast && (
-        <div className={`fixed bottom-6 right-6 flex items-center gap-3 px-5 py-3 rounded-xl text-white shadow-lg transform transition-all duration-300 ${
-          toast.type === 'success'
-            ? 'bg-gradient-to-r from-green-500 to-emerald-600'
-            : 'bg-gradient-to-r from-red-500 to-rose-600'
-        }`}>
-          {toast.type === 'success' ? (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-            </svg>
-          )}
-          <span className="font-medium">{toast.message}</span>
-        </div>
-      )}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant="danger"
+        confirmText="删除"
+        onConfirm={() => {
+          confirmDialog.onConfirm();
+          setConfirmDialog(prev => ({ ...prev, open: false }));
+        }}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }

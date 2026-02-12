@@ -17,7 +17,8 @@
       "Bash(git add docker-compose.yml)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\ndebug: 临时开启 yamux 和 rfrp_common debug 日志用于排查心跳问题\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git add rfrps/src/server.rs)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修复服务端代理请求缺少消息类型前缀导致客户端无法转发流量\n\n服务端向客户端发起 TCP/UDP 代理请求时，直接发送协议类型字节\n\\(''t''/''u''\\)，但客户端协议约定第一个字节应为消息类型\\(''p''=代理\\),\n第二个字节才是协议类型。缺少 ''p'' 前缀导致客户端将 ''t''\\(ASCII 116\\)\n识别为未知消息类型并丢弃，代理流量无法转发。\n\nCo-Authored-By: Claude Opus 4.6 \\(1M context\\) <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修复服务端代理请求缺少消息类型前缀导致客户端无法转发流量\n\n服务端向客户端发起 TCP/UDP 代理请求时，直接发送协议类型字节\n\\(''t''/''u''\\)，但客户端协议约定第一个字节应为消息类型\\(''p''=代理\\),\n第二个字节才是协议类型。缺少 ''p'' 前缀导致客户端将 ''t''\\(ASCII 116\\)\n识别为未知消息类型并丢弃，代理流量无法转发。\n\nCo-Authored-By: Claude Opus 4.6 \\(1M context\\) <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(npx tsc --noEmit --pretty)"
     ]
   }
 }

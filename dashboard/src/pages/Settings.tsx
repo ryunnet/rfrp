@@ -1,4 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { systemService } from '../lib/services';
+import { useToast } from '../contexts/ToastContext';
+import ConfirmDialog from '../components/ConfirmDialog';
+import SkeletonBlock from '../components/Skeleton';
 
 interface ConfigItem {
   id: number;
@@ -8,119 +13,60 @@ interface ConfigItem {
   valueType: 'number' | 'string' | 'boolean';
 }
 
-interface ConfigListResponse {
-  configs: ConfigItem[];
-}
-
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  message: string;
-}
-
-interface UserInfo {
-  id: number;
-  username: string;
-  is_admin: boolean;
-}
-
 export default function Settings() {
   const [configs, setConfigs] = useState<ConfigItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [editedValues, setEditedValues] = useState<Record<string, any>>({});
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { showToast } = useToast();
+  const { isAdmin } = useAuth();
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'info'; confirmText: string; onConfirm: () => void }>({ open: false, title: '', message: '', variant: 'warning', confirmText: '确定', onConfirm: () => {} });
 
   useEffect(() => {
     loadConfigs();
-    checkAdminStatus();
   }, []);
 
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-  };
-
-  const checkAdminStatus = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data: ApiResponse<UserInfo> = await response.json();
-
-      if (data.success && data.data) {
-        setIsAdmin(data.data.is_admin);
-      }
-    } catch (error) {
-      // 忽略错误，默认非管理员
-    }
-  };
-
-  const restartSystem = async () => {
-    if (!confirm('确定要重启系统吗？重启期间服务将暂时不可用。')) {
-      return;
-    }
-
-    setRestarting(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/system/restart', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data: ApiResponse<{ message: string }> = await response.json();
-
-      if (data.success) {
-        showToast('系统正在重启，请稍候...', 'success');
-        // 等待几秒后刷新页面（服务端需要2秒延迟启动）
-        setTimeout(() => {
-          window.location.reload();
-        }, 5000);
-      } else {
-        showToast(data.message || '重启失败', 'error');
-        setRestarting(false);
-      }
-    } catch (error) {
-      showToast('网络错误，请稍后重试', 'error');
-      setRestarting(false);
-    }
+  const restartSystem = () => {
+    setConfirmDialog({
+      open: true,
+      title: '重启系统',
+      message: '确定要重启系统吗？重启期间服务将暂时不可用。',
+      variant: 'warning',
+      confirmText: '重启',
+      onConfirm: async () => {
+        setRestarting(true);
+        try {
+          const response = await systemService.restart();
+          if (response.success) {
+            showToast('系统正在重启，请稍候...', 'success');
+            setTimeout(() => {
+              window.location.reload();
+            }, 5000);
+          } else {
+            showToast(response.message || '重启失败', 'error');
+            setRestarting(false);
+          }
+        } catch (error) {
+          showToast('网络错误，请稍后重试', 'error');
+          setRestarting(false);
+        }
+      },
+    });
   };
 
   const loadConfigs = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/system/configs', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data: ApiResponse<ConfigListResponse> = await response.json();
-
-      if (data.success && data.data) {
-        setConfigs(data.data.configs);
+      const response = await systemService.getConfigs();
+      if (response.success && response.data) {
+        setConfigs(response.data.configs);
         const initialValues: Record<string, any> = {};
-        data.data.configs.forEach(config => {
+        response.data.configs.forEach(config => {
           initialValues[config.key] = config.value;
         });
         setEditedValues(initialValues);
       } else {
-        showToast(data.message || '无法加载系统配置', 'error');
+        showToast(response.message || '无法加载系统配置', 'error');
       }
     } catch (error) {
       showToast('网络错误，请稍后重试', 'error');
@@ -160,8 +106,6 @@ export default function Settings() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
-
       const updates = configs
         .filter(config => !valuesEqual(editedValues[config.key], config.value, config.valueType))
         .map(config => ({
@@ -175,34 +119,43 @@ export default function Settings() {
         return;
       }
 
-      // 检查是否修改了协议设置
       const protocolChanged = updates.some(u => u.key === 'use_kcp');
 
-      const response = await fetch('/api/system/configs/batch', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ configs: updates }),
-      });
+      const response = await systemService.batchUpdateConfigs(updates);
 
-      const data: ApiResponse<ConfigListResponse> = await response.json();
-
-      if (data.success) {
+      if (response.success) {
         showToast(`已成功更新 ${updates.length} 个配置项`, 'success');
         loadConfigs();
 
-        // 如果修改了协议设置且是管理员，自动重启系统
         if (protocolChanged && isAdmin) {
           setTimeout(() => {
-            if (confirm('协议设置已更改，需要重启系统才能生效。是否立即重启？')) {
-              restartSystem();
-            }
+            setConfirmDialog({
+              open: true,
+              title: '重启系统',
+              message: '协议设置已更改，需要重启系统才能生效。是否立即重启？',
+              variant: 'warning',
+              confirmText: '立即重启',
+              onConfirm: async () => {
+                setRestarting(true);
+                try {
+                  const resp = await systemService.restart();
+                  if (resp.success) {
+                    showToast('系统正在重启，请稍候...', 'success');
+                    setTimeout(() => window.location.reload(), 5000);
+                  } else {
+                    showToast(resp.message || '重启失败', 'error');
+                    setRestarting(false);
+                  }
+                } catch {
+                  showToast('网络错误，请稍后重试', 'error');
+                  setRestarting(false);
+                }
+              },
+            });
           }, 500);
         }
       } else {
-        showToast(data.message || '无法保存配置', 'error');
+        showToast(response.message || '无法保存配置', 'error');
       }
     } catch (error) {
       showToast('网络错误，请稍后重试', 'error');
@@ -295,8 +248,38 @@ export default function Settings() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div className="space-y-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-2">
+              <SkeletonBlock className="h-8 w-32" />
+              <SkeletonBlock className="h-4 w-48" />
+            </div>
+            <div className="flex gap-3">
+              <SkeletonBlock className="h-10 w-28 rounded-xl" />
+              <SkeletonBlock className="h-10 w-24 rounded-xl" />
+              <SkeletonBlock className="h-10 w-28 rounded-xl" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <SkeletonBlock className="h-6 w-24 mb-4" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SkeletonBlock className="h-24 rounded-lg" />
+            <SkeletonBlock className="h-24 rounded-lg" />
+          </div>
+        </div>
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
+            <SkeletonBlock className="h-6 w-32 mb-2" />
+            {Array.from({ length: 3 }).map((_, j) => (
+              <div key={j} className="space-y-2">
+                <SkeletonBlock className="h-4 w-40" />
+                <SkeletonBlock className="h-10 w-64 rounded-md" />
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
     );
   }
@@ -313,17 +296,8 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      {/* Toast 通知 */}
-      {toast && (
-        <div className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg ${
-          toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
-        } text-white z-50 animate-fade-in`}>
-          {toast.message}
-        </div>
-      )}
-
       {/* 页面标题和操作按钮 */}
-      <div className="bg-white shadow rounded-lg p-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">系统配置</h1>
@@ -358,7 +332,7 @@ export default function Settings() {
       </div>
 
       {/* 协议选择卡片 */}
-      <div className="bg-white shadow rounded-lg p-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">传输协议</h2>
         <p className="text-sm text-gray-600 mb-4">
           选择服务端使用的传输协议（修改后需重启服务端生效）
@@ -429,7 +403,7 @@ export default function Settings() {
         const categoryConfigs = groupedConfigs[category];
 
         return (
-          <div key={category} className="bg-white shadow rounded-lg p-6">
+          <div key={category} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900">{category}</h2>
               <p className="text-sm text-gray-600 mt-1">
@@ -513,6 +487,19 @@ export default function Settings() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant={confirmDialog.variant}
+        confirmText={confirmDialog.confirmText}
+        onConfirm={() => {
+          confirmDialog.onConfirm();
+          setConfirmDialog(prev => ({ ...prev, open: false }));
+        }}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }
