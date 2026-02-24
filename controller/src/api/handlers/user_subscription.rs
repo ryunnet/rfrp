@@ -325,13 +325,27 @@ pub async fn create_user_subscription(
         updated_at: Set(now),
     };
 
-    match user_subscription.insert(db).await {
-        Ok(user_subscription) => (StatusCode::CREATED, ApiResponse::success(user_subscription)),
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            ApiResponse::error(format!("创建用户订阅失败: {}", err)),
-        ),
+    // 创建用户订阅
+    let created_subscription = match user_subscription.insert(db).await {
+        Ok(us) => us,
+        Err(err) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ApiResponse::error(format!("创建用户订阅失败: {}", err)),
+            )
+        }
+    };
+
+    // 将订阅流量加到用户的流量配额
+    if let Ok(Some(user)) = User::find_by_id(req.user_id).one(db).await {
+        let mut user: crate::entity::user::ActiveModel = user.into();
+        let current_quota = user.traffic_quota_gb.clone().unwrap().unwrap_or(0.0);
+        user.traffic_quota_gb = Set(Some(current_quota + subscription.traffic_quota_gb));
+        user.updated_at = Set(now);
+        let _ = user.update(db).await;
     }
+
+    (StatusCode::CREATED, ApiResponse::success(created_subscription))
 }
 
 /// PUT /api/user-subscriptions/{id} - 更新用户订阅（管理员）

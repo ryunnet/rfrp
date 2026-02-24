@@ -13,6 +13,7 @@ import Settings from './pages/Settings';
 import Nodes from './pages/Nodes';
 import Subscriptions from './pages/Subscriptions';
 import UserSubscriptions from './pages/UserSubscriptions';
+import MySubscription from './pages/MySubscription';
 
 function App() {
   return (
@@ -48,6 +49,7 @@ function App() {
                         }
                       />
                       <Route path="/nodes" element={<Nodes />} />
+                      <Route path="/my-subscription" element={<MySubscription />} />
                       <Route
                         path="/subscriptions"
                         element={
