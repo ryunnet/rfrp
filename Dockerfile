@@ -30,6 +30,10 @@ COPY agent/Cargo.toml ./agent/
 COPY common/Cargo.toml ./common/
 COPY controller/Cargo.toml ./controller/
 
+# 复制 build.rs 和 proto 文件（protobuf 代码生成需要）
+COPY common/build.rs ./common/
+COPY common/proto ./common/proto
+
 # 创建虚拟源文件以构建依赖
 RUN mkdir -p agent/src common/src controller/src && \
     echo "fn main() {}" > agent/src/main.rs && \
