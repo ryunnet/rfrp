@@ -66,7 +66,7 @@ export default function Dashboard() {
       </div>
 
       {/* 统计卡片 - 现代化设计 */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           title="总客户端"
           value={stats?.total_clients || 0}
@@ -106,6 +106,16 @@ export default function Dashboard() {
             </svg>
           }
           color="amber"
+        />
+        <StatCard
+          title="用户总配额(GB)"
+          value={stats?.user_total_quota_gb == null ? '无限制' : stats.user_total_quota_gb.toFixed(2)}
+          icon={
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.306a11.95 11.95 0 005.814-5.517L21.75 6.75M16.5 6.75h5.25V12" />
+            </svg>
+          }
+          color="teal"
         />
       </div>
 
@@ -204,9 +214,9 @@ export default function Dashboard() {
 
 interface StatCardProps {
   title: string;
-  value: number;
+  value: number | string;
   icon: React.ReactNode;
-  color: 'blue' | 'green' | 'purple' | 'amber';
+  color: 'blue' | 'green' | 'purple' | 'amber' | 'teal';
 }
 
 function StatCard({ title, value, icon, color }: StatCardProps) {
@@ -233,11 +243,18 @@ function StatCard({ title, value, icon, color }: StatCardProps) {
       hover: 'hover:shadow-purple-500/30',
     },
     amber: {
-      bg: 'bg-gradient-to-br from-amber-50 to-orange-100',
+      bg: 'bg-gradient-to-br from-amber-50 to-yellow-100',
       icon: 'text-amber-600',
       border: 'border-amber-200/50',
       shadow: 'shadow-amber-500/20',
       hover: 'hover:shadow-amber-500/30',
+    },
+    teal: {
+      bg: 'bg-gradient-to-br from-teal-50 to-cyan-100',
+      icon: 'text-teal-600',
+      border: 'border-teal-200/50',
+      shadow: 'shadow-teal-500/20',
+      hover: 'hover:shadow-teal-500/30',
     },
   };
 

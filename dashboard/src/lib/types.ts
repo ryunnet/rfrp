@@ -142,6 +142,7 @@ export interface DashboardStats {
   enabled_proxies: number;
   total_nodes: number;
   online_nodes: number;
+  user_total_quota_gb: number | null;
   user_traffic: {
     total_bytes_sent: number;
     total_bytes_received: number;

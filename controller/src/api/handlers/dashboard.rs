@@ -11,6 +11,7 @@ pub struct DashboardStats {
     pub enabled_proxies: i64,
     pub total_nodes: i64,
     pub online_nodes: i64,
+    pub user_total_quota_gb: Option<f64>,
     pub user_traffic: UserTrafficStats,
 }
 
@@ -133,6 +134,7 @@ pub async fn get_user_dashboard_stats(
         enabled_proxies,
         total_nodes,
         online_nodes,
+        user_total_quota_gb: user.traffic_quota_gb,
         user_traffic,
     };
 
