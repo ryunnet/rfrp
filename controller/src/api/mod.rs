@@ -26,6 +26,8 @@ pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
             .route("/clients", get(handlers::list_clients).post(handlers::create_client))
             .route("/clients/{id}", get(handlers::get_client).delete(handlers::delete_client))
             .route("/clients/{id}/logs", get(handlers::get_client_logs))
+            .route("/clients/{id}/traffic", get(handlers::get_client_traffic))
+            .route("/clients/{id}/allocate-quota", post(handlers::allocate_client_quota))
             .route("/proxies", get(handlers::list_proxies).post(handlers::create_proxy))
             .route("/proxies/{id}", put(handlers::update_proxy).delete(handlers::delete_proxy))
             .route("/clients/{id}/proxies", get(handlers::list_proxies_by_client))
@@ -40,8 +42,10 @@ pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
             // 管理员路由（需要管理员权限）
             .route("/users", get(handlers::list_users).post(handlers::create_user))
             .route("/users/{id}", put(handlers::update_user).delete(handlers::delete_user))
-            .route("/users/{id}/clients", get(handlers::get_user_clients))
-            .route("/users/{id}/clients/{client_id}", post(handlers::assign_client_to_user).delete(handlers::remove_client_from_user))
+            .route("/users/{id}/nodes", get(handlers::get_user_nodes))
+            .route("/users/{id}/nodes/{node_id}", post(handlers::assign_node_to_user).delete(handlers::remove_node_from_user))
+            .route("/users/{id}/adjust-quota", post(handlers::adjust_user_quota))
+            .route("/users/{id}/quota-info", get(handlers::get_user_quota_info))
             // 节点管理路由（管理员权限）
             .route("/nodes", get(handlers::list_nodes).post(handlers::create_node))
             .route("/nodes/{id}", get(handlers::get_node).put(handlers::update_node).delete(handlers::delete_node))

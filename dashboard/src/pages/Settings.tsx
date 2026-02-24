@@ -13,6 +13,13 @@ interface ConfigItem {
   valueType: 'number' | 'string' | 'boolean';
 }
 
+const configHints: Record<string, string> = {
+  health_check_interval: '服务端检查客户端连接状态的间隔时间',
+  idle_timeout: '无数据传输时连接的超时时间',
+  keep_alive_interval: '心跳包发送间隔，用于保持连接活跃',
+  max_concurrent_streams: '单个客户端连接允许的最大并发流数量',
+};
+
 export default function Settings() {
   const [configs, setConfigs] = useState<ConfigItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,7 +97,6 @@ export default function Settings() {
     }));
   };
 
-  // 比较两个值是否相等（处理类型转换）
   const valuesEqual = (a: any, b: any, valueType: string): boolean => {
     if (valueType === 'boolean') {
       const aBool = a === true || a === 'true';
@@ -119,41 +125,11 @@ export default function Settings() {
         return;
       }
 
-      const protocolChanged = updates.some(u => u.key === 'use_kcp');
-
       const response = await systemService.batchUpdateConfigs(updates);
 
       if (response.success) {
         showToast(`已成功更新 ${updates.length} 个配置项`, 'success');
         loadConfigs();
-
-        if (protocolChanged && isAdmin) {
-          setTimeout(() => {
-            setConfirmDialog({
-              open: true,
-              title: '重启系统',
-              message: '协议设置已更改，需要重启系统才能生效。是否立即重启？',
-              variant: 'warning',
-              confirmText: '立即重启',
-              onConfirm: async () => {
-                setRestarting(true);
-                try {
-                  const resp = await systemService.restart();
-                  if (resp.success) {
-                    showToast('系统正在重启，请稍候...', 'success');
-                    setTimeout(() => window.location.reload(), 5000);
-                  } else {
-                    showToast(resp.message || '重启失败', 'error');
-                    setRestarting(false);
-                  }
-                } catch {
-                  showToast('网络错误，请稍后重试', 'error');
-                  setRestarting(false);
-                }
-              },
-            });
-          }, 500);
-        }
       } else {
         showToast(response.message || '无法保存配置', 'error');
       }
@@ -177,7 +153,7 @@ export default function Settings() {
 
   const renderConfigInput = (config: ConfigItem) => {
     const value = editedValues[config.key];
-    const inputClassName = "w-full max-w-xs px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500";
+    const inputClassName = "w-full max-w-xs px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white";
 
     switch (config.valueType) {
       case 'number':
@@ -215,274 +191,131 @@ export default function Settings() {
     }
   };
 
-  const getConfigCategory = (key: string): string => {
-    if (key === 'use_kcp') {
-      return '传输协议';
-    }
-    if (key.startsWith('kcp_')) {
-      return 'KCP 协议参数';
-    }
-    if (key.includes('timeout') || key.includes('interval') || key.includes('streams')) {
-      return 'QUIC 连接配置';
-    }
-    if (key.includes('registration') || key.includes('name')) {
-      return '系统配置';
-    }
-    return '其他配置';
-  };
-
-  const categoryOrder = ['传输协议', 'KCP 协议参数', 'QUIC 连接配置', '系统配置', '其他配置'];
-
-  const groupedConfigs = configs.reduce((acc, config) => {
-    const category = getConfigCategory(config.key);
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(config);
-    return acc;
-  }, {} as Record<string, ConfigItem[]>);
-
-  const sortedCategories = Object.keys(groupedConfigs).sort((a, b) => {
-    return categoryOrder.indexOf(a) - categoryOrder.indexOf(b);
-  });
-
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <SkeletonBlock className="h-8 w-32" />
-              <SkeletonBlock className="h-4 w-48" />
-            </div>
-            <div className="flex gap-3">
-              <SkeletonBlock className="h-10 w-28 rounded-xl" />
-              <SkeletonBlock className="h-10 w-24 rounded-xl" />
-              <SkeletonBlock className="h-10 w-28 rounded-xl" />
-            </div>
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <SkeletonBlock className="h-8 w-32" />
+            <SkeletonBlock className="h-4 w-48" />
+          </div>
+          <div className="flex gap-3">
+            <SkeletonBlock className="h-10 w-28 rounded-xl" />
+            <SkeletonBlock className="h-10 w-24 rounded-xl" />
+            <SkeletonBlock className="h-10 w-28 rounded-xl" />
           </div>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <SkeletonBlock className="h-6 w-24 mb-4" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SkeletonBlock className="h-24 rounded-lg" />
-            <SkeletonBlock className="h-24 rounded-lg" />
-          </div>
-        </div>
-        {Array.from({ length: 2 }).map((_, i) => (
-          <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
-            <SkeletonBlock className="h-6 w-32 mb-2" />
-            {Array.from({ length: 3 }).map((_, j) => (
-              <div key={j} className="space-y-2">
+          <SkeletonBlock className="h-6 w-24 mb-6" />
+          <div className="space-y-6">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
                 <SkeletonBlock className="h-4 w-40" />
-                <SkeletonBlock className="h-10 w-64 rounded-md" />
+                <SkeletonBlock className="h-12 w-80 rounded-xl" />
+                <SkeletonBlock className="h-3 w-56" />
               </div>
             ))}
           </div>
-        ))}
+        </div>
       </div>
     );
   }
 
-  const useKcp = editedValues['use_kcp'] === true || editedValues['use_kcp'] === 'true';
-
-  // 根据协议选择过滤要显示的分类
-  const visibleCategories = sortedCategories.filter(cat => {
-    if (cat === '传输协议') return false;
-    if (cat === 'KCP 协议参数') return useKcp;
-    if (cat === 'QUIC 连接配置') return !useKcp;
-    return true;
-  });
-
   return (
     <div className="space-y-6">
       {/* 页面标题和操作按钮 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">系统配置</h2>
+          <p className="mt-1 text-sm text-gray-500">管理 RFRP 系统的连接配置参数</p>
+        </div>
+        <div className="flex gap-3">
+          {isAdmin && (
+            <button
+              onClick={restartSystem}
+              disabled={restarting || saving}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white text-sm font-medium rounded-xl hover:from-red-600 hover:to-rose-700 focus:outline-none focus:ring-2 focus:ring-red-500/40 shadow-lg shadow-red-500/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+              </svg>
+              {restarting ? '重启中...' : '重启系统'}
+            </button>
+          )}
+          <button
+            onClick={handleReset}
+            disabled={!hasChanges || saving}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+            </svg>
+            重置
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!hasChanges || saving}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-lg shadow-blue-500/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 3.75H6.912a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H15M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859M12 3v8.25m0 0-3-3m3 3 3-3" />
+            </svg>
+            {saving ? '保存中...' : '保存更改'}
+          </button>
+        </div>
+      </div>
+
+      {/* 连接配置 */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.204-.107-.397.165-.71.505-.78.929l-.15.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.272-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            </svg>
+          </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">系统配置</h1>
-            <p className="text-gray-600 mt-1">管理 RFRP 系统的全局配置项</p>
-          </div>
-          <div className="flex gap-3">
-            {isAdmin && (
-              <button
-                onClick={restartSystem}
-                disabled={restarting || saving}
-                className="px-4 py-2 text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {restarting ? '🔄 重启中...' : '🔄 重启系统'}
-              </button>
-            )}
-            <button
-              onClick={handleReset}
-              disabled={!hasChanges || saving}
-              className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              🔄 重置
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!hasChanges || saving}
-              className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? '💾 保存中...' : '💾 保存更改'}
-            </button>
+            <h3 className="text-lg font-bold text-gray-900">连接配置</h3>
+            <p className="text-sm text-gray-500">QUIC 协议相关的连接参数（修改后需客户端重新连接生效）</p>
           </div>
         </div>
-      </div>
 
-      {/* 协议选择卡片 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">传输协议</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          选择服务端使用的传输协议（修改后需重启服务端生效）
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* QUIC 选项卡片 */}
-          <div
-            onClick={() => handleValueChange('use_kcp', false, 'boolean')}
-            className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
-              !useKcp
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 bg-white hover:border-gray-300'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
-                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                  !useKcp ? 'border-blue-500' : 'border-gray-300'
-                }`}>
-                  {!useKcp && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}
-                </div>
-                <span className="font-medium text-gray-900">QUIC 协议</span>
-              </div>
-              {!useKcp && (
-                <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                  当前使用
+        <div className="space-y-6">
+          {configs.map((config) => (
+            <div key={config.key} className="border-b border-gray-100 pb-6 last:border-b-0 last:pb-0">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                {config.description}
+              </label>
+              <div className="flex items-center gap-4">
+                {renderConfigInput(config)}
+                <span className="text-sm text-gray-500">
+                  {config.valueType === 'number' && (
+                    (config.key.includes('interval') || config.key.includes('timeout'))
+                      ? '秒'
+                      : ''
+                  )}
                 </span>
+              </div>
+              {configHints[config.key] && (
+                <div className="flex items-center gap-1.5 mt-2">
+                  <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                  </svg>
+                  <p className="text-sm text-gray-500">{configHints[config.key]}</p>
+                </div>
               )}
             </div>
-            <p className="text-sm text-gray-600 ml-7">
-              基于 UDP 的安全传输协议，内置 TLS 加密，适合大多数场景
-            </p>
-          </div>
-
-          {/* KCP 选项卡片 */}
-          <div
-            onClick={() => handleValueChange('use_kcp', true, 'boolean')}
-            className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
-              useKcp
-                ? 'border-green-500 bg-green-50'
-                : 'border-gray-200 bg-white hover:border-gray-300'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
-                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                  useKcp ? 'border-green-500' : 'border-gray-300'
-                }`}>
-                  {useKcp && <div className="w-2 h-2 rounded-full bg-green-500"></div>}
-                </div>
-                <span className="font-medium text-gray-900">KCP 协议</span>
-              </div>
-              {useKcp && (
-                <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                  当前使用
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-gray-600 ml-7">
-              快速可靠的 UDP 传输协议，适合高延迟或不稳定的网络环境
-            </p>
-          </div>
+          ))}
         </div>
       </div>
-
-      {/* 配置项分组 - 只显示当前协议相关的配置 */}
-      {visibleCategories.map((category) => {
-        const categoryConfigs = groupedConfigs[category];
-
-        return (
-          <div key={category} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">{category}</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                {category === 'KCP 协议参数' && 'KCP 协议的详细参数配置（修改后需重启服务端生效）'}
-                {category === 'QUIC 连接配置' && 'QUIC 协议相关的连接参数（修改后需客户端重新连接生效）'}
-                {category === '系统配置' && '系统级别的基本配置'}
-              </p>
-            </div>
-
-            <div className="space-y-6">
-              {categoryConfigs.map((config) => (
-                <div key={config.key} className="border-b border-gray-200 pb-6 last:border-b-0 last:pb-0">
-                  <label className="block text-base font-medium text-gray-700 mb-2">
-                    {config.description}
-                  </label>
-                  <div className="flex items-center gap-4">
-                    {renderConfigInput(config)}
-                    <span className="text-sm text-gray-500">
-                      {config.valueType === 'number' && (
-                        config.key === 'kcp_interval'
-                          ? '毫秒'
-                          : (config.key.includes('interval') || config.key.includes('timeout'))
-                            ? '秒'
-                            : ''
-                      )}
-                    </span>
-                  </div>
-                  {config.key === 'health_check_interval' && (
-                    <p className="text-sm text-gray-500 mt-2">
-                      💡 服务端检查客户端连接状态的间隔时间
-                    </p>
-                  )}
-                  {config.key === 'idle_timeout' && (
-                    <p className="text-sm text-gray-500 mt-2">
-                      💡 无数据传输时连接的超时时间
-                    </p>
-                  )}
-                  {config.key === 'keep_alive_interval' && (
-                    <p className="text-sm text-gray-500 mt-2">
-                      💡 心跳包发送间隔，用于保持连接活跃
-                    </p>
-                  )}
-                  {config.key === 'max_concurrent_streams' && (
-                    <p className="text-sm text-gray-500 mt-2">
-                      💡 单个客户端连接允许的最大并发流数量
-                    </p>
-                  )}
-                  {config.key === 'kcp_nodelay' && (
-                    <p className="text-sm text-gray-500 mt-2">
-                      💡 启用后禁用 Nagle 算法，降低延迟
-                    </p>
-                  )}
-                  {config.key === 'kcp_interval' && (
-                    <p className="text-sm text-gray-500 mt-2">
-                      💡 内部更新时钟间隔，值越小延迟越低，建议 10-40
-                    </p>
-                  )}
-                  {config.key === 'kcp_resend' && (
-                    <p className="text-sm text-gray-500 mt-2">
-                      💡 快速重传触发次数，0 表示禁用，建议值 2
-                    </p>
-                  )}
-                  {config.key === 'kcp_nc' && (
-                    <p className="text-sm text-gray-500 mt-2">
-                      💡 关闭拥塞控制，发送速度更快
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
 
       {/* 未保存提示 */}
       {hasChanges && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center gap-2 text-yellow-800">
-            <div className="h-2 w-2 rounded-full bg-yellow-500 animate-pulse" />
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 text-amber-800">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
             <span className="text-sm font-medium">你有未保存的更改（修改后需要重启服务端生效）</span>
           </div>
         </div>

@@ -7,6 +7,7 @@ pub mod tunnel;
 pub mod config;
 pub mod utils;
 pub mod protocol;
+pub mod grpc;
 
 
 pub use tunnel::{

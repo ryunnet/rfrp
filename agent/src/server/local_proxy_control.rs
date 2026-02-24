@@ -1,14 +1,16 @@
 //! 本地代理控制实现
 //!
 //! 直接调用 ProxyListenerManager 和 ConnectionProvider，
-//! 用于 Phase 0 阶段（单二进制模式）。
+//! 实现 ProxyControl trait，支持通过 gRPC 命令启停代理。
 
 use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 use std::collections::HashMap;
+use tracing::info;
 
+use common::protocol::auth::ClientAuthProvider;
 use common::protocol::control::{
     ConnectedClient, LogEntry, ProxyControl, ServerStatus,
 };
@@ -24,6 +26,7 @@ pub struct LocalProxyControl {
     listener_manager: Arc<ProxyListenerManager>,
     quic_connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
     tunnel_connections: Arc<RwLock<HashMap<String, Arc<Box<dyn TunnelConnection>>>>>,
+    auth_provider: Arc<dyn ClientAuthProvider>,
 }
 
 impl LocalProxyControl {
@@ -31,11 +34,13 @@ impl LocalProxyControl {
         listener_manager: Arc<ProxyListenerManager>,
         quic_connections: Arc<RwLock<HashMap<String, Arc<quinn::Connection>>>>,
         tunnel_connections: Arc<RwLock<HashMap<String, Arc<Box<dyn TunnelConnection>>>>>,
+        auth_provider: Arc<dyn ClientAuthProvider>,
     ) -> Self {
         Self {
             listener_manager,
             quic_connections,
             tunnel_connections,
+            auth_provider,
         }
     }
 
@@ -50,10 +55,33 @@ impl LocalProxyControl {
 #[async_trait]
 impl ProxyControl for LocalProxyControl {
     async fn start_proxy(&self, client_id: &str, proxy_id: i64) -> Result<()> {
-        let conn_provider = self.conn_provider();
-        self.listener_manager
-            .start_single_proxy_unified(client_id.to_string(), proxy_id, conn_provider)
-            .await
+        // 先停止旧的监听器（如果存在），确保配置更新时能正确重启
+        self.listener_manager.stop_single_proxy(client_id, proxy_id).await;
+
+        // 通过 auth_provider 获取该客户端的代理配置
+        let client_id_num: i64 = client_id.parse()
+            .map_err(|_| anyhow::anyhow!("无效的 client_id: {}", client_id))?;
+        let all_proxies = self.auth_provider.get_client_proxies(client_id_num).await?;
+
+        // 过滤出目标代理
+        let target_proxies: Vec<_> = all_proxies.into_iter()
+            .filter(|p| p.proxy_id == proxy_id && p.enabled)
+            .collect();
+
+        if target_proxies.is_empty() {
+            return Err(anyhow::anyhow!(
+                "未找到代理配置: client_id={}, proxy_id={}", client_id, proxy_id
+            ));
+        }
+
+        info!("启动代理: client_id={}, proxy_id={}", client_id, proxy_id);
+
+        // 使用 ProxyListenerManager 启动代理监听器
+        self.listener_manager.start_client_proxies_from_configs(
+            client_id.to_string(),
+            target_proxies,
+            self.conn_provider(),
+        ).await
     }
 
     async fn stop_proxy(&self, client_id: &str, proxy_id: i64) -> Result<()> {

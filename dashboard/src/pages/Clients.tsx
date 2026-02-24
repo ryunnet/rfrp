@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { clientService, nodeService } from '../lib/services';
+import { clientService, nodeService, userService } from '../lib/services';
 import type { Client, LogEntry, Node } from '../lib/types';
 import { formatBytes, formatDate, copyToClipboard } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
@@ -27,13 +27,21 @@ export default function Clients() {
   const [trafficFormData, setTrafficFormData] = useState({
     uploadLimitGb: '' as string,
     downloadLimitGb: '' as string,
+    trafficQuotaGb: '' as string,
     trafficResetCycle: 'none',
   });
   const [trafficSaving, setTrafficSaving] = useState(false);
 
+  // 配额分配相关状态
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [quotaFormData, setQuotaFormData] = useState({ quotaGb: '' });
+  const [quotaSaving, setQuotaSaving] = useState(false);
+  const [userQuotaInfo, setUserQuotaInfo] = useState<any>(null);
+
   useEffect(() => {
     loadClients();
     loadNodes();
+    loadUserQuotaInfo();
   }, []);
 
   const loadClients = async () => {
@@ -59,6 +67,20 @@ export default function Clients() {
       }
     } catch (error) {
       // 非管理员可能无权限，静默处理
+    }
+  };
+
+  const loadUserQuotaInfo = async () => {
+    try {
+      const authUser = JSON.parse(localStorage.getItem('user') || '{}');
+      if (authUser.id) {
+        const response = await userService.getQuotaInfo(authUser.id);
+        if (response.success && response.data) {
+          setUserQuotaInfo(response.data);
+        }
+      }
+    } catch (error) {
+      console.error('加载用户配额信息失败:', error);
     }
   };
 
@@ -144,9 +166,18 @@ export default function Clients() {
     setTrafficFormData({
       uploadLimitGb: client.uploadLimitGb !== null ? String(client.uploadLimitGb) : '',
       downloadLimitGb: client.downloadLimitGb !== null ? String(client.downloadLimitGb) : '',
+      trafficQuotaGb: client.trafficQuotaGb !== null ? String(client.trafficQuotaGb) : '',
       trafficResetCycle: client.trafficResetCycle || 'none',
     });
     setShowTrafficModal(true);
+  };
+
+  const handleAllocateQuota = (client: Client) => {
+    setSelectedClient(client);
+    setQuotaFormData({
+      quotaGb: client.trafficQuotaGb !== null ? String(client.trafficQuotaGb) : '',
+    });
+    setShowQuotaModal(true);
   };
 
   const handleSaveTraffic = async () => {
@@ -157,6 +188,7 @@ export default function Clients() {
       const response = await clientService.updateClient(selectedClient.id, {
         upload_limit_gb: trafficFormData.uploadLimitGb ? parseFloat(trafficFormData.uploadLimitGb) : null,
         download_limit_gb: trafficFormData.downloadLimitGb ? parseFloat(trafficFormData.downloadLimitGb) : null,
+        traffic_quota_gb: trafficFormData.trafficQuotaGb ? parseFloat(trafficFormData.trafficQuotaGb) : null,
         traffic_reset_cycle: trafficFormData.trafficResetCycle,
       });
 
@@ -173,6 +205,48 @@ export default function Clients() {
       showToast('设置失败', 'error');
     } finally {
       setTrafficSaving(false);
+    }
+  };
+
+  const handleSaveQuota = async () => {
+    if (!selectedClient) return;
+
+    if (!quotaFormData.quotaGb || parseFloat(quotaFormData.quotaGb) < 0) {
+      showToast('请输入有效的配额值', 'error');
+      return;
+    }
+
+    const requestedQuota = parseFloat(quotaFormData.quotaGb);
+
+    // 前端验证：检查是否超过用户可用配额
+    if (userQuotaInfo && userQuotaInfo.total_quota_gb !== null) {
+      const currentClientQuota = selectedClient.trafficQuotaGb || 0;
+      const quotaDiff = requestedQuota - currentClientQuota;
+
+      if (quotaDiff > userQuotaInfo.available_gb) {
+        showToast(`配额不足：可用 ${userQuotaInfo.available_gb.toFixed(2)} GB，需要 ${quotaDiff.toFixed(2)} GB`, 'error');
+        return;
+      }
+    }
+
+    setQuotaSaving(true);
+    try {
+      const response = await clientService.allocateQuota(selectedClient.id, requestedQuota);
+
+      if (response.success) {
+        showToast('配额分配成功', 'success');
+        setShowQuotaModal(false);
+        setSelectedClient(null);
+        loadClients();
+        loadUserQuotaInfo(); // 重新加载用户配额信息
+      } else {
+        showToast(response.message || '分配失败', 'error');
+      }
+    } catch (error) {
+      console.error('分配配额失败:', error);
+      showToast('分配失败', 'error');
+    } finally {
+      setQuotaSaving(false);
     }
   };
 
@@ -343,13 +417,13 @@ export default function Clients() {
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-blue-500">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
                           </svg>
-                          <span className="text-gray-600">{formatBytes(client.total_bytes_sent)}</span>
+                          <span className="text-gray-600">{formatBytes(client.totalBytesSent)}</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-green-500">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
                           </svg>
-                          <span className="text-gray-600">{formatBytes(client.total_bytes_received)}</span>
+                          <span className="text-gray-600">{formatBytes(client.totalBytesReceived)}</span>
                         </div>
                       </div>
                     </td>
@@ -360,31 +434,58 @@ export default function Clients() {
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                             </svg>
-                            已超限
+                            配额已用尽
                           </span>
                         )}
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-blue-500">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
-                          </svg>
-                          <span className="text-gray-600">
-                            {client.uploadLimitGb !== null ? `${client.uploadLimitGb} GB` : '无限制'}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-green-500">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
-                          </svg>
-                          <span className="text-gray-600">
-                            {client.downloadLimitGb !== null ? `${client.downloadLimitGb} GB` : '无限制'}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {client.trafficResetCycle === 'none' ? '不重置' :
-                           client.trafficResetCycle === 'daily' ? '每日重置' :
-                           client.trafficResetCycle === 'weekly' ? '每周重置' :
-                           client.trafficResetCycle === 'monthly' ? '每月重置' : client.trafficResetCycle}
-                        </div>
+                        {client.trafficQuotaGb ? (
+                          <>
+                            <div className="text-xs font-medium text-gray-900">
+                              配额: {client.trafficQuotaGb} GB
+                            </div>
+                            <div className="text-xs text-green-600">
+                              剩余: {(client.trafficQuotaGb - (client.totalBytesSent + client.totalBytesReceived) / (1024 * 1024 * 1024)).toFixed(2)} GB
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                              <div
+                                className={`h-1.5 rounded-full ${
+                                  ((client.trafficQuotaGb - (client.totalBytesSent + client.totalBytesReceived) / (1024 * 1024 * 1024)) / client.trafficQuotaGb) < 0.2
+                                    ? 'bg-red-500'
+                                    : ((client.trafficQuotaGb - (client.totalBytesSent + client.totalBytesReceived) / (1024 * 1024 * 1024)) / client.trafficQuotaGb) < 0.5
+                                    ? 'bg-yellow-500'
+                                    : 'bg-green-500'
+                                }`}
+                                style={{
+                                  width: `${Math.max(0, Math.min(100, ((client.trafficQuotaGb - (client.totalBytesSent + client.totalBytesReceived) / (1024 * 1024 * 1024)) / client.trafficQuotaGb) * 100))}%`,
+                                }}
+                              ></div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-blue-500">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+                              </svg>
+                              <span className="text-gray-600">
+                                {client.uploadLimitGb !== null ? `${client.uploadLimitGb} GB` : '无限制'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-green-500">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+                              </svg>
+                              <span className="text-gray-600">
+                                {client.downloadLimitGb !== null ? `${client.downloadLimitGb} GB` : '无限制'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {client.trafficResetCycle === 'none' ? '不重置' :
+                               client.trafficResetCycle === 'daily' ? '每日重置' :
+                               client.trafficResetCycle === 'weekly' ? '每周重置' :
+                               client.trafficResetCycle === 'monthly' ? '每月重置' : client.trafficResetCycle}
+                            </div>
+                          </>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -392,6 +493,16 @@ export default function Clients() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleAllocateQuota(client)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="分配流量配额"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                          </svg>
+                          配额
+                        </button>
                         <button
                           onClick={() => handleEditTraffic(client)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -679,6 +790,129 @@ export default function Clients() {
                   className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 transition-all disabled:opacity-50"
                 >
                   {trafficSaving ? '保存中...' : '保存'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 配额分配模态框 */}
+      {showQuotaModal && selectedClient && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">分配流量配额</h3>
+                  <p className="text-sm text-gray-500">{selectedClient.name}</p>
+                </div>
+              </div>
+
+              {/* 用户配额信息 */}
+              {userQuotaInfo && userQuotaInfo.total_quota_gb !== null && (
+                <div className="mb-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
+                  <div className="flex items-start gap-2 mb-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                    </svg>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-indigo-900">您的配额信息</p>
+                      <div className="mt-2 space-y-1 text-xs text-indigo-700">
+                        <div className="flex justify-between">
+                          <span>总配额:</span>
+                          <span className="font-semibold">{userQuotaInfo.total_quota_gb.toFixed(2)} GB</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>已使用:</span>
+                          <span className="font-semibold">{userQuotaInfo.used_gb.toFixed(2)} GB</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>已分配给客户端:</span>
+                          <span className="font-semibold">{userQuotaInfo.allocated_to_clients_gb.toFixed(2)} GB</span>
+                        </div>
+                        <div className="flex justify-between pt-1 border-t border-indigo-200">
+                          <span className="font-bold">可用配额:</span>
+                          <span className="font-bold text-green-600">{userQuotaInfo.available_gb.toFixed(2)} GB</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-full bg-indigo-200 rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all"
+                      style={{
+                        width: `${Math.min(100, (userQuotaInfo.quota_usage_percent || 0))}%`,
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">流量配额 (GB)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max={userQuotaInfo && userQuotaInfo.total_quota_gb !== null ?
+                      (userQuotaInfo.available_gb + (selectedClient.trafficQuotaGb || 0)) : undefined}
+                    value={quotaFormData.quotaGb}
+                    onChange={(e) => setQuotaFormData({ quotaGb: e.target.value })}
+                    placeholder="请输入配额大小"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    autoFocus
+                  />
+                  <p className="mt-2 text-xs text-gray-500">
+                    设置此客户端的总流量配额（上传+下载）
+                    {userQuotaInfo && userQuotaInfo.total_quota_gb !== null && (
+                      <span className="block mt-1 text-indigo-600 font-medium">
+                        最多可分配: {(userQuotaInfo.available_gb + (selectedClient.trafficQuotaGb || 0)).toFixed(2)} GB
+                      </span>
+                    )}
+                  </p>
+                </div>
+                {selectedClient.trafficQuotaGb && (
+                  <div className="p-4 bg-blue-50 rounded-xl">
+                    <div className="flex items-start gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                      </svg>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-blue-900">当前客户端配额</p>
+                        <p className="text-xs text-blue-700 mt-1">
+                          当前配额: {selectedClient.trafficQuotaGb} GB<br />
+                          已使用: {((selectedClient.totalBytesSent + selectedClient.totalBytesReceived) / (1024 * 1024 * 1024)).toFixed(2)} GB<br />
+                          剩余: {(selectedClient.trafficQuotaGb - (selectedClient.totalBytesSent + selectedClient.totalBytesReceived) / (1024 * 1024 * 1024)).toFixed(2)} GB
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowQuotaModal(false);
+                    setSelectedClient(null);
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  disabled={quotaSaving}
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveQuota}
+                  disabled={quotaSaving}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 transition-all disabled:opacity-50"
+                >
+                  {quotaSaving ? '分配中...' : '确认分配'}
                 </button>
               </div>
             </div>

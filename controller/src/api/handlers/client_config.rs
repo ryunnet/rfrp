@@ -6,7 +6,9 @@ use axum::{
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use tracing::debug;
 
-use common::protocol::client_config::{ClientConnectConfig, ClientConnectConfigRequest};
+use common::protocol::client_config::{
+    ClientConnectConfig, ClientConnectConfigRequest,
+};
 use common::KcpConfig;
 use common::TunnelProtocol;
 

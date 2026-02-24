@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { proxyService, clientService } from '../lib/services';
-import type { Proxy, Client } from '../lib/types';
+import { proxyService, clientService, nodeService } from '../lib/services';
+import type { Proxy, Client, Node } from '../lib/types';
 import { formatBytes } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -10,12 +10,14 @@ export default function Proxies() {
   const { showToast } = useToast();
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [nodes, setNodes] = useState<Node[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProxy, setEditingProxy] = useState<Proxy | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
   const [formData, setFormData] = useState({
     client_id: '',
+    node_id: '',
     name: '',
     type: 'tcp',
     localIP: '127.0.0.1',
@@ -31,12 +33,14 @@ export default function Proxies() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [proxiesRes, clientsRes] = await Promise.all([
+      const [proxiesRes, clientsRes, nodesRes] = await Promise.all([
         proxyService.getProxies(),
         clientService.getClients(),
+        nodeService.getNodes(),
       ]);
       if (proxiesRes.success && proxiesRes.data) setProxies(proxiesRes.data);
       if (clientsRes.success && clientsRes.data) setClients(clientsRes.data);
+      if (nodesRes.success && nodesRes.data) setNodes(nodesRes.data);
     } catch (error) {
       console.error('加载数据失败:', error);
       showToast('加载失败', 'error');
@@ -48,6 +52,7 @@ export default function Proxies() {
   const resetForm = () => {
     setFormData({
       client_id: '',
+      node_id: '',
       name: '',
       type: 'tcp',
       localIP: '127.0.0.1',
@@ -59,7 +64,7 @@ export default function Proxies() {
   };
 
   const handleCreateProxy = async () => {
-    if (!formData.name || !formData.client_id || !formData.localPort || !formData.remotePort) {
+    if (!formData.name || !formData.client_id || !formData.node_id || !formData.localPort || !formData.remotePort) {
       showToast('请填写所有必填字段', 'error');
       return;
     }
@@ -72,6 +77,7 @@ export default function Proxies() {
         localIP: formData.localIP,
         localPort: parseInt(formData.localPort),
         remotePort: parseInt(formData.remotePort),
+        nodeId: parseInt(formData.node_id),
       });
       if (response.success) {
         showToast('代理创建成功', 'success');
@@ -118,6 +124,7 @@ export default function Proxies() {
     setEditingProxy(proxy);
     setFormData({
       client_id: proxy.client_id,
+      node_id: proxy.nodeId ? proxy.nodeId.toString() : '',
       name: proxy.name,
       type: proxy.type,
       localIP: proxy.localIP,
@@ -170,6 +177,12 @@ export default function Proxies() {
     return client?.name || clientId;
   };
 
+  const getNodeName = (nodeId: number | null) => {
+    if (!nodeId) return '-';
+    const node = nodes.find((n) => n.id === nodeId);
+    return node?.name || String(nodeId);
+  };
+
   return (
     <div className="space-y-6">
       {/* 页面标题 */}
@@ -203,6 +216,9 @@ export default function Proxies() {
                   名称
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  客户端
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   节点
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -225,7 +241,7 @@ export default function Proxies() {
             <tbody className="divide-y divide-gray-100">
               {proxies.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
@@ -258,6 +274,9 @@ export default function Proxies() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-gray-600">{getClientName(proxy.client_id)}</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm text-gray-600">{getNodeName(proxy.nodeId)}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-100 text-blue-700">
@@ -359,17 +378,33 @@ export default function Proxies() {
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">节点 *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">客户端 *</label>
                   <select
                     value={formData.client_id}
                     onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
                     disabled={!!editingProxy}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
-                    <option value="">选择节点</option>
+                    <option value="">选择客户端</option>
                     {clients.map((client) => (
                       <option key={client.id} value={client.id.toString()}>
                         {client.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">节点 *</label>
+                  <select
+                    value={formData.node_id}
+                    onChange={(e) => setFormData({ ...formData, node_id: e.target.value })}
+                    disabled={!!editingProxy}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <option value="">选择节点</option>
+                    {nodes.map((node) => (
+                      <option key={node.id} value={node.id.toString()}>
+                        {node.name}{node.region ? ` (${node.region})` : ''}
                       </option>
                     ))}
                   </select>
@@ -397,7 +432,7 @@ export default function Proxies() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">本地 IP *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">客户端本地 IP *</label>
                     <input
                       type="text"
                       value={formData.localIP}
@@ -408,7 +443,7 @@ export default function Proxies() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">本地端口 *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">客户端本地端口 *</label>
                     <input
                       type="number"
                       value={formData.localPort}
@@ -418,7 +453,7 @@ export default function Proxies() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">远程端口 *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">节点端口 *</label>
                     <input
                       type="number"
                       value={formData.remotePort}

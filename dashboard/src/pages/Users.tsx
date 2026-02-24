@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { userService, clientService } from '../lib/services';
-import type { UserWithClientCount, Client } from '../lib/types';
+import { userService, nodeService } from '../lib/services';
+import type { UserWithNodeCount, Node } from '../lib/types';
 import { formatDate, formatBytes } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -8,15 +8,18 @@ import { TableSkeleton } from '../components/Skeleton';
 
 export default function Users() {
   const { showToast } = useToast();
-  const [users, setUsers] = useState<UserWithClientCount[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [users, setUsers] = useState<UserWithNodeCount[]>([]);
+  const [nodes, setNodes] = useState<Node[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showBindModal, setShowBindModal] = useState(false);
   const [showTrafficModal, setShowTrafficModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<UserWithClientCount | null>(null);
-  const [userClients, setUserClients] = useState<Client[]>([]);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserWithNodeCount | null>(null);
+  const [userNodes, setUserNodes] = useState<Node[]>([]);
   const [trafficSaving, setTrafficSaving] = useState(false);
+  const [quotaSaving, setQuotaSaving] = useState(false);
+  const [quotaChangeGb, setQuotaChangeGb] = useState('');
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'info'; confirmText: string; onConfirm: () => void }>({ open: false, title: '', message: '', variant: 'danger', confirmText: '确定', onConfirm: () => {} });
   const [formData, setFormData] = useState({
     username: '',
@@ -26,12 +29,13 @@ export default function Users() {
   const [trafficFormData, setTrafficFormData] = useState({
     uploadLimitGb: '',
     downloadLimitGb: '',
+    trafficQuotaGb: '',
     trafficResetCycle: 'none',
   });
 
   useEffect(() => {
     loadUsers();
-    loadClients();
+    loadNodes();
   }, []);
 
   const loadUsers = async () => {
@@ -49,14 +53,14 @@ export default function Users() {
     }
   };
 
-  const loadClients = async () => {
+  const loadNodes = async () => {
     try {
-      const response = await clientService.getClients();
+      const response = await nodeService.getNodes();
       if (response.success && response.data) {
-        setClients(response.data);
+        setNodes(response.data);
       }
     } catch (error) {
-      console.error('加载客户端失败:', error);
+      console.error('加载节点失败:', error);
     }
   };
 
@@ -114,7 +118,7 @@ export default function Users() {
     });
   };
 
-  const handleToggleAdmin = async (user: UserWithClientCount) => {
+  const handleToggleAdmin = async (user: UserWithNodeCount) => {
     try {
       const response = await userService.updateUser(user.id, {
         is_admin: !user.is_admin,
@@ -131,67 +135,68 @@ export default function Users() {
     }
   };
 
-  const handleManageClients = async (user: UserWithClientCount) => {
+  const handleManageNodes = async (user: UserWithNodeCount) => {
     setSelectedUser(user);
     try {
-      const response = await userService.getUserClients(user.id);
+      const response = await userService.getUserNodes(user.id);
       if (response.success && response.data) {
-        setUserClients(response.data);
+        setUserNodes(response.data);
       }
     } catch (error) {
-      console.error('加载用户客户端失败:', error);
+      console.error('加载用户节点失败:', error);
     }
     setShowBindModal(true);
   };
 
-  const handleAssignClient = async (clientId: number) => {
+  const handleAssignNode = async (nodeId: number) => {
     if (!selectedUser) return;
 
     try {
-      const response = await userService.assignClient(selectedUser.id, clientId);
+      const response = await userService.assignNode(selectedUser.id, nodeId);
       if (response.success) {
-        showToast('客户端绑定成功', 'success');
-        // 重新加载用户的客户端列表
-        const res = await userService.getUserClients(selectedUser.id);
+        showToast('节点绑定成功', 'success');
+        // 重新加载用户的节点列表
+        const res = await userService.getUserNodes(selectedUser.id);
         if (res.success && res.data) {
-          setUserClients(res.data);
+          setUserNodes(res.data);
         }
         loadUsers();
       } else {
         showToast(response.message || '绑定失败', 'error');
       }
     } catch (error) {
-      console.error('绑定客户端失败:', error);
+      console.error('绑定节点失败:', error);
       showToast('绑定失败', 'error');
     }
   };
 
-  const handleRemoveClient = async (clientId: number) => {
+  const handleRemoveNode = async (nodeId: number) => {
     if (!selectedUser) return;
 
     try {
-      const response = await userService.removeClient(selectedUser.id, clientId);
+      const response = await userService.removeNode(selectedUser.id, nodeId);
       if (response.success) {
-        showToast('客户端解绑成功', 'success');
-        const res = await userService.getUserClients(selectedUser.id);
+        showToast('节点解绑成功', 'success');
+        const res = await userService.getUserNodes(selectedUser.id);
         if (res.success && res.data) {
-          setUserClients(res.data);
+          setUserNodes(res.data);
         }
         loadUsers();
       } else {
         showToast(response.message || '解绑失败', 'error');
       }
     } catch (error) {
-      console.error('解绑客户端失败:', error);
+      console.error('解绑节点失败:', error);
       showToast('解绑失败', 'error');
     }
   };
 
-  const handleTrafficLimit = (user: UserWithClientCount) => {
+  const handleTrafficLimit = (user: UserWithNodeCount) => {
     setSelectedUser(user);
     setTrafficFormData({
       uploadLimitGb: user.uploadLimitGb?.toString() || '',
       downloadLimitGb: user.downloadLimitGb?.toString() || '',
+      trafficQuotaGb: user.trafficQuotaGb?.toString() || '',
       trafficResetCycle: user.trafficResetCycle || 'none',
     });
     setShowTrafficModal(true);
@@ -205,6 +210,7 @@ export default function Users() {
       const response = await userService.updateUser(selectedUser.id, {
         upload_limit_gb: trafficFormData.uploadLimitGb ? parseFloat(trafficFormData.uploadLimitGb) : null,
         download_limit_gb: trafficFormData.downloadLimitGb ? parseFloat(trafficFormData.downloadLimitGb) : null,
+        traffic_quota_gb: trafficFormData.trafficQuotaGb ? parseFloat(trafficFormData.trafficQuotaGb) : null,
         traffic_reset_cycle: trafficFormData.trafficResetCycle,
       });
 
@@ -224,7 +230,7 @@ export default function Users() {
     }
   };
 
-  const handleResetTrafficExceeded = (user: UserWithClientCount) => {
+  const handleResetTrafficExceeded = (user: UserWithNodeCount) => {
     setConfirmDialog({
       open: true,
       title: '重置超限状态',
@@ -248,6 +254,46 @@ export default function Users() {
         }
       },
     });
+  };
+
+  const handleManageQuota = (user: UserWithNodeCount) => {
+    setSelectedUser(user);
+    setQuotaChangeGb('');
+    setShowQuotaModal(true);
+  };
+
+  const handleAdjustQuota = async (isIncrease: boolean) => {
+    if (!selectedUser || !quotaChangeGb) {
+      showToast('请输入配额变更数量', 'error');
+      return;
+    }
+
+    const changeValue = parseFloat(quotaChangeGb);
+    if (isNaN(changeValue) || changeValue <= 0) {
+      showToast('请输入有效的配额数量', 'error');
+      return;
+    }
+
+    try {
+      setQuotaSaving(true);
+      const quotaChange = isIncrease ? changeValue : -changeValue;
+      const response = await userService.adjustQuota(selectedUser.id, quotaChange);
+
+      if (response.success) {
+        showToast(response.data || '配额调整成功', 'success');
+        setShowQuotaModal(false);
+        setSelectedUser(null);
+        setQuotaChangeGb('');
+        loadUsers();
+      } else {
+        showToast(response.message || '配额调整失败', 'error');
+      }
+    } catch (error) {
+      console.error('配额调整失败:', error);
+      showToast('配额调整失败', 'error');
+    } finally {
+      setQuotaSaving(false);
+    }
   };
 
   return (
@@ -353,7 +399,7 @@ export default function Users() {
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
                         </svg>
-                        {user.client_count} 个节点
+                        {user.node_count} 个节点
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -362,19 +408,50 @@ export default function Users() {
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-blue-500">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
                           </svg>
-                          <span className="text-gray-600">{formatBytes(user.total_bytes_sent)}</span>
+                          <span className="text-gray-600">{formatBytes(user.totalBytesSent)}</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-green-500">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
                           </svg>
-                          <span className="text-gray-600">{formatBytes(user.total_bytes_received)}</span>
+                          <span className="text-gray-600">{formatBytes(user.totalBytesReceived)}</span>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
-                        {user.uploadLimitGb || user.downloadLimitGb ? (
+                        {user.trafficQuotaGb ? (
+                          <>
+                            <div className="text-xs font-medium text-gray-900">
+                              配额: {user.trafficQuotaGb} GB
+                            </div>
+                            <div className="text-xs text-green-600">
+                              剩余: {user.remainingQuotaGb?.toFixed(2) || '0.00'} GB
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                              <div
+                                className={`h-1.5 rounded-full ${
+                                  (user.remainingQuotaGb || 0) / user.trafficQuotaGb < 0.2
+                                    ? 'bg-red-500'
+                                    : (user.remainingQuotaGb || 0) / user.trafficQuotaGb < 0.5
+                                    ? 'bg-yellow-500'
+                                    : 'bg-green-500'
+                                }`}
+                                style={{
+                                  width: `${Math.max(0, Math.min(100, ((user.remainingQuotaGb || 0) / user.trafficQuotaGb) * 100))}%`,
+                                }}
+                              ></div>
+                            </div>
+                            {user.isTrafficExceeded && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-md bg-red-100 text-red-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                </svg>
+                                配额已用尽
+                              </span>
+                            )}
+                          </>
+                        ) : user.uploadLimitGb || user.downloadLimitGb ? (
                           <>
                             <div className="text-xs text-gray-600">
                               上传: {user.uploadLimitGb ? `${user.uploadLimitGb} GB` : '无限制'}
@@ -408,15 +485,30 @@ export default function Users() {
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
-                          onClick={() => handleManageClients(user)}
+                          onClick={() => handleManageQuota(user)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          配额管理
+                        </button>
+                        <button
+                          onClick={() => handleManageNodes(user)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                          </svg>
                           管理节点
                         </button>
                         <button
                           onClick={() => handleTrafficLimit(user)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                         >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                          </svg>
                           流量限制
                         </button>
                         {user.isTrafficExceeded && (
@@ -424,6 +516,9 @@ export default function Users() {
                             onClick={() => handleResetTrafficExceeded(user)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                           >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
+                            </svg>
                             重置超限
                           </button>
                         )}
@@ -431,12 +526,18 @@ export default function Users() {
                           onClick={() => handleToggleAdmin(user)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                         >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                          </svg>
                           {user.is_admin ? '取消管理员' : '设为管理员'}
                         </button>
                         <button
                           onClick={() => handleDeleteUser(user.id)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                          </svg>
                           删除
                         </button>
                       </div>
@@ -541,7 +642,7 @@ export default function Users() {
                 onClick={() => {
                   setShowBindModal(false);
                   setSelectedUser(null);
-                  setUserClients([]);
+                  setUserNodes([]);
                 }}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
@@ -557,7 +658,7 @@ export default function Users() {
                   <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
                   已绑定的节点
                 </h4>
-                {userClients.length === 0 ? (
+                {userNodes.length === 0 ? (
                   <div className="text-center py-8 bg-gray-50 rounded-xl">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-gray-300 mx-auto mb-2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
@@ -566,25 +667,26 @@ export default function Users() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {userClients.map((client) => (
+                    {userNodes.map((node) => (
                       <div
-                        key={client.id}
+                        key={node.id}
                         className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100"
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-semibold">
-                            {client.name.charAt(0).toUpperCase()}
+                            {node.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <span className="text-sm font-medium text-gray-900">{client.name}</span>
+                            <span className="text-sm font-medium text-gray-900">{node.name}</span>
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className={`w-1.5 h-1.5 rounded-full ${client.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                              <span className="text-xs text-gray-500">{client.is_online ? '在线' : '离线'}</span>
+                              <span className={`w-1.5 h-1.5 rounded-full ${node.isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                              <span className="text-xs text-gray-500">{node.isOnline ? '在线' : '离线'}</span>
+                              {node.region && <span className="text-xs text-gray-400 ml-1">({node.region})</span>}
                             </div>
                           </div>
                         </div>
                         <button
-                          onClick={() => handleRemoveClient(client.id)}
+                          onClick={() => handleRemoveNode(node.id)}
                           className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         >
                           解绑
@@ -601,27 +703,28 @@ export default function Users() {
                   可绑定的节点
                 </h4>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {clients
-                    .filter((c) => !userClients.find((uc) => uc.id === c.id))
-                    .map((client) => (
+                  {nodes
+                    .filter((n) => !userNodes.find((un) => un.id === n.id))
+                    .map((node) => (
                       <div
-                        key={client.id}
+                        key={node.id}
                         className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center text-gray-600 text-xs font-semibold">
-                            {client.name.charAt(0).toUpperCase()}
+                            {node.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <span className="text-sm font-medium text-gray-900">{client.name}</span>
+                            <span className="text-sm font-medium text-gray-900">{node.name}</span>
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className={`w-1.5 h-1.5 rounded-full ${client.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                              <span className="text-xs text-gray-500">{client.is_online ? '在线' : '离线'}</span>
+                              <span className={`w-1.5 h-1.5 rounded-full ${node.isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                              <span className="text-xs text-gray-500">{node.isOnline ? '在线' : '离线'}</span>
+                              {node.region && <span className="text-xs text-gray-400 ml-1">({node.region})</span>}
                             </div>
                           </div>
                         </div>
                         <button
-                          onClick={() => handleAssignClient(client.id)}
+                          onClick={() => handleAssignNode(node.id)}
                           className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         >
                           绑定
@@ -637,12 +740,115 @@ export default function Users() {
                 onClick={() => {
                   setShowBindModal(false);
                   setSelectedUser(null);
-                  setUserClients([]);
+                  setUserNodes([]);
                 }}
                 className="px-5 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
               >
                 关闭
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 配额管理模态框 */}
+      {showQuotaModal && selectedUser && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">配额管理</h3>
+                  <p className="text-sm text-gray-500">{selectedUser.username}</p>
+                </div>
+              </div>
+
+              {/* 当前配额信息 */}
+              <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">当前配额</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {selectedUser.trafficQuotaGb ? `${selectedUser.trafficQuotaGb} GB` : '未设置'}
+                    </span>
+                  </div>
+                  {selectedUser.trafficQuotaGb && (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">剩余配额</span>
+                        <span className="text-sm font-semibold text-green-600">
+                          {selectedUser.remainingQuotaGb?.toFixed(2) || '0.00'} GB
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                        <div
+                          className={`h-2 rounded-full transition-all ${
+                            (selectedUser.remainingQuotaGb || 0) / selectedUser.trafficQuotaGb < 0.2
+                              ? 'bg-red-500'
+                              : (selectedUser.remainingQuotaGb || 0) / selectedUser.trafficQuotaGb < 0.5
+                              ? 'bg-yellow-500'
+                              : 'bg-green-500'
+                          }`}
+                          style={{
+                            width: `${Math.max(0, Math.min(100, ((selectedUser.remainingQuotaGb || 0) / selectedUser.trafficQuotaGb) * 100))}%`,
+                          }}
+                        ></div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* 配额调整输入 */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">调整配额 (GB)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={quotaChangeGb}
+                    onChange={(e) => setQuotaChangeGb(e.target.value)}
+                    placeholder="输入要增加或减少的配额"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-gray-50/50 hover:bg-white"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">输入正数增加配额，负数减少配额</p>
+                </div>
+              </div>
+
+              {/* 操作按钮 */}
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowQuotaModal(false);
+                    setSelectedUser(null);
+                    setQuotaChangeGb('');
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  disabled={quotaSaving}
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => handleAdjustQuota(false)}
+                  disabled={quotaSaving || !quotaChangeGb}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white font-medium rounded-xl hover:from-red-600 hover:to-rose-700 shadow-lg shadow-red-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {quotaSaving ? '处理中...' : '减少配额'}
+                </button>
+                <button
+                  onClick={() => handleAdjustQuota(true)}
+                  disabled={quotaSaving || !quotaChangeGb}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium rounded-xl hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {quotaSaving ? '处理中...' : '增加配额'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -666,28 +872,46 @@ export default function Users() {
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">上传限制 (GB)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">流量配额 (GB)</label>
                   <input
                     type="number"
                     step="0.1"
                     min="0"
-                    value={trafficFormData.uploadLimitGb}
-                    onChange={(e) => setTrafficFormData({ ...trafficFormData, uploadLimitGb: e.target.value })}
+                    value={trafficFormData.trafficQuotaGb}
+                    onChange={(e) => setTrafficFormData({ ...trafficFormData, trafficQuotaGb: e.target.value })}
                     placeholder="留空表示无限制"
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
                   />
+                  <p className="mt-1 text-xs text-gray-500">设置用户总流量配额（上传+下载）</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">下载限制 (GB)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={trafficFormData.downloadLimitGb}
-                    onChange={(e) => setTrafficFormData({ ...trafficFormData, downloadLimitGb: e.target.value })}
-                    placeholder="留空表示无限制"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
-                  />
+                <div className="border-t border-gray-200 pt-4">
+                  <p className="text-xs text-gray-500 mb-3">或使用传统的上传/下载分开限制：</p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">上传限制 (GB)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={trafficFormData.uploadLimitGb}
+                        onChange={(e) => setTrafficFormData({ ...trafficFormData, uploadLimitGb: e.target.value })}
+                        placeholder="留空表示无限制"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">下载限制 (GB)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={trafficFormData.downloadLimitGb}
+                        onChange={(e) => setTrafficFormData({ ...trafficFormData, downloadLimitGb: e.target.value })}
+                        placeholder="留空表示无限制"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">流量重置周期</label>

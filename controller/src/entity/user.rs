@@ -23,6 +23,8 @@ pub struct Model {
     pub last_reset_at: Option<DateTime>,
     #[serde(rename = "isTrafficExceeded")]
     pub is_traffic_exceeded: bool,
+    #[serde(rename = "trafficQuotaGb")]
+    pub traffic_quota_gb: Option<f64>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }
@@ -31,11 +33,19 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::user_client::Entity")]
     UserClients,
+    #[sea_orm(has_many = "super::user_node::Entity")]
+    UserNodes,
 }
 
 impl Related<super::user_client::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::UserClients.def()
+    }
+}
+
+impl Related<super::user_node::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::UserNodes.def()
     }
 }
 

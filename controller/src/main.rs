@@ -8,9 +8,12 @@ mod traffic;
 mod traffic_limiter;
 mod config_manager;
 mod api;
-mod frps_client;
-mod internal_api;
 mod node_manager;
+mod local_auth_provider;
+mod client_stream_manager;
+mod grpc_agent_server_service;
+mod grpc_agent_client_service;
+mod grpc_server;
 
 use crate::migration::{get_connection, init_sqlite};
 use anyhow::Result;
@@ -33,6 +36,7 @@ pub struct AppState {
     pub node_manager: Arc<node_manager::NodeManager>,
     pub auth_provider: Arc<dyn ClientAuthProvider>,
     pub config_manager: Arc<config_manager::ConfigManager>,
+    pub client_stream_manager: Arc<client_stream_manager::ClientStreamManager>,
     pub config: Arc<config::Config>,
 }
 
@@ -68,9 +72,6 @@ async fn main() -> Result<()> {
         tracing::error!("加载系统配置失败: {}", e);
     }
 
-    // 向后兼容：如果配置了 frps_url/frps_secret 且 DB 中无节点，自动创建默认节点
-    migrate_legacy_frps_config(config).await;
-
     // 创建多节点管理器
     let node_manager = Arc::new(node_manager::NodeManager::new());
     if let Err(e) = node_manager.load_nodes().await {
@@ -82,8 +83,11 @@ async fn main() -> Result<()> {
 
     // 创建内部认证提供者（controller 直接查询本地 DB）
     let auth_provider: Arc<dyn ClientAuthProvider> = Arc::new(
-        internal_api::LocalControllerAuthProvider::new()
+        local_auth_provider::LocalControllerAuthProvider::new()
     );
+
+    // 创建 Agent Client 流管理器
+    let client_stream_manager = Arc::new(client_stream_manager::ClientStreamManager::new());
 
     let config_arc = Arc::new(config.clone());
 
@@ -93,21 +97,25 @@ async fn main() -> Result<()> {
         node_manager: node_manager.clone(),
         auth_provider: auth_provider.clone(),
         config_manager: config_manager.clone(),
+        client_stream_manager: client_stream_manager.clone(),
         config: config_arc.clone(),
     };
 
     // 启动 Web API 服务
     let web_handle = api::start_web_server(app_state.clone());
 
-    // 启动内部 API 服务（供节点调用）
-    let internal_handle = internal_api::start_internal_api(
-        config_arc.clone(),
-        config_manager.clone(),
+    // 启动 gRPC Server（供 Agent Server 和 Agent Client 连接）
+    let grpc_handle = grpc_server::start_grpc_server(
+        config.internal_port,
         node_manager.clone(),
+        client_stream_manager.clone(),
     );
 
     // 启动节点健康监控
     start_node_health_monitor(node_manager.clone());
+
+    // 启动客户端健康监控
+    start_client_health_monitor(client_stream_manager.clone());
 
     // 等待终止信号
     info!("✅ 所有服务已启动，等待终止信号...");
@@ -135,56 +143,10 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// 向后兼容：将旧的 frps_url/frps_secret 配置迁移为默认节点
-async fn migrate_legacy_frps_config(config: &config::Config) {
-    let frps_url = match &config.frps_url {
-        Some(url) if !url.is_empty() => url.clone(),
-        _ => return,
-    };
-    let frps_secret = config.frps_secret.clone().unwrap_or_default();
-
-    let db = get_connection().await;
-
-    // 检查是否已有节点
-    let node_count = entity::Node::find().count(db).await.unwrap_or(0);
-    if node_count > 0 {
-        return;
-    }
-
-    // 自动创建默认节点
-    let now = Utc::now().naive_utc();
-    let default_node = entity::node::ActiveModel {
-        id: NotSet,
-        name: Set("默认节点".to_string()),
-        url: Set(frps_url.clone()),
-        secret: Set(frps_secret),
-        is_online: Set(false),
-        region: Set(None),
-        description: Set(Some("从 frps_url 配置自动迁移".to_string())),
-        tunnel_addr: Set(String::new()),
-        tunnel_port: Set(7000),
-        tunnel_protocol: Set("quic".to_string()),
-        kcp_config: Set(None),
-        created_at: Set(now),
-        updated_at: Set(now),
-    };
-
-    match default_node.insert(db).await {
-        Ok(node) => {
-            info!("📦 已从旧配置自动创建默认节点: #{} ({})", node.id, frps_url);
-        }
-        Err(e) => {
-            tracing::error!("自动创建默认节点失败: {}", e);
-        }
-    }
-}
-
 /// 启动节点健康监控后台任务
 fn start_node_health_monitor(node_manager: Arc<node_manager::NodeManager>) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(30));
-        // 跳过第一次立即执行
-        interval.tick().await;
 
         loop {
             interval.tick().await;
@@ -204,6 +166,38 @@ fn start_node_health_monitor(node_manager: Arc<node_manager::NodeManager>) {
                     }
 
                     let mut active: entity::node::ActiveModel = node.into();
+                    active.is_online = Set(is_online);
+                    active.updated_at = Set(Utc::now().naive_utc());
+                    let _ = active.update(db).await;
+                }
+            }
+        }
+    });
+}
+
+/// 启动客户端健康监控后台任务
+fn start_client_health_monitor(client_stream_manager: Arc<client_stream_manager::ClientStreamManager>) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
+
+        loop {
+            interval.tick().await;
+
+            let results = client_stream_manager.check_all_clients().await;
+            let db = get_connection().await;
+
+            for (client_id, is_online) in results {
+                if let Ok(Some(client)) = entity::Client::find_by_id(client_id).one(db).await {
+                    let was_online = client.is_online;
+                    if was_online != is_online {
+                        if is_online {
+                            info!("客户端 #{} ({}) 已上线", client_id, client.name);
+                        } else {
+                            tracing::warn!("客户端 #{} ({}) 已离线", client_id, client.name);
+                        }
+                    }
+
+                    let mut active: entity::client::ActiveModel = client.into();
                     active.is_online = Set(is_online);
                     active.updated_at = Set(Utc::now().naive_utc());
                     let _ = active.update(db).await;
@@ -249,6 +243,7 @@ async fn initialize_admin_user() {
                 total_bytes_received: Set(0),
                 upload_limit_gb: Set(None),
                 download_limit_gb: Set(None),
+                traffic_quota_gb: Set(None),
                 traffic_reset_cycle: Set("none".to_string()),
                 last_reset_at: Set(None),
                 is_traffic_exceeded: Set(false),

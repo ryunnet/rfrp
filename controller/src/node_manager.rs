@@ -1,77 +1,109 @@
 //! 多节点管理器
 //!
-//! 管理多个 agent server 节点的连接，实现 ProxyControl trait，
+//! 管理多个 agent server 节点的 gRPC 流连接，实现 ProxyControl trait，
 //! 根据客户端所属节点自动路由操作到正确的节点。
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use sea_orm::EntityTrait;
+use tokio::sync::{mpsc, RwLock};
+use tracing::{info, warn};
 
+use common::grpc::rfrp;
+use common::grpc::rfrp::controller_to_agent_message::Payload as ControllerPayload;
+use common::grpc::rfrp::agent_server_response::Result as AgentResult;
+use common::grpc::pending_requests::PendingRequests;
 use common::protocol::control::{
     ConnectedClient, LogEntry, ProxyControl, ServerStatus,
 };
 
-use crate::entity::{Node, node, Client, client};
-use crate::frps_client::RemoteProxyControl;
+use crate::entity::{Client, Node};
 use crate::migration::get_connection;
 
+/// 单个节点的 gRPC 流连接
+struct NodeStream {
+    tx: mpsc::Sender<Result<rfrp::ControllerToAgentMessage, tonic::Status>>,
+    pending: PendingRequests<rfrp::AgentServerResponse>,
+}
+
 /// 多节点管理器
-///
-/// 维护多个 RemoteProxyControl 实例，根据客户端所属节点路由操作。
 pub struct NodeManager {
-    /// node_id -> RemoteProxyControl 实例
-    nodes: RwLock<HashMap<i64, Arc<RemoteProxyControl>>>,
+    /// node_id -> gRPC 流连接
+    streams: RwLock<HashMap<i64, NodeStream>>,
 }
 
 impl NodeManager {
     pub fn new() -> Self {
         Self {
-            nodes: RwLock::new(HashMap::new()),
+            streams: RwLock::new(HashMap::new()),
         }
     }
 
-    /// 从数据库加载所有节点，创建 RemoteProxyControl 实例
+    /// 从数据库加载节点（gRPC 模式下仅用于初始化，实际连接由 Agent Server 主动发起）
     pub async fn load_nodes(&self) -> Result<()> {
         let db = get_connection().await;
         let all_nodes = Node::find().all(db).await?;
-
-        let mut nodes = self.nodes.write().await;
-        nodes.clear();
-
-        for node in all_nodes {
-            let control = Arc::new(RemoteProxyControl::new(
-                node.url.clone(),
-                node.secret.clone(),
-            ));
-            info!("加载节点: #{} {} ({})", node.id, node.name, node.url);
-            nodes.insert(node.id, control);
-        }
-
-        info!("共加载 {} 个节点", nodes.len());
+        info!("数据库中有 {} 个节点（等待 gRPC 连接）", all_nodes.len());
         Ok(())
     }
 
-    /// 动态添加或更新节点
-    pub async fn add_node(&self, node_id: i64, url: String, secret: String) {
-        let control = Arc::new(RemoteProxyControl::new(url, secret));
-        let mut nodes = self.nodes.write().await;
-        nodes.insert(node_id, control);
+    /// 注册一个 Agent Server 的 gRPC 流
+    pub async fn register_node_stream(
+        &self,
+        node_id: i64,
+        tx: mpsc::Sender<Result<rfrp::ControllerToAgentMessage, tonic::Status>>,
+    ) {
+        let stream = NodeStream {
+            tx,
+            pending: PendingRequests::new(),
+        };
+        self.streams.write().await.insert(node_id, stream);
+        info!("节点 #{} gRPC 流已注册", node_id);
     }
 
-    /// 动态移除节点
-    pub async fn remove_node(&self, node_id: i64) {
-        let mut nodes = self.nodes.write().await;
-        nodes.remove(&node_id);
+    /// 移除一个 Agent Server 的 gRPC 流
+    pub async fn unregister_node_stream(&self, node_id: i64) {
+        self.streams.write().await.remove(&node_id);
+        info!("节点 #{} gRPC 流已移除", node_id);
     }
 
-    /// 获取指定节点的 ProxyControl
-    pub async fn get_node_control(&self, node_id: i64) -> Option<Arc<RemoteProxyControl>> {
-        let nodes = self.nodes.read().await;
-        nodes.get(&node_id).cloned()
+    /// 完成一个待处理的请求（由 AgentServerResponse 触发）
+    pub async fn complete_pending_request(&self, node_id: i64, response: &rfrp::AgentServerResponse) {
+        let streams = self.streams.read().await;
+        if let Some(stream) = streams.get(&node_id) {
+            stream.pending.complete(&response.request_id, response.clone()).await;
+        }
+    }
+
+    /// 向指定节点发送命令并等待响应
+    async fn send_command_and_wait(
+        &self,
+        node_id: i64,
+        payload: ControllerPayload,
+    ) -> Result<rfrp::AgentServerResponse> {
+        let (request_id, rx, tx_clone) = {
+            let streams = self.streams.read().await;
+            let stream = streams.get(&node_id)
+                .ok_or_else(|| anyhow!("节点 #{} 未连接", node_id))?;
+
+            let (request_id, rx) = stream.pending.register().await;
+            (request_id, rx, stream.tx.clone())
+        };
+
+        // 替换 payload 中的 request_id
+        let final_payload = replace_request_id(payload, &request_id);
+
+        let msg = rfrp::ControllerToAgentMessage {
+            payload: Some(final_payload),
+        };
+
+        tx_clone.send(Ok(msg)).await
+            .map_err(|_| anyhow!("发送命令到节点 #{} 失败", node_id))?;
+
+        PendingRequests::wait(rx, Duration::from_secs(10)).await
     }
 
     /// 根据 client_id 查找所属节点 ID
@@ -86,29 +118,55 @@ impl NodeManager {
         Ok(client_model.and_then(|c| c.node_id))
     }
 
-    /// 健康检查所有节点，返回 (node_id, is_online) 列表
+    /// 健康检查所有节点
     pub async fn check_all_nodes(&self) -> Vec<(i64, bool)> {
-        let nodes = self.nodes.read().await;
-        let mut results = Vec::new();
+        let db = get_connection().await;
+        let all_nodes = match Node::find().all(db).await {
+            Ok(nodes) => nodes,
+            Err(e) => {
+                warn!("查询节点列表失败: {}", e);
+                return vec![];
+            }
+        };
 
-        for (&node_id, control) in nodes.iter() {
-            let is_online = match control.get_server_status().await {
-                Ok(_) => true,
-                Err(e) => {
-                    debug!("节点 #{} 健康检查失败: {}", node_id, e);
-                    false
-                }
-            };
-            results.push((node_id, is_online));
-        }
+        let streams = self.streams.read().await;
 
-        results
+        all_nodes
+            .into_iter()
+            .map(|node| {
+                let is_online = streams.contains_key(&node.id);
+                (node.id, is_online)
+            })
+            .collect()
     }
 
-    /// 获取所有已加载的节点 ID 列表
+    /// 获取所有已连接的节点 ID
     pub async fn get_loaded_node_ids(&self) -> Vec<i64> {
-        let nodes = self.nodes.read().await;
-        nodes.keys().cloned().collect()
+        let streams = self.streams.read().await;
+        streams.keys().cloned().collect()
+    }
+}
+
+/// 替换 payload 中的 request_id
+fn replace_request_id(payload: ControllerPayload, request_id: &str) -> ControllerPayload {
+    match payload {
+        ControllerPayload::StartProxy(mut cmd) => {
+            cmd.request_id = request_id.to_string();
+            ControllerPayload::StartProxy(cmd)
+        }
+        ControllerPayload::StopProxy(mut cmd) => {
+            cmd.request_id = request_id.to_string();
+            ControllerPayload::StopProxy(cmd)
+        }
+        ControllerPayload::GetStatus(mut cmd) => {
+            cmd.request_id = request_id.to_string();
+            ControllerPayload::GetStatus(cmd)
+        }
+        ControllerPayload::GetClientLogs(mut cmd) => {
+            cmd.request_id = request_id.to_string();
+            ControllerPayload::GetClientLogs(cmd)
+        }
+        other => other,
     }
 }
 
@@ -118,33 +176,73 @@ impl ProxyControl for NodeManager {
         let node_id = self.resolve_node_for_client(client_id).await?
             .ok_or_else(|| anyhow!("客户端 {} 未关联任何节点", client_id))?;
 
-        let control = self.get_node_control(node_id).await
-            .ok_or_else(|| anyhow!("节点 #{} 未加载或不可用", node_id))?;
+        let cmd = ControllerPayload::StartProxy(rfrp::StartProxyCommand {
+            request_id: String::new(),
+            client_id: client_id.to_string(),
+            proxy_id,
+        });
 
-        control.start_proxy(client_id, proxy_id).await
+        let resp = self.send_command_and_wait(node_id, cmd).await?;
+
+        match resp.result {
+            Some(AgentResult::CommandAck(ack)) => {
+                if ack.success {
+                    Ok(())
+                } else {
+                    Err(anyhow!("启动代理失败: {}", ack.error.unwrap_or_default()))
+                }
+            }
+            _ => Err(anyhow!("收到意外的响应类型")),
+        }
     }
 
     async fn stop_proxy(&self, client_id: &str, proxy_id: i64) -> Result<()> {
         let node_id = self.resolve_node_for_client(client_id).await?
             .ok_or_else(|| anyhow!("客户端 {} 未关联任何节点", client_id))?;
 
-        let control = self.get_node_control(node_id).await
-            .ok_or_else(|| anyhow!("节点 #{} 未加载或不可用", node_id))?;
+        let cmd = ControllerPayload::StopProxy(rfrp::StopProxyCommand {
+            request_id: String::new(),
+            client_id: client_id.to_string(),
+            proxy_id,
+        });
 
-        control.stop_proxy(client_id, proxy_id).await
+        let resp = self.send_command_and_wait(node_id, cmd).await?;
+
+        match resp.result {
+            Some(AgentResult::CommandAck(ack)) => {
+                if ack.success {
+                    Ok(())
+                } else {
+                    Err(anyhow!("停止代理失败: {}", ack.error.unwrap_or_default()))
+                }
+            }
+            _ => Err(anyhow!("收到意外的响应类型")),
+        }
     }
 
     async fn get_connected_clients(&self) -> Result<Vec<ConnectedClient>> {
-        let nodes = self.nodes.read().await;
+        let node_ids = self.get_loaded_node_ids().await;
         let mut all_clients = Vec::new();
 
-        for (&node_id, control) in nodes.iter() {
-            match control.get_connected_clients().await {
-                Ok(clients) => {
-                    all_clients.extend(clients);
+        for node_id in node_ids {
+            let cmd = ControllerPayload::GetStatus(rfrp::GetStatusCommand {
+                request_id: String::new(),
+            });
+
+            match self.send_command_and_wait(node_id, cmd).await {
+                Ok(resp) => {
+                    if let Some(AgentResult::ServerStatus(status)) = resp.result {
+                        for c in status.connected_clients {
+                            all_clients.push(ConnectedClient {
+                                client_id: c.client_id,
+                                remote_address: c.remote_address,
+                                protocol: c.protocol,
+                            });
+                        }
+                    }
                 }
                 Err(e) => {
-                    warn!("从节点 #{} 获取连接客户端失败: {}", node_id, e);
+                    warn!("从节点 #{} 获取状态失败: {}", node_id, e);
                 }
             }
         }
@@ -156,22 +254,48 @@ impl ProxyControl for NodeManager {
         let node_id = self.resolve_node_for_client(client_id).await?
             .ok_or_else(|| anyhow!("客户端 {} 未关联任何节点", client_id))?;
 
-        let control = self.get_node_control(node_id).await
-            .ok_or_else(|| anyhow!("节点 #{} 未加载或不可用", node_id))?;
+        let cmd = ControllerPayload::GetClientLogs(rfrp::GetClientLogsCommand {
+            request_id: String::new(),
+            client_id: client_id.to_string(),
+            count: count as u32,
+        });
 
-        control.fetch_client_logs(client_id, count).await
+        let resp = self.send_command_and_wait(node_id, cmd).await?;
+
+        match resp.result {
+            Some(AgentResult::ClientLogs(logs)) => {
+                Ok(logs.logs.into_iter().map(|l| LogEntry {
+                    timestamp: l.timestamp,
+                    level: l.level,
+                    message: l.message,
+                }).collect())
+            }
+            _ => Err(anyhow!("收到意外的响应类型")),
+        }
     }
 
     async fn get_server_status(&self) -> Result<ServerStatus> {
-        let nodes = self.nodes.read().await;
+        let node_ids = self.get_loaded_node_ids().await;
         let mut all_clients = Vec::new();
         let mut total_proxy_count = 0;
 
-        for (&node_id, control) in nodes.iter() {
-            match control.get_server_status().await {
-                Ok(status) => {
-                    all_clients.extend(status.connected_clients);
-                    total_proxy_count += status.active_proxy_count;
+        for node_id in node_ids {
+            let cmd = ControllerPayload::GetStatus(rfrp::GetStatusCommand {
+                request_id: String::new(),
+            });
+
+            match self.send_command_and_wait(node_id, cmd).await {
+                Ok(resp) => {
+                    if let Some(AgentResult::ServerStatus(status)) = resp.result {
+                        total_proxy_count += status.active_proxy_count as usize;
+                        for c in status.connected_clients {
+                            all_clients.push(ConnectedClient {
+                                client_id: c.client_id,
+                                remote_address: c.remote_address,
+                                protocol: c.protocol,
+                            });
+                        }
+                    }
                 }
                 Err(e) => {
                     warn!("从节点 #{} 获取状态失败: {}", node_id, e);

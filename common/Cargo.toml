@@ -18,3 +18,9 @@ tokio-util = { version = "0.7", features = ["compat"] }
 futures = "0.3"
 socket2 = { version = "0.6.2", features = ["all"] }
 windows-sys = { version = "0.61.2", features = ["Win32_Networking_WinSock", "Win32_Foundation"] }
+tonic = "0.12"
+prost = "0.13"
+uuid = { version = "1.0", features = ["v4"] }
+
+[build-dependencies]
+tonic-build = "0.12"

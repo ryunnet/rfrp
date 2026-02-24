@@ -6,14 +6,12 @@ use axum::{
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, PaginatorTrait, QueryFilter, Set};
 use serde::Deserialize;
-
-use common::protocol::control::ProxyControl;
+use uuid::Uuid;
 
 use crate::{
     entity::{Node, node, Client, client},
     migration::get_connection,
     middleware::AuthUser,
-    frps_client::RemoteProxyControl,
     AppState,
 };
 
@@ -23,7 +21,7 @@ use super::ApiResponse;
 pub struct CreateNodeRequest {
     pub name: String,
     pub url: String,
-    pub secret: String,
+    pub secret: Option<String>,
     pub region: Option<String>,
     pub description: Option<String>,
     #[serde(rename = "tunnelAddr")]
@@ -96,7 +94,7 @@ pub async fn create_node(
         id: NotSet,
         name: Set(req.name),
         url: Set(req.url.clone()),
-        secret: Set(req.secret.clone()),
+        secret: Set(req.secret.unwrap_or_else(|| Uuid::new_v4().to_string())),
         is_online: Set(false),
         region: Set(req.region),
         description: Set(req.description),
@@ -111,8 +109,7 @@ pub async fn create_node(
     let db = get_connection().await;
     match new_node.insert(db).await {
         Ok(node_model) => {
-            // 动态添加到 NodeManager
-            app_state.node_manager.add_node(node_model.id, req.url, req.secret).await;
+            // gRPC 模式下节点会主动连接认证，无需手动添加
             (StatusCode::OK, ApiResponse::success(node_model))
         }
         Err(e) => (
@@ -210,12 +207,7 @@ pub async fn update_node(
 
     match active.update(db).await {
         Ok(updated) => {
-            // 如果 URL 或 secret 变了，更新 NodeManager
-            if url_changed || !new_secret.is_empty() {
-                let final_url = if new_url.is_empty() { updated.url.clone() } else { new_url };
-                let final_secret = if new_secret.is_empty() { updated.secret.clone() } else { new_secret };
-                app_state.node_manager.add_node(id, final_url, final_secret).await;
-            }
+            // gRPC 模式下节点会主动重连，无需手动更新连接
             (StatusCode::OK, ApiResponse::success(updated))
         }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<node::Model>::error(format!("Failed to update node: {}", e))),
@@ -255,8 +247,7 @@ pub async fn delete_node(
 
     match Node::delete_by_id(id).exec(db).await {
         Ok(_) => {
-            // 从 NodeManager 移除
-            app_state.node_manager.remove_node(id).await;
+            // gRPC 模式下节点断开后会自动清理
             (StatusCode::OK, ApiResponse::success("Node deleted successfully"))
         }
         Err(e) => (
@@ -270,6 +261,7 @@ pub async fn delete_node(
 pub async fn test_node_connection(
     Path(id): Path<i64>,
     Extension(auth_user_opt): Extension<Option<AuthUser>>,
+    Extension(app_state): Extension<AppState>,
 ) -> impl IntoResponse {
     let auth_user = match auth_user_opt {
         Some(user) => user,
@@ -287,25 +279,15 @@ pub async fn test_node_connection(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<serde_json::Value>::error(format!("Failed to find node: {}", e))),
     };
 
-    // 创建临时 RemoteProxyControl 测试连接
-    let control = RemoteProxyControl::new(node_model.url.clone(), node_model.secret.clone());
-    match control.get_server_status().await {
-        Ok(status) => {
-            let result = serde_json::json!({
-                "online": true,
-                "connected_clients": status.connected_clients.len(),
-                "active_proxy_count": status.active_proxy_count,
-            });
-            (StatusCode::OK, ApiResponse::success(result))
-        }
-        Err(e) => {
-            let result = serde_json::json!({
-                "online": false,
-                "error": e.to_string(),
-            });
-            (StatusCode::OK, ApiResponse::success(result))
-        }
-    }
+    // gRPC 模式下检查节点是否已连接
+    let connected_ids = app_state.node_manager.get_loaded_node_ids().await;
+    let is_online = connected_ids.contains(&id);
+
+    let result = serde_json::json!({
+        "online": is_online,
+        "node_name": node_model.name,
+    });
+    (StatusCode::OK, ApiResponse::success(result))
 }
 
 /// GET /api/nodes/{id}/status — 获取节点实时状态
@@ -323,12 +305,14 @@ pub async fn get_node_status(
         return (StatusCode::FORBIDDEN, ApiResponse::<serde_json::Value>::error("Only admin can manage nodes".to_string()));
     }
 
-    let control = match app_state.node_manager.get_node_control(id).await {
-        Some(c) => c,
-        None => return (StatusCode::NOT_FOUND, ApiResponse::<serde_json::Value>::error("Node not found or not loaded".to_string())),
-    };
+    // gRPC 模式下检查节点是否已连接
+    let connected_ids = app_state.node_manager.get_loaded_node_ids().await;
+    if !connected_ids.contains(&id) {
+        return (StatusCode::NOT_FOUND, ApiResponse::<serde_json::Value>::error("Node not connected via gRPC".to_string()));
+    }
 
-    match control.get_server_status().await {
+    // 通过 ProxyControl 获取状态（会通过 gRPC 流发送命令）
+    match app_state.proxy_control.get_server_status().await {
         Ok(status) => {
             let result = serde_json::json!({
                 "connected_clients": status.connected_clients,

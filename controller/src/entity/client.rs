@@ -23,33 +23,41 @@ pub struct Model {
     pub last_reset_at: Option<DateTime>,
     #[serde(rename = "isTrafficExceeded")]
     pub is_traffic_exceeded: bool,
+    #[serde(rename = "trafficQuotaGb")]
+    pub traffic_quota_gb: Option<f64>,
     #[serde(rename = "nodeId")]
     pub node_id: Option<i64>,
+    #[serde(rename = "userId")]
+    pub user_id: Option<i64>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::user_client::Entity")]
-    UserClients,
     #[sea_orm(
         belongs_to = "super::node::Entity",
         from = "Column::NodeId",
         to = "super::node::Column::Id"
     )]
     Node,
-}
-
-impl Related<super::user_client::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::UserClients.def()
-    }
+    #[sea_orm(
+        belongs_to = "super::user::Entity",
+        from = "Column::UserId",
+        to = "super::user::Column::Id"
+    )]
+    User,
 }
 
 impl Related<super::node::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Node.def()
+    }
+}
+
+impl Related<super::user::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::User.def()
     }
 }
 

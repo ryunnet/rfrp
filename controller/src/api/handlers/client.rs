@@ -20,6 +20,7 @@ pub struct CreateClientRequest {
     pub upload_limit_gb: Option<f64>,
     pub download_limit_gb: Option<f64>,
     pub traffic_reset_cycle: Option<String>,
+    pub traffic_quota_gb: Option<f64>,
 }
 
 pub async fn list_clients(Extension(auth_user_opt): Extension<Option<AuthUser>>) -> impl IntoResponse {
@@ -45,45 +46,21 @@ pub async fn list_clients(Extension(auth_user_opt): Extension<Option<AuthUser>>)
             }
         }
     } else {
-        // Regular users can only see their assigned clients
-        // First get the user's assigned client IDs
-        let user_client_ids = match crate::entity::UserClient::find()
-            .filter(crate::entity::user_client::Column::UserId.eq(auth_user.id))
+        // Regular users can only see their own clients (based on client.user_id)
+        match Client::find()
+            .filter(crate::entity::client::Column::UserId.eq(auth_user.id))
             .all(db)
             .await
         {
-            Ok(user_clients) => user_clients.into_iter().map(|uc| uc.client_id).collect::<Vec<_>>(),
+            Ok(clients) => clients,
             Err(e) => {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ApiResponse::<Vec<crate::entity::client::Model>>::error(format!(
-                        "Failed to get user clients: {}",
+                        "Failed to list clients: {}",
                         e
                     )),
                 )
-            }
-        };
-
-        // If user has no assigned clients, return empty list
-        if user_client_ids.is_empty() {
-            vec![]
-        } else {
-            // Get clients for those IDs
-            match Client::find()
-                .filter(crate::entity::client::Column::Id.is_in(user_client_ids))
-                .all(db)
-                .await
-            {
-                Ok(clients) => clients,
-                Err(e) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        ApiResponse::<Vec<crate::entity::client::Model>>::error(format!(
-                            "Failed to list clients: {}",
-                            e
-                        )),
-                    )
-                }
             }
         }
     };
@@ -92,9 +69,14 @@ pub async fn list_clients(Extension(auth_user_opt): Extension<Option<AuthUser>>)
 }
 
 pub async fn create_client(
-    Extension(_auth_user): Extension<Option<AuthUser>>,
+    Extension(auth_user_opt): Extension<Option<AuthUser>>,
     Json(req): Json<CreateClientRequest>,
 ) -> impl IntoResponse {
+    let auth_user = match auth_user_opt {
+        Some(user) => user,
+        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<crate::entity::client::Model>::error("未认证".to_string())),
+    };
+
     let token = req.token.unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = Utc::now().naive_utc();
     let new_client = crate::entity::client::ActiveModel {
@@ -103,10 +85,12 @@ pub async fn create_client(
         token: Set(token.clone()),
         is_online: NotSet,
         node_id: Set(req.node_id),
+        user_id: Set(Some(auth_user.id)),
         total_bytes_sent: Set(0),
         total_bytes_received: Set(0),
         upload_limit_gb: Set(req.upload_limit_gb),
         download_limit_gb: Set(req.download_limit_gb),
+        traffic_quota_gb: Set(req.traffic_quota_gb),
         traffic_reset_cycle: Set(req.traffic_reset_cycle.unwrap_or_else(|| "none".to_string())),
         last_reset_at: Set(None),
         is_traffic_exceeded: Set(false),
@@ -166,6 +150,7 @@ pub struct UpdateClientRequest {
     pub name: Option<String>,
     pub upload_limit_gb: Option<f64>,
     pub download_limit_gb: Option<f64>,
+    pub traffic_quota_gb: Option<f64>,
     pub traffic_reset_cycle: Option<String>,
     pub is_traffic_exceeded: Option<bool>,
 }
@@ -203,6 +188,9 @@ pub async fn update_client(
     if req.download_limit_gb.is_some() || req.download_limit_gb.is_none() {
         client_active.download_limit_gb = Set(req.download_limit_gb);
     }
+    if req.traffic_quota_gb.is_some() || req.traffic_quota_gb.is_none() {
+        client_active.traffic_quota_gb = Set(req.traffic_quota_gb);
+    }
     if let Some(cycle) = req.traffic_reset_cycle {
         client_active.traffic_reset_cycle = Set(cycle);
     }
@@ -216,4 +204,126 @@ pub async fn update_client(
         Ok(updated) => (StatusCode::OK, ApiResponse::success(updated)),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<crate::entity::client::Model>::error(format!("Failed to update client: {}", e))),
     }
+}
+
+/// 为客户端分配流量配额
+#[derive(Deserialize)]
+pub struct AllocateQuotaRequest {
+    pub quota_gb: f64,
+}
+
+pub async fn allocate_client_quota(
+    Path(client_id): Path<i64>,
+    Extension(auth_user_opt): Extension<Option<AuthUser>>,
+    Json(req): Json<AllocateQuotaRequest>,
+) -> impl IntoResponse {
+    let auth_user = match auth_user_opt {
+        Some(user) => user,
+        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<String>::error("未认证".to_string())),
+    };
+
+    if req.quota_gb < 0.0 {
+        return (StatusCode::BAD_REQUEST, ApiResponse::<String>::error("配额不能为负数".to_string()));
+    }
+
+    let db = get_connection().await;
+
+    // 检查客户端是否存在
+    let client = match Client::find_by_id(client_id).one(db).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, ApiResponse::<String>::error("客户端不存在".to_string())),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<String>::error(format!("查询客户端失败: {}", e))),
+    };
+
+    // 获取客户端当前配额
+    let current_quota = client.traffic_quota_gb.unwrap_or(0.0);
+    let quota_diff = req.quota_gb - current_quota;
+
+    // 如果不是管理员，需要检查用户配额
+    if !auth_user.is_admin {
+        // 检查用户是否有权限访问此客户端
+        let has_access = match crate::entity::UserClient::find()
+            .filter(crate::entity::user_client::Column::UserId.eq(auth_user.id))
+            .filter(crate::entity::user_client::Column::ClientId.eq(client_id))
+            .one(db)
+            .await
+        {
+            Ok(Some(_)) => true,
+            Ok(None) => false,
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<String>::error(format!("检查权限失败: {}", e))),
+        };
+
+        if !has_access {
+            return (StatusCode::FORBIDDEN, ApiResponse::<String>::error("无权限访问此客户端".to_string()));
+        }
+
+        // 检查用户配额是否足够（仅在增加配额时检查）
+        if quota_diff > 0.0 {
+            match crate::traffic_limiter::check_user_quota_allocation(auth_user.id, quota_diff, db).await {
+                Ok((true, _)) => {},
+                Ok((false, reason)) => return (StatusCode::BAD_REQUEST, ApiResponse::<String>::error(reason)),
+                Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<String>::error(format!("检查配额失败: {}", e))),
+            }
+        }
+    }
+
+    // 更新客户端配额
+    let mut client_active: crate::entity::client::ActiveModel = client.into();
+    client_active.traffic_quota_gb = Set(Some(req.quota_gb));
+    client_active.updated_at = Set(Utc::now().naive_utc());
+
+    match client_active.update(db).await {
+        Ok(_) => (StatusCode::OK, ApiResponse::success(format!("配额分配成功: {:.2} GB", req.quota_gb))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<String>::error(format!("更新配额失败: {}", e))),
+    }
+}
+
+/// 获取客户端流量详情（包含剩余配额）
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct ClientTrafficInfo {
+    pub client_id: i64,
+    pub client_name: String,
+    pub total_bytes_sent: i64,
+    pub total_bytes_received: i64,
+    pub total_bytes: i64,
+    pub quota_gb: Option<f64>,
+    pub remaining_quota_gb: Option<f64>,
+    pub quota_usage_percent: Option<f64>,
+    pub is_traffic_exceeded: bool,
+}
+
+pub async fn get_client_traffic(
+    Path(client_id): Path<i64>,
+    Extension(_auth_user): Extension<Option<AuthUser>>,
+) -> impl IntoResponse {
+    let db = get_connection().await;
+
+    let client = match Client::find_by_id(client_id).one(db).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, ApiResponse::<ClientTrafficInfo>::error("客户端不存在".to_string())),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<ClientTrafficInfo>::error(format!("查询失败: {}", e))),
+    };
+
+    let remaining_quota_gb = crate::traffic_limiter::calculate_client_remaining_quota(&client);
+    let quota_usage_percent = if let (Some(quota), Some(remaining)) = (client.traffic_quota_gb, remaining_quota_gb) {
+        Some(((quota - remaining) / quota * 100.0).min(100.0))
+    } else {
+        None
+    };
+
+    let info = ClientTrafficInfo {
+        client_id: client.id,
+        client_name: client.name,
+        total_bytes_sent: client.total_bytes_sent,
+        total_bytes_received: client.total_bytes_received,
+        total_bytes: client.total_bytes_sent + client.total_bytes_received,
+        quota_gb: client.traffic_quota_gb,
+        remaining_quota_gb,
+        quota_usage_percent,
+        is_traffic_exceeded: client.is_traffic_exceeded,
+    };
+
+    (StatusCode::OK, ApiResponse::success(info))
 }

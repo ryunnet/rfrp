@@ -8,16 +8,13 @@ use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::RwLock;
-use sea_orm::{EntityTrait, ColumnTrait, QueryFilter};
 use tokio::task::JoinHandle;
 use tracing::{info, warn, error, debug};
 use serde::{Serialize, Deserialize};
 
-use crate::server::entity::{Proxy, UserClient, user_client};
-use crate::server::migration::get_connection;
 use crate::server::traffic::TrafficManager;
 use crate::server::config_manager::ConfigManager;
-use crate::server::config::KcpConfig;
+use common::KcpConfig;
 
 // 从共享库导入隧道模块
 use common::{
@@ -163,44 +160,7 @@ impl ProxyListenerManager {
         }
     }
 
-    // 为客户端启动所有代理监听器 (使用统一连接提供器)
-    pub async fn start_client_proxies_unified(
-        &self,
-        client_id: String,
-        conn_provider: ConnectionProvider,
-    ) -> Result<()> {
-        let db = get_connection().await;
-
-        // 查询该客户端的所有启用的代理
-        let proxies = Proxy::find()
-            .filter(crate::server::entity::proxy::Column::ClientId.eq(&client_id))
-            .filter(crate::server::entity::proxy::Column::Enabled.eq(true))
-            .all(db)
-            .await?;
-
-        if proxies.is_empty() {
-            info!("  [客户端 {}] 没有启用的代理", client_id);
-            return Ok(());
-        }
-
-        let proxy_configs: Vec<common::protocol::control::ProxyConfig> = proxies
-            .into_iter()
-            .map(|p| common::protocol::control::ProxyConfig {
-                proxy_id: p.id,
-                client_id: p.client_id,
-                name: p.name,
-                proxy_type: p.proxy_type,
-                local_ip: p.local_ip,
-                local_port: p.local_port,
-                remote_port: p.remote_port,
-                enabled: p.enabled,
-            })
-            .collect();
-
-        self.start_client_proxies_from_configs(client_id, proxy_configs, conn_provider).await
-    }
-
-    // 从代理配置列表启动代理监听器（不依赖本地 DB）
+    // 从代理配置列表启动代理监听器
     pub async fn start_client_proxies_from_configs(
         &self,
         client_id: String,
@@ -296,113 +256,6 @@ impl ProxyListenerManager {
                 debug!("    代理 #{} 已停止", proxy_id);
             }
         }
-    }
-
-    // 动态启动单个代理监听器（使用统一连接提供器）
-    pub async fn start_single_proxy_unified(
-        &self,
-        client_id: String,
-        proxy_id: i64,
-        conn_provider: ConnectionProvider,
-    ) -> Result<()> {
-        // 检查客户端是否在线
-        if !conn_provider.is_online(&client_id).await {
-            info!("  [客户端 {}] 离线，跳过启动代理 #{}", client_id, proxy_id);
-            return Ok(());
-        }
-
-        let db = get_connection().await;
-
-        // 查询指定的代理
-        let proxy = match Proxy::find_by_id(proxy_id).one(db).await? {
-            Some(p) => p,
-            None => {
-                warn!("  代理 #{} 不存在", proxy_id);
-                return Ok(());
-            }
-        };
-
-        // 检查代理是否启用且属于该客户端
-        if proxy.client_id != client_id {
-            warn!("  代理 #{} 不属于客户端 {}", proxy_id, client_id);
-            return Ok(());
-        }
-
-        if !proxy.enabled {
-            info!("  代理 #{} 未启用，跳过启动", proxy_id);
-            return Ok(());
-        }
-
-        let mut listeners = self.listeners.write().await;
-        let client_listeners = listeners.entry(client_id.clone()).or_insert_with(HashMap::new);
-
-        // 如果该代理的监听器已经运行，跳过
-        if client_listeners.contains_key(&proxy.id) {
-            info!("  代理 #{} 监听器已运行", proxy_id);
-            return Ok(());
-        }
-
-        let proxy_name = proxy.name.clone();
-        let proxy_protocol: ProxyProtocol = proxy.proxy_type.clone().into();
-        let proxy_protocol_str = proxy_protocol.as_str().to_uppercase();
-        let client_id_clone = client_id.clone();
-        let listen_addr = format!("0.0.0.0:{}", proxy.remote_port);
-        let target_addr = format!("{}:{}", proxy.local_ip, proxy.local_port);
-        let conn_provider_clone = conn_provider.clone();
-        let traffic_manager = self.traffic_manager.clone();
-
-        let udp_sessions = self.udp_sessions.clone();
-
-        let handle = tokio::spawn(async move {
-            loop {
-                let result = match proxy_protocol {
-                    ProxyProtocol::Tcp => {
-                        run_tcp_proxy_listener_unified(
-                            proxy_name.clone(),
-                            client_id_clone.clone(),
-                            listen_addr.clone(),
-                            target_addr.clone(),
-                            conn_provider_clone.clone(),
-                            proxy_id,
-                            traffic_manager.clone(),
-                        ).await
-                    }
-                    ProxyProtocol::Udp => {
-                        run_udp_proxy_listener_unified(
-                            proxy_name.clone(),
-                            client_id_clone.clone(),
-                            listen_addr.clone(),
-                            target_addr.clone(),
-                            conn_provider_clone.clone(),
-                            proxy_id,
-                            udp_sessions.clone(),
-                            traffic_manager.clone(),
-                        ).await
-                    }
-                };
-
-                match result {
-                    Ok(_) => {},
-                    Err(e) => {
-                        error!("[{}] 代理监听失败: {}", proxy_name, e);
-                    }
-                }
-                // 如果监听器失败，等待一段时间后重新尝试启动（如果客户端仍在线）
-                tokio::time::sleep(Duration::from_secs(5)).await;
-
-                // 检查客户端是否仍在连接
-                if !conn_provider_clone.is_online(&client_id_clone).await {
-                    warn!("[{}] 客户端已离线，停止代理监听", proxy_name);
-                    break;
-                }
-            }
-        });
-
-        client_listeners.insert(proxy_id, handle);
-        info!("  [客户端 {}] 启动{}代理: {} 端口: {}",
-              client_id, proxy_protocol_str, proxy.name, proxy.remote_port);
-
-        Ok(())
     }
 
     // 停止单个代理监听器（用于删除或禁用代理时）
@@ -1281,7 +1134,7 @@ async fn handle_tcp_to_tunnel_unified(
     if bytes_sent > 0 || bytes_received > 0 {
         let client_id_num = client_id.parse::<i64>().unwrap_or(0);
 
-        // 1. 先记录 proxy/client/daily 维度的流量（user_id=None，只写一次）
+        // 1. 记录 proxy/client/daily 维度的流量
         traffic_manager.record_traffic(
             proxy_id,
             client_id_num,
@@ -1290,33 +1143,8 @@ async fn handle_tcp_to_tunnel_unified(
             bytes_received,
         ).await;
 
-        // 2. 再为每个关联用户记录用户维度的流量（仅本地模式）
-        if !traffic_manager.is_remote() {
-            let db = get_connection().await;
-            let user_clients = UserClient::find()
-                .filter(user_client::Column::ClientId.eq(client_id_num))
-                .all(db)
-                .await
-                .unwrap_or_default();
-
-            let user_count = user_clients.len();
-
-            for uc in user_clients {
-                traffic_manager.record_traffic(
-                    proxy_id,
-                    client_id_num,
-                    Some(uc.user_id),
-                    bytes_sent,
-                    bytes_received,
-                ).await;
-            }
-
-            debug!("[{}] 流量统计: 发送={}, 接收={}, 关联用户数={}",
-                   proxy_name, bytes_sent, bytes_received, user_count);
-        } else {
-            debug!("[{}] 流量统计(远程): 发送={}, 接收={}",
-                   proxy_name, bytes_sent, bytes_received);
-        }
+        debug!("[{}] 流量统计(远程): 发送={}, 接收={}",
+               proxy_name, bytes_sent, bytes_received);
     }
 
     Ok(())
@@ -1383,7 +1211,7 @@ async fn handle_udp_to_tunnel_unified(
     if bytes_sent > 0 || bytes_received > 0 {
         let client_id_num = client_id.parse::<i64>().unwrap_or(0);
 
-        // 1. 记录 proxy/client/daily 维度的流量（user_id=None）
+        // 1. 记录 proxy/client/daily 维度的流量
         traffic_manager.record_traffic(
             proxy_id,
             client_id_num,
@@ -1391,26 +1219,6 @@ async fn handle_udp_to_tunnel_unified(
             bytes_sent,
             bytes_received,
         ).await;
-
-        // 2. 为每个关联用户记录用户维度的流量（仅本地模式）
-        if !traffic_manager.is_remote() {
-            let db = get_connection().await;
-            let user_clients = UserClient::find()
-                .filter(user_client::Column::ClientId.eq(client_id_num))
-                .all(db)
-                .await
-                .unwrap_or_default();
-
-            for uc in user_clients {
-                traffic_manager.record_traffic(
-                    proxy_id,
-                    client_id_num,
-                    Some(uc.user_id),
-                    bytes_sent,
-                    bytes_received,
-                ).await;
-            }
-        }
     }
 
     Ok(())

@@ -1,0 +1,279 @@
+syntax = "proto3";
+package rfrp;
+
+// ===== 公共消息 =====
+
+message Heartbeat {
+  int64 timestamp = 1;
+}
+
+message GrpcKcpConfig {
+  bool nodelay = 1;
+  uint32 interval = 2;
+  uint32 resend = 3;
+  bool nc = 4;
+}
+
+// ===== Service 1: Controller ↔ Agent Server =====
+
+service AgentServerService {
+  // Agent Server 与 Controller 之间的双向流通道
+  rpc AgentServerChannel(stream AgentServerMessage) returns (stream ControllerToAgentMessage);
+}
+
+// Agent Server → Controller
+message AgentServerMessage {
+  oneof payload {
+    NodeRegisterRequest register = 1;
+    TrafficReportRequest traffic_report = 2;
+    ValidateTokenRequest validate_token = 3;
+    ClientOnlineRequest client_online = 4;
+    CheckTrafficLimitRequest check_traffic_limit = 5;
+    GetClientProxiesRequest get_client_proxies = 6;
+    Heartbeat heartbeat = 7;
+    AgentServerResponse response = 8;
+  }
+}
+
+// Controller → Agent Server
+message ControllerToAgentMessage {
+  oneof payload {
+    NodeRegisterResponse register_response = 1;
+    ValidateTokenResponse validate_token_response = 2;
+    ClientOnlineResponse client_online_response = 3;
+    TrafficLimitResponse traffic_limit_response = 4;
+    GetClientProxiesResponse get_client_proxies_response = 5;
+    TrafficReportResponse traffic_report_response = 6;
+    Heartbeat heartbeat_response = 7;
+    // Controller 主动下发的指令
+    StartProxyCommand start_proxy = 10;
+    StopProxyCommand stop_proxy = 11;
+    GetStatusCommand get_status = 12;
+    GetClientLogsCommand get_client_logs = 13;
+  }
+}
+
+// ===== Service 2: Controller ↔ Agent Client =====
+
+service AgentClientService {
+  // Agent Client 与 Controller 之间的双向流通道
+  rpc AgentClientChannel(stream AgentClientMessage) returns (stream ControllerToClientMessage);
+}
+
+// Agent Client → Controller
+message AgentClientMessage {
+  oneof payload {
+    ClientAuthRequest auth = 1;
+    Heartbeat heartbeat = 2;
+  }
+}
+
+// Controller → Agent Client
+message ControllerToClientMessage {
+  oneof payload {
+    ClientAuthResponse auth_response = 1;
+    ProxyListUpdate proxy_update = 2;
+    Heartbeat heartbeat_response = 3;
+    ErrorNotification error = 4;
+  }
+}
+
+// ===== 节点注册 =====
+
+message NodeRegisterRequest {
+  string token = 1;
+  uint32 tunnel_port = 2;
+  string tunnel_protocol = 3;
+}
+
+message NodeRegisterResponse {
+  int64 node_id = 1;
+  string node_name = 2;
+}
+
+// ===== 认证 =====
+
+message ValidateTokenRequest {
+  string request_id = 1;
+  string token = 2;
+}
+
+message ValidateTokenResponse {
+  string request_id = 1;
+  int64 client_id = 2;
+  string client_name = 3;
+  bool allowed = 4;
+  optional string reject_reason = 5;
+}
+
+message ClientOnlineRequest {
+  string request_id = 1;
+  int64 client_id = 2;
+  bool online = 3;
+}
+
+message ClientOnlineResponse {
+  string request_id = 1;
+  bool success = 2;
+}
+
+message CheckTrafficLimitRequest {
+  string request_id = 1;
+  int64 client_id = 2;
+}
+
+message TrafficLimitResponse {
+  string request_id = 1;
+  bool exceeded = 2;
+  optional string reason = 3;
+}
+
+// ===== 代理配置 =====
+
+message GetClientProxiesRequest {
+  string request_id = 1;
+  int64 client_id = 2;
+  int64 node_id = 3;
+}
+
+message GetClientProxiesResponse {
+  string request_id = 1;
+  repeated ProxyConfig proxies = 2;
+}
+
+message ProxyConfig {
+  int64 proxy_id = 1;
+  string client_id = 2;
+  string name = 3;
+  string proxy_type = 4;
+  string local_ip = 5;
+  uint32 local_port = 6;
+  uint32 remote_port = 7;
+  bool enabled = 8;
+}
+
+// ===== 流量上报 =====
+
+message TrafficRecord {
+  int64 proxy_id = 1;
+  string client_id = 2;
+  optional int64 user_id = 3;
+  int64 bytes_sent = 4;
+  int64 bytes_received = 5;
+}
+
+message TrafficReportRequest {
+  repeated TrafficRecord records = 1;
+}
+
+message TrafficReportResponse {
+  bool accepted = 1;
+}
+
+// ===== Controller 下发指令 =====
+
+message StartProxyCommand {
+  string request_id = 1;
+  string client_id = 2;
+  int64 proxy_id = 3;
+}
+
+message StopProxyCommand {
+  string request_id = 1;
+  string client_id = 2;
+  int64 proxy_id = 3;
+}
+
+message GetStatusCommand {
+  string request_id = 1;
+}
+
+message GetClientLogsCommand {
+  string request_id = 1;
+  string client_id = 2;
+  uint32 count = 3;
+}
+
+// ===== Agent Server 对指令的响应 =====
+
+message AgentServerResponse {
+  string request_id = 1;
+  oneof result {
+    CommandAck command_ack = 2;
+    ServerStatus server_status = 3;
+    ClientLogsResponse client_logs = 4;
+  }
+}
+
+message CommandAck {
+  bool success = 1;
+  optional string error = 2;
+}
+
+message ConnectedClient {
+  string client_id = 1;
+  string remote_address = 2;
+  string protocol = 3;
+}
+
+message ServerStatus {
+  repeated ConnectedClient connected_clients = 1;
+  uint32 active_proxy_count = 2;
+}
+
+message LogEntry {
+  string timestamp = 1;
+  string level = 2;
+  string message = 3;
+}
+
+message ClientLogsResponse {
+  repeated LogEntry logs = 1;
+}
+
+// ===== Agent Client 认证 =====
+
+message ClientAuthRequest {
+  string token = 1;
+}
+
+message ClientAuthResponse {
+  bool success = 1;
+  optional string error_message = 2;
+  int64 client_id = 3;
+  string client_name = 4;
+}
+
+// ===== 代理列表推送 =====
+
+message ProxyListUpdate {
+  int64 client_id = 1;
+  string client_name = 2;
+  repeated ServerProxyGroup server_groups = 3;
+}
+
+message ServerProxyGroup {
+  int64 node_id = 1;
+  string server_addr = 2;
+  uint32 server_port = 3;
+  string protocol = 4;
+  optional GrpcKcpConfig kcp = 5;
+  repeated ProxyInfo proxies = 6;
+}
+
+message ProxyInfo {
+  int64 proxy_id = 1;
+  string name = 2;
+  string proxy_type = 3;
+  string local_ip = 4;
+  int32 local_port = 5;
+  int32 remote_port = 6;
+  bool enabled = 7;
+}
+
+// ===== 错误通知 =====
+
+message ErrorNotification {
+  string code = 1;
+  string message = 2;
+}

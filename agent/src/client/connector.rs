@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::net::{TcpStream, UdpSocket};
+use tokio::net::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{info, error, warn, debug};
 use crate::client::log_collector::LogCollector;
@@ -15,32 +15,6 @@ use common::utils::create_configured_udp_socket;
 // Heartbeat configuration
 const HEARTBEAT_INTERVAL_SECS: u64 = 10;
 const HEARTBEAT_TIMEOUT_SECS: u64 = 15;
-
-pub async fn run(
-    connector: Arc<dyn TunnelConnector>,
-    server_addr: SocketAddr,
-    token: String,
-    log_collector: LogCollector,
-) -> Result<()> {
-    info!("Tunnel connector initialized");
-    info!("Connecting to server: {}", server_addr);
-    info!("Idle timeout: 60s, Heartbeat interval: {}s", HEARTBEAT_INTERVAL_SECS);
-
-    // Connection loop with auto-reconnect
-    loop {
-        match connect_to_server(connector.clone(), server_addr, &token, log_collector.clone()).await {
-            Ok(_) => {
-                info!("Connection closed");
-            }
-            Err(e) => {
-                error!("Connection error: {}", e);
-            }
-        }
-
-        warn!("Connection lost, reconnecting in 5 seconds...");
-        tokio::time::sleep(Duration::from_secs(5)).await;
-    }
-}
 
 /// 单次连接尝试（供 controller 模式使用，不含重试循环）
 pub async fn connect_once(

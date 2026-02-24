@@ -13,6 +13,11 @@ mod m20250204_000001_add_kcp_enabled;
 mod m20250204_000002_remove_kcp_port;
 mod m20250213_000001_add_node;
 mod m20250214_000001_add_node_tunnel_fields;
+mod m20250214_000002_add_proxy_node_id;
+mod m20250214_000003_create_user_node;
+mod m20250215_000001_remove_unused_configs;
+mod m20250224_000001_add_traffic_quota;
+mod m20250224_000002_add_client_user_id;
 
 pub struct Migrator;
 
@@ -29,6 +34,11 @@ impl MigratorTrait for Migrator {
             Box::new(m20250204_000002_remove_kcp_port::Migration),
             Box::new(m20250213_000001_add_node::Migration),
             Box::new(m20250214_000001_add_node_tunnel_fields::Migration),
+            Box::new(m20250214_000002_add_proxy_node_id::Migration),
+            Box::new(m20250214_000003_create_user_node::Migration),
+            Box::new(m20250215_000001_remove_unused_configs::Migration),
+            Box::new(m20250224_000001_add_traffic_quota::Migration),
+            Box::new(m20250224_000002_add_client_user_id::Migration),
         ]
     }
 }

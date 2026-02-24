@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     auth::{generate_random_password, hash_password},
-    entity::{User, UserClient},
+    entity::{User, UserNode, Node},
     migration::get_connection,
     middleware::AuthUser,
 };
@@ -17,13 +17,31 @@ use crate::{
 use super::ApiResponse;
 
 #[derive(Serialize)]
-pub struct UserWithClientCount {
+pub struct UserWithNodeCount {
     pub id: i64,
     pub username: String,
     pub is_admin: bool,
     pub created_at: String,
     pub updated_at: String,
-    pub client_count: u64,
+    pub node_count: u64,
+    #[serde(rename = "totalBytesSent")]
+    pub total_bytes_sent: i64,
+    #[serde(rename = "totalBytesReceived")]
+    pub total_bytes_received: i64,
+    #[serde(rename = "uploadLimitGb")]
+    pub upload_limit_gb: Option<f64>,
+    #[serde(rename = "downloadLimitGb")]
+    pub download_limit_gb: Option<f64>,
+    #[serde(rename = "trafficQuotaGb")]
+    pub traffic_quota_gb: Option<f64>,
+    #[serde(rename = "remainingQuotaGb")]
+    pub remaining_quota_gb: Option<f64>,
+    #[serde(rename = "trafficResetCycle")]
+    pub traffic_reset_cycle: String,
+    #[serde(rename = "lastResetAt")]
+    pub last_reset_at: Option<String>,
+    #[serde(rename = "isTrafficExceeded")]
+    pub is_traffic_exceeded: bool,
 }
 
 #[derive(Deserialize)]
@@ -33,6 +51,7 @@ pub struct CreateUserRequest {
     pub is_admin: Option<bool>,
     pub upload_limit_gb: Option<f64>,
     pub download_limit_gb: Option<f64>,
+    pub traffic_quota_gb: Option<f64>,
     pub traffic_reset_cycle: Option<String>,
 }
 
@@ -43,6 +62,7 @@ pub struct UpdateUserRequest {
     pub is_admin: Option<bool>,
     pub upload_limit_gb: Option<f64>,
     pub download_limit_gb: Option<f64>,
+    pub traffic_quota_gb: Option<f64>,
     pub traffic_reset_cycle: Option<String>,
     pub is_traffic_exceeded: Option<bool>,
 }
@@ -51,17 +71,17 @@ pub struct UpdateUserRequest {
 pub async fn list_users(Extension(auth_user_opt): Extension<Option<AuthUser>>) -> impl IntoResponse {
     let _auth_user = match auth_user_opt {
         Some(user) => user,
-        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<Vec<UserWithClientCount>>::error("Not authenticated".to_string())),
+        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<Vec<UserWithNodeCount>>::error("Not authenticated".to_string())),
     };
     let db = get_connection().await;
 
     match User::find().all(db).await {
         Ok(users) => {
-            // Count clients for each user
+            // Count nodes for each user
             let mut users_with_count = Vec::new();
             for user in users {
-                let client_count = match UserClient::find()
-                    .filter(crate::entity::user_client::Column::UserId.eq(user.id))
+                let node_count = match UserNode::find()
+                    .filter(crate::entity::user_node::Column::UserId.eq(user.id))
                     .count(db)
                     .await
                 {
@@ -69,13 +89,24 @@ pub async fn list_users(Extension(auth_user_opt): Extension<Option<AuthUser>>) -
                     Err(_) => 0,
                 };
 
-                users_with_count.push(UserWithClientCount {
+                let remaining_quota_gb = crate::traffic_limiter::calculate_user_remaining_quota(&user);
+
+                users_with_count.push(UserWithNodeCount {
                     id: user.id,
                     username: user.username,
                     is_admin: user.is_admin,
                     created_at: user.created_at.to_string(),
                     updated_at: user.updated_at.to_string(),
-                    client_count,
+                    node_count,
+                    total_bytes_sent: user.total_bytes_sent,
+                    total_bytes_received: user.total_bytes_received,
+                    upload_limit_gb: user.upload_limit_gb,
+                    download_limit_gb: user.download_limit_gb,
+                    traffic_quota_gb: user.traffic_quota_gb,
+                    remaining_quota_gb,
+                    traffic_reset_cycle: user.traffic_reset_cycle,
+                    last_reset_at: user.last_reset_at.map(|d| d.to_string()),
+                    is_traffic_exceeded: user.is_traffic_exceeded,
                 });
             }
 
@@ -83,7 +114,7 @@ pub async fn list_users(Extension(auth_user_opt): Extension<Option<AuthUser>>) -
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            ApiResponse::<Vec<UserWithClientCount>>::error(format!("Failed to list users: {}", e)),
+            ApiResponse::<Vec<UserWithNodeCount>>::error(format!("Failed to list users: {}", e)),
         ),
     }
 }
@@ -142,6 +173,7 @@ pub async fn create_user(
         total_bytes_received: Set(0),
         upload_limit_gb: Set(req.upload_limit_gb),
         download_limit_gb: Set(req.download_limit_gb),
+        traffic_quota_gb: Set(req.traffic_quota_gb),
         traffic_reset_cycle: Set(req.traffic_reset_cycle.unwrap_or_else(|| "none".to_string())),
         last_reset_at: Set(None),
         is_traffic_exceeded: Set(false),
@@ -266,6 +298,9 @@ pub async fn update_user(
     if let Some(download_limit) = req.download_limit_gb {
         user.download_limit_gb = Set(Some(download_limit));
     }
+    if req.traffic_quota_gb.is_some() || req.traffic_quota_gb.is_none() {
+        user.traffic_quota_gb = Set(req.traffic_quota_gb);
+    }
     if let Some(cycle) = req.traffic_reset_cycle {
         user.traffic_reset_cycle = Set(cycle);
     }
@@ -311,42 +346,42 @@ pub async fn delete_user(Extension(auth_user_opt): Extension<Option<AuthUser>>, 
     }
 }
 
-/// GET /api/users/:id/clients - Get user's client list (admin only)
-pub async fn get_user_clients(Extension(auth_user_opt): Extension<Option<AuthUser>>, Path(user_id): Path<i64>) -> impl IntoResponse {
+/// GET /api/users/:id/nodes - Get user's node list (admin only)
+pub async fn get_user_nodes(Extension(auth_user_opt): Extension<Option<AuthUser>>, Path(user_id): Path<i64>) -> impl IntoResponse {
     let _auth_user = match auth_user_opt {
         Some(user) => user,
-        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<Vec<crate::entity::client::Model>>::error("Not authenticated".to_string())),
+        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<Vec<crate::entity::node::Model>>::error("Not authenticated".to_string())),
     };
     let db = get_connection().await;
 
-    match UserClient::find()
-        .filter(crate::entity::user_client::Column::UserId.eq(user_id))
-        .find_also_related(crate::entity::Client)
+    match UserNode::find()
+        .filter(crate::entity::user_node::Column::UserId.eq(user_id))
+        .find_also_related(crate::entity::Node)
         .all(db)
         .await
     {
-        Ok(user_clients) => {
-            let clients: Vec<_> = user_clients
+        Ok(user_nodes) => {
+            let nodes: Vec<_> = user_nodes
                 .into_iter()
-                .filter_map(|(_, client)| client)
+                .filter_map(|(_, node)| node)
                 .collect();
 
-            (StatusCode::OK, ApiResponse::success(clients))
+            (StatusCode::OK, ApiResponse::success(nodes))
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            ApiResponse::<Vec<crate::entity::client::Model>>::error(format!(
-                "Failed to get user clients: {}",
+            ApiResponse::<Vec<crate::entity::node::Model>>::error(format!(
+                "Failed to get user nodes: {}",
                 e
             )),
         ),
     }
 }
 
-/// POST /api/users/:id/clients/:client_id - Assign client to user (admin only)
-pub async fn assign_client_to_user(
+/// POST /api/users/:id/nodes/:node_id - Assign node to user (admin only)
+pub async fn assign_node_to_user(
     Extension(auth_user_opt): Extension<Option<AuthUser>>,
-    Path((user_id, client_id)): Path<(i64, i64)>,
+    Path((user_id, node_id)): Path<(i64, i64)>,
 ) -> impl IntoResponse {
     let _auth_user = match auth_user_opt {
         Some(user) => user,
@@ -371,34 +406,34 @@ pub async fn assign_client_to_user(
         }
     };
 
-    // Check if client exists
-    match crate::entity::Client::find_by_id(client_id).one(db).await {
+    // Check if node exists
+    match Node::find_by_id(node_id).one(db).await {
         Ok(Some(_)) => {}
         Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
-                ApiResponse::<&str>::error("Client not found".to_string()),
+                ApiResponse::<&str>::error("Node not found".to_string()),
             )
         }
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                ApiResponse::<&str>::error(format!("Failed to find client: {}", e)),
+                ApiResponse::<&str>::error(format!("Failed to find node: {}", e)),
             )
         }
     };
 
     // Check if already assigned
-    match UserClient::find()
-        .filter(crate::entity::user_client::Column::UserId.eq(user_id))
-        .filter(crate::entity::user_client::Column::ClientId.eq(client_id))
+    match UserNode::find()
+        .filter(crate::entity::user_node::Column::UserId.eq(user_id))
+        .filter(crate::entity::user_node::Column::NodeId.eq(node_id))
         .one(db)
         .await
     {
         Ok(Some(_)) => {
             return (
                 StatusCode::CONFLICT,
-                ApiResponse::<&str>::error("Client already assigned to user".to_string()),
+                ApiResponse::<&str>::error("Node already assigned to user".to_string()),
             )
         }
         Ok(None) => {}
@@ -412,26 +447,26 @@ pub async fn assign_client_to_user(
 
     // Create assignment
     let now = Utc::now().naive_utc();
-    let new_user_client = crate::entity::user_client::ActiveModel {
+    let new_user_node = crate::entity::user_node::ActiveModel {
         id: NotSet,
         user_id: Set(user_id),
-        client_id: Set(client_id),
+        node_id: Set(node_id),
         created_at: Set(now),
     };
 
-    match new_user_client.insert(db).await {
-        Ok(_) => (StatusCode::OK, ApiResponse::success("Client assigned successfully")),
+    match new_user_node.insert(db).await {
+        Ok(_) => (StatusCode::OK, ApiResponse::success("Node assigned successfully")),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            ApiResponse::<&str>::error(format!("Failed to assign client: {}", e)),
+            ApiResponse::<&str>::error(format!("Failed to assign node: {}", e)),
         ),
     }
 }
 
-/// DELETE /api/users/:id/clients/:client_id - Remove client from user (admin only)
-pub async fn remove_client_from_user(
+/// DELETE /api/users/:id/nodes/:node_id - Remove node from user (admin only)
+pub async fn remove_node_from_user(
     Extension(auth_user_opt): Extension<Option<AuthUser>>,
-    Path((user_id, client_id)): Path<(i64, i64)>,
+    Path((user_id, node_id)): Path<(i64, i64)>,
 ) -> impl IntoResponse {
     let _auth_user = match auth_user_opt {
         Some(user) => user,
@@ -439,9 +474,9 @@ pub async fn remove_client_from_user(
     };
     let db = get_connection().await;
 
-    match UserClient::delete_many()
-        .filter(crate::entity::user_client::Column::UserId.eq(user_id))
-        .filter(crate::entity::user_client::Column::ClientId.eq(client_id))
+    match UserNode::delete_many()
+        .filter(crate::entity::user_node::Column::UserId.eq(user_id))
+        .filter(crate::entity::user_node::Column::NodeId.eq(node_id))
         .exec(db)
         .await
     {
@@ -449,7 +484,7 @@ pub async fn remove_client_from_user(
             if result.rows_affected > 0 {
                 (
                     StatusCode::OK,
-                    ApiResponse::success("Client removed successfully"),
+                    ApiResponse::success("Node removed successfully"),
                 )
             } else {
                 (
@@ -460,7 +495,184 @@ pub async fn remove_client_from_user(
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            ApiResponse::<&str>::error(format!("Failed to remove client: {}", e)),
+            ApiResponse::<&str>::error(format!("Failed to remove node: {}", e)),
         ),
     }
+}
+
+/// POST /api/users/:id/adjust-quota - Adjust user quota (admin only)
+#[derive(Deserialize)]
+pub struct AdjustQuotaRequest {
+    pub quota_change_gb: f64,
+}
+
+pub async fn adjust_user_quota(
+    Extension(auth_user_opt): Extension<Option<AuthUser>>,
+    Path(user_id): Path<i64>,
+    Json(req): Json<AdjustQuotaRequest>,
+) -> impl IntoResponse {
+    let auth_user = match auth_user_opt {
+        Some(user) => user,
+        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<String>::error("未认证".to_string())),
+    };
+
+    if !auth_user.is_admin {
+        return (StatusCode::FORBIDDEN, ApiResponse::<String>::error("只有管理员可以调整用户配额".to_string()));
+    }
+
+    let db = get_connection().await;
+
+    // 查找用户
+    let user = match User::find_by_id(user_id).one(db).await {
+        Ok(Some(u)) => u,
+        Ok(None) => return (StatusCode::NOT_FOUND, ApiResponse::<String>::error("用户不存在".to_string())),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<String>::error(format!("查询用户失败: {}", e))),
+    };
+
+    // 计算新配额
+    let current_quota = user.traffic_quota_gb.unwrap_or(0.0);
+    let new_quota = current_quota + req.quota_change_gb;
+
+    if new_quota < 0.0 {
+        return (StatusCode::BAD_REQUEST, ApiResponse::<String>::error("配额不能为负数".to_string()));
+    }
+
+    // 如果是减少配额，需要检查是否会影响已分配的客户端配额
+    if req.quota_change_gb < 0.0 {
+        use crate::entity::{user_client, UserClient, Client};
+
+        // 计算用户已使用的流量
+        let user_used_gb = crate::traffic_limiter::bytes_to_gb(user.total_bytes_sent + user.total_bytes_received);
+
+        // 查询用户所有客户端已分配的配额总和
+        let user_clients = match UserClient::find()
+            .filter(user_client::Column::UserId.eq(user_id))
+            .all(db)
+            .await
+        {
+            Ok(uc) => uc,
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<String>::error(format!("查询客户端失败: {}", e))),
+        };
+
+        let mut total_allocated_gb = 0.0;
+        for uc in user_clients {
+            if let Ok(Some(client)) = Client::find_by_id(uc.client_id).one(db).await {
+                if let Some(quota) = client.traffic_quota_gb {
+                    total_allocated_gb += quota;
+                }
+            }
+        }
+
+        // 检查新配额是否足够覆盖已使用和已分配的配额
+        if new_quota < user_used_gb + total_allocated_gb {
+            let reason = format!(
+                "配额不足: 新配额 {:.2} GB 小于已使用 {:.2} GB + 已分配 {:.2} GB = {:.2} GB",
+                new_quota,
+                user_used_gb,
+                total_allocated_gb,
+                user_used_gb + total_allocated_gb
+            );
+            return (StatusCode::BAD_REQUEST, ApiResponse::<String>::error(reason));
+        }
+    }
+
+    // 更新用户配额
+    let mut user_active: crate::entity::user::ActiveModel = user.into();
+    user_active.traffic_quota_gb = Set(Some(new_quota));
+    user_active.updated_at = Set(Utc::now().naive_utc());
+
+    match user_active.update(db).await {
+        Ok(_) => {
+            let message = if req.quota_change_gb > 0.0 {
+                format!("配额增加成功: +{:.2} GB，当前配额: {:.2} GB", req.quota_change_gb, new_quota)
+            } else {
+                format!("配额减少成功: {:.2} GB，当前配额: {:.2} GB", req.quota_change_gb, new_quota)
+            };
+            (StatusCode::OK, ApiResponse::success(message))
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<String>::error(format!("更新配额失败: {}", e))),
+    }
+}
+
+/// GET /api/users/:id/quota-info - Get user quota information
+#[derive(Serialize)]
+pub struct UserQuotaInfo {
+    pub user_id: i64,
+    pub username: String,
+    pub total_quota_gb: Option<f64>,
+    pub used_gb: f64,
+    pub allocated_to_clients_gb: f64,
+    pub available_gb: f64,
+    pub quota_usage_percent: Option<f64>,
+}
+
+pub async fn get_user_quota_info(
+    Extension(auth_user_opt): Extension<Option<AuthUser>>,
+    Path(user_id): Path<i64>,
+) -> impl IntoResponse {
+    let auth_user = match auth_user_opt {
+        Some(user) => user,
+        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<UserQuotaInfo>::error("未认证".to_string())),
+    };
+
+    // 非管理员只能查看自己的配额信息
+    if !auth_user.is_admin && auth_user.id != user_id {
+        return (StatusCode::FORBIDDEN, ApiResponse::<UserQuotaInfo>::error("无权限查看此用户配额".to_string()));
+    }
+
+    let db = get_connection().await;
+
+    let user = match User::find_by_id(user_id).one(db).await {
+        Ok(Some(u)) => u,
+        Ok(None) => return (StatusCode::NOT_FOUND, ApiResponse::<UserQuotaInfo>::error("用户不存在".to_string())),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<UserQuotaInfo>::error(format!("查询失败: {}", e))),
+    };
+
+    let used_gb = crate::traffic_limiter::bytes_to_gb(user.total_bytes_sent + user.total_bytes_received);
+
+    // 计算已分配给客户端的配额
+    use crate::entity::{user_client, UserClient, Client};
+
+    let user_clients = match UserClient::find()
+        .filter(user_client::Column::UserId.eq(user_id))
+        .all(db)
+        .await
+    {
+        Ok(uc) => uc,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<UserQuotaInfo>::error(format!("查询客户端失败: {}", e))),
+    };
+
+    let mut allocated_to_clients_gb = 0.0;
+    for uc in user_clients {
+        if let Ok(Some(client)) = Client::find_by_id(uc.client_id).one(db).await {
+            if let Some(quota) = client.traffic_quota_gb {
+                allocated_to_clients_gb += quota;
+            }
+        }
+    }
+
+    let total_quota_gb = user.traffic_quota_gb;
+    let available_gb = if let Some(quota) = total_quota_gb {
+        (quota - used_gb - allocated_to_clients_gb).max(0.0)
+    } else {
+        f64::INFINITY
+    };
+
+    let quota_usage_percent = if let Some(quota) = total_quota_gb {
+        Some(((used_gb + allocated_to_clients_gb) / quota * 100.0).min(100.0))
+    } else {
+        None
+    };
+
+    let info = UserQuotaInfo {
+        user_id: user.id,
+        username: user.username,
+        total_quota_gb,
+        used_gb,
+        allocated_to_clients_gb,
+        available_gb,
+        quota_usage_percent,
+    };
+
+    (StatusCode::OK, ApiResponse::success(info))
 }

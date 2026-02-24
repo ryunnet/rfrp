@@ -1,8 +1,9 @@
 import api from './api';
 import type {
   ApiResponse,
-  UserWithClientCount,
+  UserWithNodeCount,
   Client,
+  ClientTrafficInfo,
   Proxy,
   TrafficOverview,
   DashboardStats,
@@ -22,8 +23,8 @@ export const authService = {
 
 // ============ 用户服务 ============
 export const userService = {
-  async getUsers(): Promise<ApiResponse<UserWithClientCount[]>> {
-    const response = await api.get<ApiResponse<UserWithClientCount[]>>('/users');
+  async getUsers(): Promise<ApiResponse<UserWithNodeCount[]>> {
+    const response = await api.get<ApiResponse<UserWithNodeCount[]>>('/users');
     return response.data;
   },
 
@@ -31,6 +32,7 @@ export const userService = {
     username: string;
     password?: string;
     is_admin?: boolean;
+    traffic_quota_gb?: number | null;
   }): Promise<ApiResponse<any>> {
     const response = await api.post<ApiResponse<any>>('/users', data);
     return response.data;
@@ -44,6 +46,7 @@ export const userService = {
       is_admin?: boolean;
       upload_limit_gb?: number | null;
       download_limit_gb?: number | null;
+      traffic_quota_gb?: number | null;
       traffic_reset_cycle?: string;
       is_traffic_exceeded?: boolean;
     }
@@ -57,18 +60,30 @@ export const userService = {
     return response.data;
   },
 
-  async getUserClients(id: number): Promise<ApiResponse<Client[]>> {
-    const response = await api.get<ApiResponse<Client[]>>(`/users/${id}/clients`);
+  async getUserNodes(id: number): Promise<ApiResponse<Node[]>> {
+    const response = await api.get<ApiResponse<Node[]>>(`/users/${id}/nodes`);
     return response.data;
   },
 
-  async assignClient(userId: number, clientId: number): Promise<ApiResponse<string>> {
-    const response = await api.post<ApiResponse<string>>(`/users/${userId}/clients/${clientId}`);
+  async assignNode(userId: number, nodeId: number): Promise<ApiResponse<string>> {
+    const response = await api.post<ApiResponse<string>>(`/users/${userId}/nodes/${nodeId}`);
     return response.data;
   },
 
-  async removeClient(userId: number, clientId: number): Promise<ApiResponse<string>> {
-    const response = await api.delete<ApiResponse<string>>(`/users/${userId}/clients/${clientId}`);
+  async removeNode(userId: number, nodeId: number): Promise<ApiResponse<string>> {
+    const response = await api.delete<ApiResponse<string>>(`/users/${userId}/nodes/${nodeId}`);
+    return response.data;
+  },
+
+  async adjustQuota(userId: number, quotaChangeGb: number): Promise<ApiResponse<string>> {
+    const response = await api.post<ApiResponse<string>>(`/users/${userId}/adjust-quota`, {
+      quota_change_gb: quotaChangeGb,
+    });
+    return response.data;
+  },
+
+  async getQuotaInfo(userId: number): Promise<ApiResponse<any>> {
+    const response = await api.get<ApiResponse<any>>(`/users/${userId}/quota-info`);
     return response.data;
   },
 };
@@ -106,11 +121,24 @@ export const clientService = {
       name?: string;
       upload_limit_gb?: number | null;
       download_limit_gb?: number | null;
+      traffic_quota_gb?: number | null;
       traffic_reset_cycle?: string;
       is_traffic_exceeded?: boolean;
     }
   ): Promise<ApiResponse<Client>> {
     const response = await api.put<ApiResponse<Client>>(`/clients/${id}`, data);
+    return response.data;
+  },
+
+  async allocateQuota(id: number, quotaGb: number): Promise<ApiResponse<string>> {
+    const response = await api.post<ApiResponse<string>>(`/clients/${id}/allocate-quota`, {
+      quota_gb: quotaGb,
+    });
+    return response.data;
+  },
+
+  async getClientTraffic(id: number): Promise<ApiResponse<ClientTrafficInfo>> {
+    const response = await api.get<ApiResponse<ClientTrafficInfo>>(`/clients/${id}/traffic`);
     return response.data;
   },
 };
@@ -134,6 +162,7 @@ export const proxyService = {
     localIP: string;
     localPort: number;
     remotePort: number;
+    nodeId?: number;
   }): Promise<ApiResponse<Proxy>> {
     const response = await api.post<ApiResponse<Proxy>>('/proxies', data);
     return response.data;
@@ -218,7 +247,7 @@ export const nodeService = {
   async createNode(data: {
     name: string;
     url: string;
-    secret: string;
+    secret?: string;
     region?: string;
     description?: string;
     tunnelAddr?: string;

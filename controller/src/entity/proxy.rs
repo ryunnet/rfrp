@@ -17,6 +17,8 @@ pub struct Model {
     #[serde(rename = "remotePort")]
     pub remote_port: u16,
     pub enabled: bool,
+    #[serde(rename = "nodeId")]
+    pub node_id: Option<i64>,
     #[serde(rename = "totalBytesSent")]
     pub total_bytes_sent: i64,
     #[serde(rename = "totalBytesReceived")]

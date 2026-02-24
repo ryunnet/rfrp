@@ -139,23 +139,28 @@ pub async fn get_user_dashboard_stats(
     ApiResponse::success(stats)
 }
 
-/// 获取用户绑定的客户端
+/// 获取用户绑定的客户端（通过 UserNode → Node → Client 链路）
 async fn get_user_clients(
     db: &DatabaseConnection,
     user_id: i64,
 ) -> Result<Vec<entity::client::Model>, DbErr> {
-    // 查询用户绑定的客户端ID
-    let user_clients = entity::UserClient::find()
-        .filter(entity::user_client::Column::UserId.eq(user_id))
+    // 查询用户绑定的节点ID
+    let user_nodes = entity::UserNode::find()
+        .filter(entity::user_node::Column::UserId.eq(user_id))
         .all(db)
         .await?;
 
-    let mut clients = Vec::new();
-    for uc in user_clients {
-        if let Some(client) = entity::Client::find_by_id(uc.client_id).one(db).await? {
-            clients.push(client);
-        }
+    let node_ids: Vec<i64> = user_nodes.into_iter().map(|un| un.node_id).collect();
+
+    if node_ids.is_empty() {
+        return Ok(Vec::new());
     }
+
+    // 查询这些节点下的所有客户端
+    let clients = entity::Client::find()
+        .filter(entity::client::Column::NodeId.is_in(node_ids))
+        .all(db)
+        .await?;
 
     Ok(clients)
 }

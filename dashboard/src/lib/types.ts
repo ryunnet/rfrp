@@ -12,17 +12,30 @@ export interface User {
   is_admin: boolean;
   created_at: string;
   updated_at: string;
-  total_bytes_sent: number;
-  total_bytes_received: number;
+  totalBytesSent: number;
+  totalBytesReceived: number;
   uploadLimitGb: number | null;
   downloadLimitGb: number | null;
+  trafficQuotaGb: number | null;
+  remainingQuotaGb: number | null;
   trafficResetCycle: string;
   lastResetAt: string | null;
   isTrafficExceeded: boolean;
 }
 
-export interface UserWithClientCount extends User {
-  client_count: number;
+export interface UserWithNodeCount extends User {
+  node_count: number;
+}
+
+// 用户配额信息
+export interface UserQuotaInfo {
+  user_id: number;
+  username: string;
+  total_quota_gb: number | null;
+  used_gb: number;
+  allocated_to_clients_gb: number;
+  available_gb: number;
+  quota_usage_percent: number | null;
 }
 
 // 客户端类型
@@ -32,16 +45,31 @@ export interface Client {
   token: string;
   is_online: boolean;
   nodeId: number | null;
+  userId: number | null;
   node_name?: string;
-  total_bytes_sent: number;
-  total_bytes_received: number;
+  totalBytesSent: number;
+  totalBytesReceived: number;
   uploadLimitGb: number | null;
   downloadLimitGb: number | null;
+  trafficQuotaGb: number | null;
   trafficResetCycle: string;
   lastResetAt: string | null;
   isTrafficExceeded: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// 客户端流量详情
+export interface ClientTrafficInfo {
+  client_id: number;
+  client_name: string;
+  total_bytes_sent: number;
+  total_bytes_received: number;
+  total_bytes: number;
+  quota_gb: number | null;
+  remaining_quota_gb: number | null;
+  quota_usage_percent: number | null;
+  is_traffic_exceeded: boolean;
 }
 
 // 代理类型
@@ -54,6 +82,7 @@ export interface Proxy {
   localPort: number;  // 后端返回驼峰命名
   remotePort: number;  // 后端返回驼峰命名
   enabled: boolean;
+  nodeId: number | null;
   totalBytesSent: number;  // 后端返回驼峰命名
   totalBytesReceived: number;  // 后端返回驼峰命名
   created_at: string;

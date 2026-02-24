@@ -28,3 +28,47 @@ pub struct ClientConnectConfig {
     /// 客户端名称
     pub client_name: String,
 }
+
+/// 客户端轮询代理列表请求
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClientPollRequest {
+    pub token: String,
+}
+
+/// 客户端轮询代理列表响应
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClientPollResponse {
+    pub client_id: i64,
+    pub client_name: String,
+    /// 按 Server 分组的代理列表
+    pub server_groups: Vec<ServerProxyGroup>,
+}
+
+/// 一个 Server 及其上面需要运行的代理
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerProxyGroup {
+    /// 节点 ID
+    pub node_id: i64,
+    /// Server 隧道地址
+    pub server_addr: String,
+    /// Server 隧道端口
+    pub server_port: u16,
+    /// 隧道协议
+    pub protocol: TunnelProtocol,
+    /// KCP 配置（可选）
+    pub kcp: Option<KcpConfig>,
+    /// 该 Server 上的代理列表
+    pub proxies: Vec<ProxyInfo>,
+}
+
+/// 轮询响应中的代理信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyInfo {
+    pub proxy_id: i64,
+    pub name: String,
+    pub proxy_type: String,
+    pub local_ip: String,
+    pub local_port: i32,
+    pub remote_port: i32,
+    pub enabled: bool,
+}

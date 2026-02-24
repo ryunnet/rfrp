@@ -1,22 +1,17 @@
 pub mod connector;
-pub mod config;
 pub mod log_collector;
+pub mod connection_manager;
+pub mod grpc_client;
 
 use anyhow::Result;
-use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, error, warn};
 use tracing_subscriber::{EnvFilter, fmt, prelude::*, layer::SubscriberExt};
 use log_collector::{LogCollector, LogCollectorLayer};
-use config::TunnelProtocol;
-
-// 从共享库导入隧道模块
-use common::{TunnelConnector, QuicConnector, KcpConnector};
 
 pub async fn run_client(
-    config_path: Option<String>,
-    controller_url: Option<String>,
-    token: Option<String>,
+    controller_url: String,
+    token: String,
 ) -> Result<()> {
     // 初始化日志收集器（保留最近 1000 条日志）
     let log_collector = LogCollector::new(1000);
@@ -31,93 +26,35 @@ pub async fn run_client(
         .with(LogCollectorLayer::new(log_collector.clone()))
         .init();
 
-    // 判断运行模式
-    let is_controller_mode = controller_url.is_some();
+    info!("Agent Client 启动 (Controller gRPC 模式)");
+    info!("Controller: {}", controller_url);
 
-    if is_controller_mode {
-        let controller_url = controller_url.unwrap();
-        let token = token.ok_or_else(|| anyhow::anyhow!("使用 --controller-url 时必须指定 --token"))?;
+    // Controller 模式：通过 gRPC 双向流接收代理列表推送
+    let conn_manager = connection_manager::ConnectionManager::new(
+        token.clone(),
+        log_collector.clone(),
+    );
 
-        info!("Controller mode: {}", controller_url);
+    // 断线重连循环
+    loop {
+        match grpc_client::connect_and_run(&controller_url, &token).await {
+            Ok((_client_id, client_name, mut update_rx)) => {
+                info!("已连接 Controller，客户端: {}", client_name);
 
-        // Controller 模式：每次重连都重新获取配置
-        loop {
-            // 从 Controller 获取配置
-            let cfg = match config::Config::from_controller(&controller_url, &token).await {
-                Ok(c) => c,
-                Err(e) => {
-                    error!("Failed to fetch config from controller: {}", e);
-                    warn!("Retrying in 5 seconds...");
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                    continue;
+                // 接收代理列表推送并调和连接
+                while let Some(server_groups) = update_rx.recv().await {
+                    info!("收到代理列表更新: {} 个 Server 分组", server_groups.len());
+                    conn_manager.reconcile(server_groups).await;
                 }
-            };
 
-            info!("Config received: server={}:{}, protocol={:?}", cfg.server_addr, cfg.server_port, cfg.protocol);
-
-            let server_addr = match cfg.get_server_addr() {
-                Ok(addr) => addr,
-                Err(e) => {
-                    error!("Invalid server address: {}", e);
-                    warn!("Retrying in 5 seconds...");
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                    continue;
-                }
-            };
-
-            // 根据协议创建连接器
-            let connector: Arc<dyn TunnelConnector> = match cfg.protocol {
-                TunnelProtocol::Quic => {
-                    info!("Using QUIC protocol");
-                    match QuicConnector::new() {
-                        Ok(c) => Arc::new(c),
-                        Err(e) => {
-                            error!("Failed to create QUIC connector: {}", e);
-                            tokio::time::sleep(Duration::from_secs(5)).await;
-                            continue;
-                        }
-                    }
-                }
-                TunnelProtocol::Kcp => {
-                    info!("Using KCP protocol");
-                    Arc::new(KcpConnector::new(cfg.kcp.clone()))
-                }
-            };
-
-            // 单次连接尝试
-            match connector::connect_once(connector, server_addr, &cfg.token, log_collector.clone()).await {
-                Ok(_) => info!("Connection closed"),
-                Err(e) => error!("Connection error: {}", e),
+                warn!("与 Controller 的 gRPC 连接断开");
             }
-
-            warn!("Connection lost, reconnecting in 5 seconds...");
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            Err(e) => {
+                error!("连接 Controller 失败: {}", e);
+            }
         }
-    } else {
-        // 配置文件模式
-        let config_path = config_path.unwrap_or_else(|| "rfrpc.toml".to_string());
-        let cfg = config::Config::from_file(&config_path)?;
 
-        info!("Loaded configuration: {}", config_path);
-        info!("Server address: {}:{}", cfg.server_addr, cfg.server_port);
-        info!("Protocol: {:?}", cfg.protocol);
-
-        let server_addr = cfg.get_server_addr()?;
-
-        let connector: Arc<dyn TunnelConnector> = match cfg.protocol {
-            TunnelProtocol::Quic => {
-                info!("Using QUIC protocol");
-                Arc::new(QuicConnector::new()?)
-            }
-            TunnelProtocol::Kcp => {
-                info!("Using KCP protocol");
-                Arc::new(KcpConnector::new(cfg.kcp.clone()))
-            }
-        };
-
-        // 配置文件模式使用原有的重连循环
-        connector::run(connector, server_addr, cfg.token, log_collector).await?;
-
-        Ok(())
+        warn!("5秒后重连 Controller...");
+        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }
