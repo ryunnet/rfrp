@@ -249,7 +249,8 @@ export default function Clients() {
         <TableSkeleton rows={5} cols={7} />
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <table className="min-w-full">
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
             <thead>
               <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -448,7 +449,8 @@ export default function Clients() {
                 ))
               )}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
       )}
 

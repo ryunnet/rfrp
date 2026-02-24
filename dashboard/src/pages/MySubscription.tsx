@@ -158,6 +158,7 @@ export default function MySubscription() {
                 <p className="text-sm mt-2">请联系管理员为您分配订阅套餐</p>
               </div>
             ) : (
+            <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -203,7 +204,8 @@ export default function MySubscription() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+                </table>
+            </div>
             )}
           </div>
         </>
