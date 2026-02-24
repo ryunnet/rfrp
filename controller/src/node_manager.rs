@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use sea_orm::EntityTrait;
+use sea_orm::{EntityTrait, ColumnTrait, QueryFilter};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{info, warn};
 
@@ -109,13 +109,15 @@ impl NodeManager {
     /// 根据 client_id 查找所属节点 ID
     async fn resolve_node_for_client(&self, client_id: &str) -> Result<Option<i64>> {
         let db = get_connection().await;
-        let client_id_num: i64 = client_id.parse().unwrap_or(0);
 
-        let client_model = Client::find_by_id(client_id_num)
+        // 查找客户端的第一个启用的代理，并获取其节点ID
+        let proxy = crate::entity::Proxy::find()
+            .filter(crate::entity::proxy::Column::ClientId.eq(client_id))
+            .filter(crate::entity::proxy::Column::Enabled.eq(true))
             .one(db)
             .await?;
 
-        Ok(client_model.and_then(|c| c.node_id))
+        Ok(proxy.and_then(|p| p.node_id))
     }
 
     /// 健康检查所有节点

@@ -44,7 +44,7 @@ pub struct AppState {
 async fn main() -> Result<()> {
     // 初始化 tracing 日志系统
     let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+        .unwrap_or_else(|_| EnvFilter::new("info,sqlx::query=warn"));
 
     tracing_subscriber::registry()
         .with(env_filter)
@@ -241,8 +241,6 @@ async fn initialize_admin_user() {
                 is_admin: Set(true),
                 total_bytes_sent: Set(0),
                 total_bytes_received: Set(0),
-                upload_limit_gb: Set(None),
-                download_limit_gb: Set(None),
                 traffic_quota_gb: Set(None),
                 traffic_reset_cycle: Set("none".to_string()),
                 last_reset_at: Set(None),

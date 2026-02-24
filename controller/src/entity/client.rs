@@ -13,10 +13,6 @@ pub struct Model {
     pub total_bytes_sent: i64,
     #[serde(rename = "totalBytesReceived")]
     pub total_bytes_received: i64,
-    #[serde(rename = "uploadLimitGb")]
-    pub upload_limit_gb: Option<f64>,
-    #[serde(rename = "downloadLimitGb")]
-    pub download_limit_gb: Option<f64>,
     #[serde(rename = "trafficResetCycle")]
     pub traffic_reset_cycle: String,
     #[serde(rename = "lastResetAt")]
@@ -25,8 +21,6 @@ pub struct Model {
     pub is_traffic_exceeded: bool,
     #[serde(rename = "trafficQuotaGb")]
     pub traffic_quota_gb: Option<f64>,
-    #[serde(rename = "nodeId")]
-    pub node_id: Option<i64>,
     #[serde(rename = "userId")]
     pub user_id: Option<i64>,
     pub created_at: DateTime,
@@ -36,23 +30,11 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::node::Entity",
-        from = "Column::NodeId",
-        to = "super::node::Column::Id"
-    )]
-    Node,
-    #[sea_orm(
         belongs_to = "super::user::Entity",
         from = "Column::UserId",
         to = "super::user::Column::Id"
     )]
     User,
-}
-
-impl Related<super::node::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Node.def()
-    }
 }
 
 impl Related<super::user::Entity> for Entity {

@@ -16,9 +16,6 @@ use super::ApiResponse;
 pub struct CreateClientRequest {
     pub name: String,
     pub token: Option<String>,
-    pub node_id: Option<i64>,
-    pub upload_limit_gb: Option<f64>,
-    pub download_limit_gb: Option<f64>,
     pub traffic_reset_cycle: Option<String>,
     pub traffic_quota_gb: Option<f64>,
 }
@@ -84,12 +81,9 @@ pub async fn create_client(
         name: Set(req.name),
         token: Set(token.clone()),
         is_online: NotSet,
-        node_id: Set(req.node_id),
         user_id: Set(Some(auth_user.id)),
         total_bytes_sent: Set(0),
         total_bytes_received: Set(0),
-        upload_limit_gb: Set(req.upload_limit_gb),
-        download_limit_gb: Set(req.download_limit_gb),
         traffic_quota_gb: Set(req.traffic_quota_gb),
         traffic_reset_cycle: Set(req.traffic_reset_cycle.unwrap_or_else(|| "none".to_string())),
         last_reset_at: Set(None),
@@ -148,8 +142,6 @@ pub async fn delete_client(
 #[derive(Deserialize)]
 pub struct UpdateClientRequest {
     pub name: Option<String>,
-    pub upload_limit_gb: Option<f64>,
-    pub download_limit_gb: Option<f64>,
     pub traffic_quota_gb: Option<f64>,
     pub traffic_reset_cycle: Option<String>,
     pub is_traffic_exceeded: Option<bool>,
@@ -181,12 +173,6 @@ pub async fn update_client(
 
     if let Some(name) = req.name {
         client_active.name = Set(name);
-    }
-    if req.upload_limit_gb.is_some() || req.upload_limit_gb.is_none() {
-        client_active.upload_limit_gb = Set(req.upload_limit_gb);
-    }
-    if req.download_limit_gb.is_some() || req.download_limit_gb.is_none() {
-        client_active.download_limit_gb = Set(req.download_limit_gb);
     }
     if req.traffic_quota_gb.is_some() || req.traffic_quota_gb.is_none() {
         client_active.traffic_quota_gb = Set(req.traffic_quota_gb);

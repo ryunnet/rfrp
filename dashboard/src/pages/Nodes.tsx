@@ -17,6 +17,7 @@ export default function Nodes() {
   const [editingNode, setEditingNode] = useState<Node | null>(null);
   const [commandNode, setCommandNode] = useState<Node | null>(null);
   const [controllerUrl, setControllerUrl] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     url: '',
@@ -26,11 +27,15 @@ export default function Nodes() {
     tunnelAddr: '',
     tunnelPort: '7000',
     tunnelProtocol: 'quic',
+    nodeType: 'shared',
   });
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
   const [testingId, setTestingId] = useState<number | null>(null);
 
   useEffect(() => {
+    // 获取当前用户信息
+    const authUser = JSON.parse(localStorage.getItem('user') || '{}');
+    setIsAdmin(authUser.is_admin || false);
     loadNodes();
   }, []);
 
@@ -65,6 +70,7 @@ export default function Nodes() {
         tunnelAddr: formData.tunnelAddr || undefined,
         tunnelPort: formData.tunnelPort ? parseInt(formData.tunnelPort) : undefined,
         tunnelProtocol: formData.tunnelProtocol || undefined,
+        nodeType: formData.nodeType || undefined,
       });
       if (response.success) {
         showToast('节点创建成功', 'success');
@@ -99,6 +105,7 @@ export default function Nodes() {
         tunnelAddr: formData.tunnelAddr || undefined,
         tunnelPort: formData.tunnelPort ? parseInt(formData.tunnelPort) : undefined,
         tunnelProtocol: formData.tunnelProtocol || undefined,
+        nodeType: formData.nodeType || undefined,
       });
       if (response.success) {
         showToast('节点更新成功', 'success');
@@ -168,12 +175,13 @@ export default function Nodes() {
       tunnelAddr: node.tunnelAddr || '',
       tunnelPort: String(node.tunnelPort || 7000),
       tunnelProtocol: node.tunnelProtocol || 'quic',
+      nodeType: node.nodeType || 'shared',
     });
     setShowEditModal(true);
   };
 
   const resetForm = () => {
-    setFormData({ name: '', url: '', secret: '', region: '', description: '', tunnelAddr: '', tunnelPort: '7000', tunnelProtocol: 'quic' });
+    setFormData({ name: '', url: '', secret: '', region: '', description: '', tunnelAddr: '', tunnelPort: '7000', tunnelProtocol: 'quic', nodeType: 'shared' });
   };
 
   const tunnelFields = (
@@ -243,17 +251,21 @@ export default function Nodes() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">节点管理</h2>
-          <p className="mt-1 text-sm text-gray-500">管理和监控所有代理节点</p>
+          <p className="mt-1 text-sm text-gray-500">
+            {isAdmin ? '管理和监控所有代理节点' : '查看可用的代理节点（共享节点 + 您的独享节点）'}
+          </p>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowCreateModal(true); }}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-lg shadow-blue-500/25 transition-all duration-200"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          添加节点
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => { resetForm(); setShowCreateModal(true); }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-lg shadow-blue-500/25 transition-all duration-200"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            添加节点
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -265,6 +277,9 @@ export default function Nodes() {
               <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   名称
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  类型
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   地区
@@ -289,7 +304,7 @@ export default function Nodes() {
             <tbody className="divide-y divide-gray-100">
               {nodes.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
@@ -316,6 +331,22 @@ export default function Nodes() {
                           )}
                         </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg ${
+                        node.nodeType === 'dedicated'
+                          ? 'bg-purple-50 text-purple-700'
+                          : 'bg-blue-50 text-blue-700'
+                      }`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                          {node.nodeType === 'dedicated' ? (
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                          ) : (
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                          )}
+                        </svg>
+                        {node.nodeType === 'dedicated' ? '独享' : '共享'}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {node.region ? (
@@ -355,43 +386,52 @@ export default function Nodes() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleShowCommand(node)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
-                          </svg>
-                          启动命令
-                        </button>
-                        <button
-                          onClick={() => handleTestConnection(node)}
-                          disabled={testingId === node.id}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                          </svg>
-                          {testingId === node.id ? '测试中...' : '测试'}
-                        </button>
-                        <button
-                          onClick={() => openEditModal(node)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                          </svg>
-                          编辑
-                        </button>
-                        <button
-                          onClick={() => handleDeleteNode(node)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                          </svg>
-                          删除
-                        </button>
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={() => handleShowCommand(node)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+                              </svg>
+                              启动命令
+                            </button>
+                            <button
+                              onClick={() => handleTestConnection(node)}
+                              disabled={testingId === node.id}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                              </svg>
+                              {testingId === node.id ? '测试中...' : '测试'}
+                            </button>
+                            <button
+                              onClick={() => openEditModal(node)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                              </svg>
+                              编辑
+                            </button>
+                            <button
+                              onClick={() => handleDeleteNode(node)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                              </svg>
+                              删除
+                            </button>
+                          </>
+                        )}
+                        {!isAdmin && (
+                          <span className="text-xs text-gray-400 px-3 py-1.5">
+                            {node.nodeType === 'shared' ? '所有用户可用' : '已分配给您'}
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -459,6 +499,18 @@ export default function Nodes() {
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
                     placeholder="可选描述"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">节点类型</label>
+                  <select
+                    value={formData.nodeType}
+                    onChange={(e) => setFormData({ ...formData, nodeType: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                  >
+                    <option value="shared">共享节点</option>
+                    <option value="dedicated">独享节点</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1.5">共享节点可被多个用户使用，独享节点仅分配给特定用户</p>
                 </div>
                 {tunnelFields}
               </div>
@@ -543,6 +595,18 @@ export default function Nodes() {
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">节点类型</label>
+                  <select
+                    value={formData.nodeType}
+                    onChange={(e) => setFormData({ ...formData, nodeType: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                  >
+                    <option value="shared">共享节点</option>
+                    <option value="dedicated">独享节点</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1.5">共享节点可被多个用户使用，独享节点仅分配给特定用户</p>
                 </div>
                 {tunnelFields}
               </div>

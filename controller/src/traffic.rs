@@ -457,27 +457,16 @@ pub async fn get_traffic_overview(user_id: Option<i64>, days: i64) -> Result<Tra
     })
 }
 
-/// 检查用户是否有访问客户端的权限（通过 client.node_id → UserNode）
+/// 检查用户是否有访问客户端的权限（通过 client.user_id）
 async fn has_client_access(db: &DatabaseConnection, user_id: i64, client_id: i64) -> Result<bool> {
-    use crate::entity::{user_node, user_node::Entity as UserNode, client::Entity as Client};
+    use crate::entity::client::Entity as Client;
 
-    // 查找 client 的 node_id
+    // 查找 client 并检查 user_id
     let client = match Client::find_by_id(client_id).one(db).await? {
         Some(c) => c,
         None => return Ok(false),
     };
 
-    let node_id = match client.node_id {
-        Some(id) => id,
-        None => return Ok(false),
-    };
-
-    // 检查 user_node 表中是否存在 (user_id, node_id) 记录
-    let count = UserNode::find()
-        .filter(user_node::Column::UserId.eq(user_id))
-        .filter(user_node::Column::NodeId.eq(node_id))
-        .count(db)
-        .await?;
-
-    Ok(count > 0)
+    // 检查客户端是否属于该用户
+    Ok(client.user_id == Some(user_id))
 }

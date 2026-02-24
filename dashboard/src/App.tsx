@@ -45,14 +45,7 @@ function App() {
                           </ProtectedRoute>
                         }
                       />
-                      <Route
-                        path="/nodes"
-                        element={
-                          <ProtectedRoute requireAdmin>
-                            <Nodes />
-                          </ProtectedRoute>
-                        }
-                      />
+                      <Route path="/nodes" element={<Nodes />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </Layout>

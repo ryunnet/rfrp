@@ -45,27 +45,19 @@ impl ClientAuthProvider for LocalControllerAuthProvider {
         let client_id = client.id;
         let client_name = client.name.clone();
 
-        // 检查流量限制（通过 client.node_id → UserNode → User）
-        if let Some(node_id) = client.node_id {
-            let user_nodes = UserNode::find()
-                .filter(user_node::Column::NodeId.eq(node_id))
-                .all(db)
-                .await
-                .unwrap_or_default();
-
-            for un in user_nodes {
-                if let Ok(Some(user)) = User::find_by_id(un.user_id).one(db).await {
-                    if user.is_traffic_exceeded {
-                        return Ok(ValidateTokenResponse {
-                            client_id,
-                            client_name,
-                            allowed: false,
-                            reject_reason: Some(format!(
-                                "用户 {} (#{}) 流量已超限",
-                                user.username, user.id
-                            )),
-                        });
-                    }
+        // 检查流量限制（通过 client.user_id → User）
+        if let Some(user_id) = client.user_id {
+            if let Ok(Some(user)) = User::find_by_id(user_id).one(db).await {
+                if user.is_traffic_exceeded {
+                    return Ok(ValidateTokenResponse {
+                        client_id,
+                        client_name,
+                        allowed: false,
+                        reject_reason: Some(format!(
+                            "用户 {} (#{}) 流量已超限",
+                            user.username, user.id
+                        )),
+                    });
                 }
             }
         }
@@ -92,7 +84,7 @@ impl ClientAuthProvider for LocalControllerAuthProvider {
     async fn check_traffic_limit(&self, client_id: i64) -> Result<TrafficLimitResponse> {
         let db = get_connection().await;
 
-        // 查找 client 的 node_id，然后通过 UserNode 查找关联的 user
+        // 查找 client 的 user_id，然后检查用户流量限制
         let client = match Client::find_by_id(client_id).one(db).await? {
             Some(c) => c,
             None => {
@@ -103,23 +95,16 @@ impl ClientAuthProvider for LocalControllerAuthProvider {
             }
         };
 
-        if let Some(node_id) = client.node_id {
-            let user_nodes = UserNode::find()
-                .filter(user_node::Column::NodeId.eq(node_id))
-                .all(db)
-                .await?;
-
-            for un in user_nodes {
-                if let Ok(Some(user)) = User::find_by_id(un.user_id).one(db).await {
-                    if user.is_traffic_exceeded {
-                        return Ok(TrafficLimitResponse {
-                            exceeded: true,
-                            reason: Some(format!(
-                                "用户 {} (#{}) 流量已超限",
-                                user.username, user.id
-                            )),
-                        });
-                    }
+        if let Some(user_id) = client.user_id {
+            if let Ok(Some(user)) = User::find_by_id(user_id).one(db).await {
+                if user.is_traffic_exceeded {
+                    return Ok(TrafficLimitResponse {
+                        exceeded: true,
+                        reason: Some(format!(
+                            "用户 {} (#{}) 流量已超限",
+                            user.username, user.id
+                        )),
+                    });
                 }
             }
         }

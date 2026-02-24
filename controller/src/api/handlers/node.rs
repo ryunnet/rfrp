@@ -32,6 +32,8 @@ pub struct CreateNodeRequest {
     pub tunnel_protocol: Option<String>,
     #[serde(rename = "kcpConfig")]
     pub kcp_config: Option<String>,
+    #[serde(rename = "nodeType")]
+    pub node_type: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -49,9 +51,11 @@ pub struct UpdateNodeRequest {
     pub tunnel_protocol: Option<String>,
     #[serde(rename = "kcpConfig")]
     pub kcp_config: Option<String>,
+    #[serde(rename = "nodeType")]
+    pub node_type: Option<String>,
 }
 
-/// GET /api/nodes — 列出所有节点
+/// GET /api/nodes — 列出节点（管理员看全部，普通用户看可用的）
 pub async fn list_nodes(
     Extension(auth_user_opt): Extension<Option<AuthUser>>,
 ) -> impl IntoResponse {
@@ -60,17 +64,44 @@ pub async fn list_nodes(
         None => return (StatusCode::UNAUTHORIZED, ApiResponse::<Vec<node::Model>>::error("Not authenticated".to_string())),
     };
 
-    if !auth_user.is_admin {
-        return (StatusCode::FORBIDDEN, ApiResponse::<Vec<node::Model>>::error("Only admin can manage nodes".to_string()));
-    }
-
     let db = get_connection().await;
-    match Node::find().all(db).await {
-        Ok(nodes) => (StatusCode::OK, ApiResponse::success(nodes)),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            ApiResponse::<Vec<node::Model>>::error(format!("Failed to list nodes: {}", e)),
-        ),
+
+    if auth_user.is_admin {
+        // 管理员可以看到所有节点
+        match Node::find().all(db).await {
+            Ok(nodes) => (StatusCode::OK, ApiResponse::success(nodes)),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ApiResponse::<Vec<node::Model>>::error(format!("Failed to list nodes: {}", e)),
+            ),
+        }
+    } else {
+        // 普通用户只能看到共享节点 + 自己的独享节点
+        match Node::find().all(db).await {
+            Ok(all_nodes) => {
+                // 获取用户的独享节点
+                let user_node_ids = match crate::entity::UserNode::find()
+                    .filter(crate::entity::user_node::Column::UserId.eq(auth_user.id))
+                    .all(db)
+                    .await
+                {
+                    Ok(user_nodes) => user_nodes.into_iter().map(|un| un.node_id).collect::<Vec<_>>(),
+                    Err(_) => vec![],
+                };
+
+                // 过滤出共享节点 + 用户的独享节点
+                let available_nodes: Vec<node::Model> = all_nodes
+                    .into_iter()
+                    .filter(|node| node.node_type == "shared" || user_node_ids.contains(&node.id))
+                    .collect();
+
+                (StatusCode::OK, ApiResponse::success(available_nodes))
+            }
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ApiResponse::<Vec<node::Model>>::error(format!("Failed to list nodes: {}", e)),
+            ),
+        }
     }
 }
 
@@ -102,6 +133,7 @@ pub async fn create_node(
         tunnel_port: Set(req.tunnel_port.unwrap_or(7000)),
         tunnel_protocol: Set(req.tunnel_protocol.unwrap_or_else(|| "quic".to_string())),
         kcp_config: Set(req.kcp_config),
+        node_type: Set(req.node_type.unwrap_or_else(|| "shared".to_string())),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -203,6 +235,9 @@ pub async fn update_node(
     if req.kcp_config.is_some() {
         active.kcp_config = Set(req.kcp_config);
     }
+    if let Some(node_type) = req.node_type {
+        active.node_type = Set(node_type);
+    }
     active.updated_at = Set(Utc::now().naive_utc());
 
     match active.update(db).await {
@@ -231,17 +266,17 @@ pub async fn delete_node(
 
     let db = get_connection().await;
 
-    // 检查是否有关联客户端
-    let client_count = Client::find()
-        .filter(client::Column::NodeId.eq(id))
+    // 检查是否有关联代理（proxy 仍然可以指定节点）
+    let proxy_count = crate::entity::Proxy::find()
+        .filter(crate::entity::proxy::Column::NodeId.eq(id))
         .count(db)
         .await
         .unwrap_or(0);
 
-    if client_count > 0 {
+    if proxy_count > 0 {
         return (
             StatusCode::BAD_REQUEST,
-            ApiResponse::<&str>::error(format!("无法删除节点：仍有 {} 个客户端关联到此节点", client_count)),
+            ApiResponse::<&str>::error(format!("无法删除节点：仍有 {} 个代理关联到此节点", proxy_count)),
         );
     }
 

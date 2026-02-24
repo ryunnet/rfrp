@@ -18,6 +18,9 @@ mod m20250214_000003_create_user_node;
 mod m20250215_000001_remove_unused_configs;
 mod m20250224_000001_add_traffic_quota;
 mod m20250224_000002_add_client_user_id;
+mod m20250224_000003_remove_client_node_id;
+mod m20250224_000004_remove_traffic_limits;
+mod m20260224_000001_add_node_type;
 
 pub struct Migrator;
 
@@ -39,6 +42,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20250215_000001_remove_unused_configs::Migration),
             Box::new(m20250224_000001_add_traffic_quota::Migration),
             Box::new(m20250224_000002_add_client_user_id::Migration),
+            Box::new(m20250224_000003_remove_client_node_id::Migration),
+            Box::new(m20250224_000004_remove_traffic_limits::Migration),
+            Box::new(m20260224_000001_add_node_type::Migration),
         ]
     }
 }

@@ -25,7 +25,7 @@ pub async fn run_server_controller_mode(
 ) -> Result<()> {
     // 初始化 tracing 日志系统
     let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+        .unwrap_or_else(|_| EnvFilter::new("info,sqlx::query=warn"));
 
     tracing_subscriber::registry()
         .with(env_filter)

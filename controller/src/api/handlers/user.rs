@@ -28,10 +28,6 @@ pub struct UserWithNodeCount {
     pub total_bytes_sent: i64,
     #[serde(rename = "totalBytesReceived")]
     pub total_bytes_received: i64,
-    #[serde(rename = "uploadLimitGb")]
-    pub upload_limit_gb: Option<f64>,
-    #[serde(rename = "downloadLimitGb")]
-    pub download_limit_gb: Option<f64>,
     #[serde(rename = "trafficQuotaGb")]
     pub traffic_quota_gb: Option<f64>,
     #[serde(rename = "remainingQuotaGb")]
@@ -49,8 +45,6 @@ pub struct CreateUserRequest {
     pub username: String,
     pub password: Option<String>,
     pub is_admin: Option<bool>,
-    pub upload_limit_gb: Option<f64>,
-    pub download_limit_gb: Option<f64>,
     pub traffic_quota_gb: Option<f64>,
     pub traffic_reset_cycle: Option<String>,
 }
@@ -60,8 +54,6 @@ pub struct UpdateUserRequest {
     pub username: Option<String>,
     pub password: Option<String>,
     pub is_admin: Option<bool>,
-    pub upload_limit_gb: Option<f64>,
-    pub download_limit_gb: Option<f64>,
     pub traffic_quota_gb: Option<f64>,
     pub traffic_reset_cycle: Option<String>,
     pub is_traffic_exceeded: Option<bool>,
@@ -100,8 +92,6 @@ pub async fn list_users(Extension(auth_user_opt): Extension<Option<AuthUser>>) -
                     node_count,
                     total_bytes_sent: user.total_bytes_sent,
                     total_bytes_received: user.total_bytes_received,
-                    upload_limit_gb: user.upload_limit_gb,
-                    download_limit_gb: user.download_limit_gb,
                     traffic_quota_gb: user.traffic_quota_gb,
                     remaining_quota_gb,
                     traffic_reset_cycle: user.traffic_reset_cycle,
@@ -171,8 +161,6 @@ pub async fn create_user(
         is_admin: Set(req.is_admin.unwrap_or(false)),
         total_bytes_sent: Set(0),
         total_bytes_received: Set(0),
-        upload_limit_gb: Set(req.upload_limit_gb),
-        download_limit_gb: Set(req.download_limit_gb),
         traffic_quota_gb: Set(req.traffic_quota_gb),
         traffic_reset_cycle: Set(req.traffic_reset_cycle.unwrap_or_else(|| "none".to_string())),
         last_reset_at: Set(None),
@@ -292,12 +280,6 @@ pub async fn update_user(
     }
 
     // Update traffic limits if provided
-    if let Some(upload_limit) = req.upload_limit_gb {
-        user.upload_limit_gb = Set(Some(upload_limit));
-    }
-    if let Some(download_limit) = req.download_limit_gb {
-        user.download_limit_gb = Set(Some(download_limit));
-    }
     if req.traffic_quota_gb.is_some() || req.traffic_quota_gb.is_none() {
         user.traffic_quota_gb = Set(req.traffic_quota_gb);
     }
@@ -406,9 +388,9 @@ pub async fn assign_node_to_user(
         }
     };
 
-    // Check if node exists
-    match Node::find_by_id(node_id).one(db).await {
-        Ok(Some(_)) => {}
+    // Check if node exists and is dedicated
+    let node = match Node::find_by_id(node_id).one(db).await {
+        Ok(Some(n)) => n,
         Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
@@ -422,6 +404,14 @@ pub async fn assign_node_to_user(
             )
         }
     };
+
+    // Only dedicated nodes can be assigned to users
+    if node.node_type == "shared" {
+        return (
+            StatusCode::BAD_REQUEST,
+            ApiResponse::<&str>::error("共享节点无需分配，所有用户均可使用".to_string()),
+        );
+    }
 
     // Check if already assigned
     match UserNode::find()

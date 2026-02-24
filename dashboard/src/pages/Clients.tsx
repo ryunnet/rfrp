@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { clientService, nodeService, userService } from '../lib/services';
-import type { Client, LogEntry, Node } from '../lib/types';
+import { clientService, userService } from '../lib/services';
+import type { Client, LogEntry } from '../lib/types';
 import { formatBytes, formatDate, copyToClipboard } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -12,8 +12,6 @@ export default function Clients() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newClientName, setNewClientName] = useState('');
-  const [newClientNodeId, setNewClientNodeId] = useState<number | undefined>(undefined);
-  const [nodes, setNodes] = useState<Node[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   // 日志相关状态
@@ -21,16 +19,6 @@ export default function Clients() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
-
-  // 流量限制编辑相关状态
-  const [showTrafficModal, setShowTrafficModal] = useState(false);
-  const [trafficFormData, setTrafficFormData] = useState({
-    uploadLimitGb: '' as string,
-    downloadLimitGb: '' as string,
-    trafficQuotaGb: '' as string,
-    trafficResetCycle: 'none',
-  });
-  const [trafficSaving, setTrafficSaving] = useState(false);
 
   // 配额分配相关状态
   const [showQuotaModal, setShowQuotaModal] = useState(false);
@@ -40,7 +28,6 @@ export default function Clients() {
 
   useEffect(() => {
     loadClients();
-    loadNodes();
     loadUserQuotaInfo();
   }, []);
 
@@ -56,17 +43,6 @@ export default function Clients() {
       showToast('加载失败', 'error');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadNodes = async () => {
-    try {
-      const response = await nodeService.getNodes();
-      if (response.success && response.data) {
-        setNodes(response.data);
-      }
-    } catch (error) {
-      // 非管理员可能无权限，静默处理
     }
   };
 
@@ -91,11 +67,10 @@ export default function Clients() {
     }
 
     try {
-      const response = await clientService.createClient({ name: newClientName, node_id: newClientNodeId });
+      const response = await clientService.createClient({ name: newClientName });
       if (response.success) {
         showToast('客户端创建成功', 'success');
         setNewClientName('');
-        setNewClientNodeId(undefined);
         setShowCreateModal(false);
         loadClients();
       } else {
@@ -161,51 +136,12 @@ export default function Clients() {
     showToast(success ? 'Token 已复制' : '复制失败', success ? 'success' : 'error');
   };
 
-  const handleEditTraffic = (client: Client) => {
-    setSelectedClient(client);
-    setTrafficFormData({
-      uploadLimitGb: client.uploadLimitGb !== null ? String(client.uploadLimitGb) : '',
-      downloadLimitGb: client.downloadLimitGb !== null ? String(client.downloadLimitGb) : '',
-      trafficQuotaGb: client.trafficQuotaGb !== null ? String(client.trafficQuotaGb) : '',
-      trafficResetCycle: client.trafficResetCycle || 'none',
-    });
-    setShowTrafficModal(true);
-  };
-
   const handleAllocateQuota = (client: Client) => {
     setSelectedClient(client);
     setQuotaFormData({
       quotaGb: client.trafficQuotaGb !== null ? String(client.trafficQuotaGb) : '',
     });
     setShowQuotaModal(true);
-  };
-
-  const handleSaveTraffic = async () => {
-    if (!selectedClient) return;
-
-    setTrafficSaving(true);
-    try {
-      const response = await clientService.updateClient(selectedClient.id, {
-        upload_limit_gb: trafficFormData.uploadLimitGb ? parseFloat(trafficFormData.uploadLimitGb) : null,
-        download_limit_gb: trafficFormData.downloadLimitGb ? parseFloat(trafficFormData.downloadLimitGb) : null,
-        traffic_quota_gb: trafficFormData.trafficQuotaGb ? parseFloat(trafficFormData.trafficQuotaGb) : null,
-        traffic_reset_cycle: trafficFormData.trafficResetCycle,
-      });
-
-      if (response.success) {
-        showToast('流量限制设置成功', 'success');
-        setShowTrafficModal(false);
-        setSelectedClient(null);
-        loadClients();
-      } else {
-        showToast(response.message || '设置失败', 'error');
-      }
-    } catch (error) {
-      console.error('设置流量限制失败:', error);
-      showToast('设置失败', 'error');
-    } finally {
-      setTrafficSaving(false);
-    }
   };
 
   const handleSaveQuota = async () => {
@@ -323,9 +259,6 @@ export default function Clients() {
                   名称
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  所属节点
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Token
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -385,15 +318,6 @@ export default function Clients() {
                         </div>
                         <span className="text-sm font-semibold text-gray-900">{client.name}</span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {client.nodeId ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-700">
-                          {nodes.find(n => n.id === client.nodeId)?.name || `节点 #${client.nodeId}`}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">未分配</span>
-                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
@@ -461,30 +385,9 @@ export default function Clients() {
                             </div>
                           </>
                         ) : (
-                          <>
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-blue-500">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
-                              </svg>
-                              <span className="text-gray-600">
-                                {client.uploadLimitGb !== null ? `${client.uploadLimitGb} GB` : '无限制'}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-green-500">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
-                              </svg>
-                              <span className="text-gray-600">
-                                {client.downloadLimitGb !== null ? `${client.downloadLimitGb} GB` : '无限制'}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-400">
-                              {client.trafficResetCycle === 'none' ? '不重置' :
-                               client.trafficResetCycle === 'daily' ? '每日重置' :
-                               client.trafficResetCycle === 'weekly' ? '每周重置' :
-                               client.trafficResetCycle === 'monthly' ? '每月重置' : client.trafficResetCycle}
-                            </div>
-                          </>
+                          <div className="text-xs text-gray-400">
+                            无配额限制
+                          </div>
                         )}
                       </div>
                     </td>
@@ -502,16 +405,6 @@ export default function Clients() {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
                           </svg>
                           配额
-                        </button>
-                        <button
-                          onClick={() => handleEditTraffic(client)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title="设置流量限制"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-                          </svg>
-                          流量
                         </button>
                         {client.isTrafficExceeded && (
                           <button
@@ -588,30 +481,12 @@ export default function Clients() {
                     onKeyDown={(e) => e.key === 'Enter' && handleCreateClient()}
                   />
                 </div>
-                {nodes.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">所属节点</label>
-                    <select
-                      value={newClientNodeId ?? ''}
-                      onChange={(e) => setNewClientNodeId(e.target.value ? Number(e.target.value) : undefined)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
-                    >
-                      <option value="">不指定节点</option>
-                      {nodes.map((node) => (
-                        <option key={node.id} value={node.id}>
-                          {node.name}{node.region ? ` (${node.region})` : ''}{node.isOnline ? '' : ' [离线]'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
               </div>
               <div className="mt-6 flex gap-3">
                 <button
                   onClick={() => {
                     setShowCreateModal(false);
                     setNewClientName('');
-                    setNewClientNodeId(undefined);
                   }}
                   className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
                 >
@@ -713,85 +588,6 @@ export default function Clients() {
               >
                 关闭
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 流量限制设置模态框 */}
-      {showTrafficModal && selectedClient && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">流量限制设置</h3>
-                  <p className="text-sm text-gray-500">{selectedClient.name}</p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">上传限制 (GB)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={trafficFormData.uploadLimitGb}
-                    onChange={(e) => setTrafficFormData({ ...trafficFormData, uploadLimitGb: e.target.value })}
-                    placeholder="留空表示无限制"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">下载限制 (GB)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={trafficFormData.downloadLimitGb}
-                    onChange={(e) => setTrafficFormData({ ...trafficFormData, downloadLimitGb: e.target.value })}
-                    placeholder="留空表示无限制"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">流量重置周期</label>
-                  <select
-                    value={trafficFormData.trafficResetCycle}
-                    onChange={(e) => setTrafficFormData({ ...trafficFormData, trafficResetCycle: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
-                  >
-                    <option value="none">不重置</option>
-                    <option value="daily">每日重置</option>
-                    <option value="weekly">每周重置</option>
-                    <option value="monthly">每月重置</option>
-                  </select>
-                </div>
-              </div>
-              <div className="mt-6 flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowTrafficModal(false);
-                    setSelectedClient(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
-                  disabled={trafficSaving}
-                >
-                  取消
-                </button>
-                <button
-                  onClick={handleSaveTraffic}
-                  disabled={trafficSaving}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 transition-all disabled:opacity-50"
-                >
-                  {trafficSaving ? '保存中...' : '保存'}
-                </button>
-              </div>
             </div>
           </div>
         </div>

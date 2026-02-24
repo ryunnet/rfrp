@@ -21,22 +21,16 @@ pub struct Model {
     pub tunnel_protocol: String,
     #[serde(rename = "kcpConfig")]
     pub kcp_config: Option<String>,
+    #[serde(rename = "nodeType")]
+    pub node_type: String,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::client::Entity")]
-    Clients,
     #[sea_orm(has_many = "super::user_node::Entity")]
     UserNodes,
-}
-
-impl Related<super::client::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Clients.def()
-    }
 }
 
 impl Related<super::user_node::Entity> for Entity {

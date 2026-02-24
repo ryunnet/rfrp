@@ -85,7 +85,7 @@ pub async fn check_user_traffic_limit(user_id: i64, db: &DatabaseConnection) -> 
         return Ok((false, String::new()));
     }
 
-    // 优先检查配额模式
+    // 检查配额模式
     if let Some(quota_gb) = user.traffic_quota_gb {
         let total_used = user.total_bytes_sent + user.total_bytes_received;
         let quota_bytes = gb_to_bytes(quota_gb);
@@ -95,32 +95,6 @@ pub async fn check_user_traffic_limit(user_id: i64, db: &DatabaseConnection) -> 
                 "流量配额已用尽: {:.2} GB / {:.2} GB",
                 bytes_to_gb(total_used),
                 quota_gb
-            );
-            return Ok((true, reason));
-        }
-        return Ok((false, String::new()));
-    }
-
-    // 兼容旧的上传/下载分开限制模式
-    if let Some(upload_limit_gb) = user.upload_limit_gb {
-        let upload_limit_bytes = gb_to_bytes(upload_limit_gb);
-        if user.total_bytes_sent >= upload_limit_bytes {
-            let reason = format!(
-                "上传流量超限: {:.2} GB / {:.2} GB",
-                bytes_to_gb(user.total_bytes_sent),
-                upload_limit_gb
-            );
-            return Ok((true, reason));
-        }
-    }
-
-    if let Some(download_limit_gb) = user.download_limit_gb {
-        let download_limit_bytes = gb_to_bytes(download_limit_gb);
-        if user.total_bytes_received >= download_limit_bytes {
-            let reason = format!(
-                "下载流量超限: {:.2} GB / {:.2} GB",
-                bytes_to_gb(user.total_bytes_received),
-                download_limit_gb
             );
             return Ok((true, reason));
         }
@@ -185,7 +159,7 @@ pub async fn check_client_traffic_limit(client_id: i64, db: &DatabaseConnection)
         return Ok((false, String::new()));
     }
 
-    // 优先检查配额模式
+    // 检查配额模式
     if let Some(quota_gb) = client_model.traffic_quota_gb {
         let total_used = client_model.total_bytes_sent + client_model.total_bytes_received;
         let quota_bytes = gb_to_bytes(quota_gb);
@@ -195,32 +169,6 @@ pub async fn check_client_traffic_limit(client_id: i64, db: &DatabaseConnection)
                 "流量配额已用尽: {:.2} GB / {:.2} GB",
                 bytes_to_gb(total_used),
                 quota_gb
-            );
-            return Ok((true, reason));
-        }
-        return Ok((false, String::new()));
-    }
-
-    // 兼容旧的上传/下载分开限制模式
-    if let Some(upload_limit_gb) = client_model.upload_limit_gb {
-        let upload_limit_bytes = gb_to_bytes(upload_limit_gb);
-        if client_model.total_bytes_sent >= upload_limit_bytes {
-            let reason = format!(
-                "上传流量超限: {:.2} GB / {:.2} GB",
-                bytes_to_gb(client_model.total_bytes_sent),
-                upload_limit_gb
-            );
-            return Ok((true, reason));
-        }
-    }
-
-    if let Some(download_limit_gb) = client_model.download_limit_gb {
-        let download_limit_bytes = gb_to_bytes(download_limit_gb);
-        if client_model.total_bytes_received >= download_limit_bytes {
-            let reason = format!(
-                "下载流量超限: {:.2} GB / {:.2} GB",
-                bytes_to_gb(client_model.total_bytes_received),
-                download_limit_gb
             );
             return Ok((true, reason));
         }

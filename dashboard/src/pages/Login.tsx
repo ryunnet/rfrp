@@ -29,8 +29,6 @@ export default function Login() {
           updated_at: '',
           totalBytesSent: 0,
           totalBytesReceived: 0,
-          uploadLimitGb: null,
-          downloadLimitGb: null,
           trafficQuotaGb: null,
           remainingQuotaGb: null,
           trafficResetCycle: 'none',

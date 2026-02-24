@@ -100,7 +100,7 @@ export const clientService = {
     return response.data;
   },
 
-  async createClient(data: { name: string; token?: string; node_id?: number }): Promise<ApiResponse<Client>> {
+  async createClient(data: { name: string; token?: string }): Promise<ApiResponse<Client>> {
     const response = await api.post<ApiResponse<Client>>('/clients', data);
     return response.data;
   },
@@ -254,6 +254,7 @@ export const nodeService = {
     tunnelPort?: number;
     tunnelProtocol?: string;
     kcpConfig?: string;
+    nodeType?: string;
   }): Promise<ApiResponse<Node>> {
     const response = await api.post<ApiResponse<Node>>('/nodes', data);
     return response.data;
@@ -271,6 +272,7 @@ export const nodeService = {
       tunnelPort?: number;
       tunnelProtocol?: string;
       kcpConfig?: string;
+      nodeType?: string;
     }
   ): Promise<ApiResponse<Node>> {
     const response = await api.put<ApiResponse<Node>>(`/nodes/${id}`, data);

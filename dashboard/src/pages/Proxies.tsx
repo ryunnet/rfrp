@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { proxyService, clientService, nodeService } from '../lib/services';
+import { proxyService, clientService, nodeService, userService } from '../lib/services';
 import type { Proxy, Client, Node } from '../lib/types';
 import { formatBytes } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
@@ -11,10 +11,16 @@ export default function Proxies() {
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [nodes, setNodes] = useState<Node[]>([]);
+  const [availableNodes, setAvailableNodes] = useState<Node[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProxy, setEditingProxy] = useState<Proxy | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
+  const [nodeSearchQuery, setNodeSearchQuery] = useState('');
+  const [nodeTypeFilter, setNodeTypeFilter] = useState<'all' | 'shared' | 'dedicated'>('all');
+  const [nodeStatusFilter, setNodeStatusFilter] = useState<'all' | 'online' | 'offline'>('all');
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [clientStatusFilter, setClientStatusFilter] = useState<'all' | 'online' | 'offline'>('all');
   const [formData, setFormData] = useState({
     client_id: '',
     node_id: '',
@@ -30,6 +36,20 @@ export default function Proxies() {
     loadData();
   }, []);
 
+  // 控制模态框打开时禁用背景滚动
+  useEffect(() => {
+    if (showCreateModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    // 清理函数
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showCreateModal]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -40,7 +60,33 @@ export default function Proxies() {
       ]);
       if (proxiesRes.success && proxiesRes.data) setProxies(proxiesRes.data);
       if (clientsRes.success && clientsRes.data) setClients(clientsRes.data);
-      if (nodesRes.success && nodesRes.data) setNodes(nodesRes.data);
+      if (nodesRes.success && nodesRes.data) {
+        setNodes(nodesRes.data);
+
+        // 获取当前用户信息
+        const authUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+        if (authUser.is_admin) {
+          // 管理员可以看到所有节点
+          setAvailableNodes(nodesRes.data);
+        } else if (authUser.id) {
+          // 普通用户获取自己的节点列表
+          const userNodesRes = await userService.getUserNodes(authUser.id);
+          if (userNodesRes.success && userNodesRes.data) {
+            // 过滤出共享节点 + 用户的独享节点
+            const available = nodesRes.data.filter((node: Node) =>
+              node.nodeType === 'shared' || userNodesRes.data!.some((un: Node) => un.id === node.id)
+            );
+            setAvailableNodes(available);
+          } else {
+            // 如果获取失败，只显示共享节点
+            setAvailableNodes(nodesRes.data.filter((node: Node) => node.nodeType === 'shared'));
+          }
+        } else {
+          // 未登录，只显示共享节点
+          setAvailableNodes(nodesRes.data.filter((node: Node) => node.nodeType === 'shared'));
+        }
+      }
     } catch (error) {
       console.error('加载数据失败:', error);
       showToast('加载失败', 'error');
@@ -181,6 +227,54 @@ export default function Proxies() {
     if (!nodeId) return '-';
     const node = nodes.find((n) => n.id === nodeId);
     return node?.name || String(nodeId);
+  };
+
+  // 筛选节点
+  const getFilteredNodes = () => {
+    return availableNodes.filter((node) => {
+      // 搜索过滤
+      if (nodeSearchQuery) {
+        const query = nodeSearchQuery.toLowerCase();
+        const matchName = node.name.toLowerCase().includes(query);
+        const matchRegion = node.region?.toLowerCase().includes(query);
+        if (!matchName && !matchRegion) return false;
+      }
+
+      // 类型过滤
+      if (nodeTypeFilter !== 'all') {
+        if (nodeTypeFilter === 'shared' && node.nodeType !== 'shared') return false;
+        if (nodeTypeFilter === 'dedicated' && node.nodeType !== 'dedicated') return false;
+      }
+
+      // 状态过滤
+      if (nodeStatusFilter !== 'all') {
+        if (nodeStatusFilter === 'online' && !node.isOnline) return false;
+        if (nodeStatusFilter === 'offline' && node.isOnline) return false;
+      }
+
+      return true;
+    });
+  };
+
+  // 筛选客户端
+  const getFilteredClients = () => {
+    return clients.filter((client) => {
+      // 搜索过滤
+      if (clientSearchQuery) {
+        const query = clientSearchQuery.toLowerCase();
+        const matchName = client.name.toLowerCase().includes(query);
+        const matchId = client.id.toString().includes(query);
+        if (!matchName && !matchId) return false;
+      }
+
+      // 状态过滤
+      if (clientStatusFilter !== 'all') {
+        if (clientStatusFilter === 'online' && !client.is_online) return false;
+        if (clientStatusFilter === 'offline' && client.is_online) return false;
+      }
+
+      return true;
+    });
   };
 
   return (
@@ -358,56 +452,266 @@ export default function Proxies() {
 
       {/* 创建/编辑代理模态框 */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 transform transition-all">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-start justify-center z-50 p-4">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8 transform transition-all flex flex-col max-h-[calc(100vh-4rem)]">
+            {/* 固定头部 */}
+            <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">
+                      {editingProxy ? '编辑代理' : '创建新代理'}
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      {editingProxy ? '修改代理配置信息' : '添加一个新的端口映射规则'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setEditingProxy(null);
+                    resetForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">
-                    {editingProxy ? '编辑代理' : '创建新代理'}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    {editingProxy ? '修改代理配置信息' : '添加一个新的端口映射规则'}
-                  </p>
-                </div>
+                </button>
               </div>
+            </div>
+
+            {/* 可滚动内容区域 */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
               <div className="space-y-4">
+                {/* 客户端选择 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">客户端 *</label>
-                  <select
-                    value={formData.client_id}
-                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
-                    disabled={!!editingProxy}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    <option value="">选择客户端</option>
-                    {clients.map((client) => (
-                      <option key={client.id} value={client.id.toString()}>
-                        {client.name}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">选择客户端 *</label>
+                  {editingProxy ? (
+                    <div className="px-4 py-3 bg-gray-100 rounded-xl text-gray-600 text-sm">
+                      {getClientName(formData.client_id)} (编辑时不可更改)
+                    </div>
+                  ) : (
+                    <>
+                      {/* 搜索和筛选 */}
+                      {clients.length > 3 && (
+                        <div className="mb-3 space-y-2">
+                          {/* 搜索框 */}
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={clientSearchQuery}
+                              onChange={(e) => setClientSearchQuery(e.target.value)}
+                              placeholder="搜索客户端名称或ID..."
+                              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                            />
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 absolute left-3 top-2.5 text-gray-400">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                            </svg>
+                          </div>
+
+                          {/* 状态筛选器 */}
+                          <select
+                            value={clientStatusFilter}
+                            onChange={(e) => setClientStatusFilter(e.target.value as 'all' | 'online' | 'offline')}
+                            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="all">全部状态</option>
+                            <option value="online">仅在线</option>
+                            <option value="offline">仅离线</option>
+                          </select>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
+                        {clients.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500 text-sm">
+                            暂无可用客户端，请先创建客户端
+                          </div>
+                        ) : getFilteredClients().length === 0 ? (
+                          <div className="text-center py-8 text-gray-500 text-sm">
+                            没有符合条件的客户端
+                          </div>
+                        ) : (
+                          getFilteredClients().map((client) => (
+                          <button
+                            key={client.id}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, client_id: client.id.toString() })}
+                            className={`relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                              formData.client_id === client.id.toString()
+                                ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-semibold text-sm shadow-sm ${
+                              formData.client_id === client.id.toString()
+                                ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
+                                : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                            }`}>
+                              {client.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900 text-sm truncate">{client.name}</span>
+                                {client.is_online && (
+                                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
+                                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                                    在线
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5">ID: {client.id}</p>
+                            </div>
+                            {formData.client_id === client.id.toString() && (
+                              <div className="flex-shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 text-blue-600">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </div>
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                    </>
+                  )}
                 </div>
+
+                {/* 节点选择 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">节点 *</label>
-                  <select
-                    value={formData.node_id}
-                    onChange={(e) => setFormData({ ...formData, node_id: e.target.value })}
-                    disabled={!!editingProxy}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    <option value="">选择节点</option>
-                    {nodes.map((node) => (
-                      <option key={node.id} value={node.id.toString()}>
-                        {node.name}{node.region ? ` (${node.region})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">选择节点 *</label>
+                  {editingProxy ? (
+                    <div className="px-4 py-3 bg-gray-100 rounded-xl text-gray-600 text-sm">
+                      {getNodeName(formData.node_id ? parseInt(formData.node_id) : null)} (编辑时不可更改)
+                    </div>
+                  ) : (
+                    <>
+                      {/* 搜索和筛选 */}
+                      {availableNodes.length > 3 && (
+                        <div className="mb-3 space-y-2">
+                          {/* 搜索框 */}
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={nodeSearchQuery}
+                              onChange={(e) => setNodeSearchQuery(e.target.value)}
+                              placeholder="搜索节点名称或地区..."
+                              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                            />
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 absolute left-3 top-2.5 text-gray-400">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                            </svg>
+                          </div>
+
+                          {/* 筛选器 */}
+                          <div className="flex gap-2">
+                            <select
+                              value={nodeTypeFilter}
+                              onChange={(e) => setNodeTypeFilter(e.target.value as 'all' | 'shared' | 'dedicated')}
+                              className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            >
+                              <option value="all">全部类型</option>
+                              <option value="shared">共享节点</option>
+                              <option value="dedicated">独享节点</option>
+                            </select>
+                            <select
+                              value={nodeStatusFilter}
+                              onChange={(e) => setNodeStatusFilter(e.target.value as 'all' | 'online' | 'offline')}
+                              className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            >
+                              <option value="all">全部状态</option>
+                              <option value="online">仅在线</option>
+                              <option value="offline">仅离线</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
+                        {availableNodes.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500 text-sm">
+                            暂无可用节点
+                          </div>
+                        ) : getFilteredNodes().length === 0 ? (
+                          <div className="text-center py-8 text-gray-500 text-sm">
+                            没有符合条件的节点
+                          </div>
+                        ) : (
+                          getFilteredNodes().map((node) => (
+                            <button
+                              key={node.id}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, node_id: node.id.toString() })}
+                              className={`relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                                formData.node_id === node.id.toString()
+                                  ? 'border-indigo-500 bg-indigo-50 shadow-sm'
+                                  : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-semibold text-sm shadow-sm ${
+                                formData.node_id === node.id.toString()
+                                  ? 'bg-gradient-to-br from-indigo-500 to-purple-600'
+                                  : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                              }`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
+                                </svg>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold text-gray-900 text-sm truncate">{node.name}</span>
+                                  {node.isOnline && (
+                                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
+                                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                                      在线
+                                    </span>
+                                  )}
+                                  <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${
+                                    node.nodeType === 'shared'
+                                      ? 'bg-blue-100 text-blue-700'
+                                      : 'bg-purple-100 text-purple-700'
+                                  }`}>
+                                    {node.nodeType === 'shared' ? '共享' : '独享'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  {node.region && (
+                                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                      </svg>
+                                      {node.region}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {formData.node_id === node.id.toString() && (
+                                <div className="flex-shrink-0">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 text-indigo-600">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                </div>
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2 flex items-start gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 mt-0.5 flex-shrink-0">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                        </svg>
+                        <span>共享节点对所有用户可用，独享节点仅限分配的用户使用</span>
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">代理名称 *</label>
@@ -478,13 +782,18 @@ export default function Proxies() {
                   </div>
                 )}
               </div>
-              <div className="mt-6 flex gap-3">
+            </div>
+
+            {/* 固定底部按钮 */}
+            <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+              <div className="flex gap-3">
                 <button
                   onClick={() => {
                     setShowCreateModal(false);
+                    setEditingProxy(null);
                     resetForm();
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
                 >
                   取消
                 </button>

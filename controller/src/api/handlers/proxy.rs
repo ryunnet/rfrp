@@ -63,66 +63,42 @@ pub async fn list_proxies(Extension(auth_user_opt): Extension<Option<AuthUser>>)
             }
         }
     } else {
-        // Regular users can only see proxies for clients on their assigned nodes
-        // First get the user's assigned node IDs
-        let user_node_ids = match crate::entity::UserNode::find()
-            .filter(crate::entity::user_node::Column::UserId.eq(auth_user.id))
+        // Regular users can only see proxies for their own clients
+        let client_ids = match crate::entity::Client::find()
+            .filter(crate::entity::client::Column::UserId.eq(auth_user.id))
             .all(db)
             .await
         {
-            Ok(user_nodes) => user_nodes.into_iter().map(|un| un.node_id).collect::<Vec<_>>(),
+            Ok(clients) => clients.into_iter().map(|c| c.id.to_string()).collect::<Vec<_>>(),
             Err(e) => {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ApiResponse::<Vec<crate::entity::proxy::Model>>::error(format!(
-                        "Failed to get user nodes: {}",
+                        "Failed to get clients: {}",
                         e
                     )),
                 )
             }
         };
 
-        // If user has no assigned nodes, return empty list
-        if user_node_ids.is_empty() {
+        if client_ids.is_empty() {
             vec![]
         } else {
-            // Get client IDs for those nodes
-            let client_ids = match crate::entity::Client::find()
-                .filter(crate::entity::client::Column::NodeId.is_in(user_node_ids))
+            // Get proxies for those clients
+            match Proxy::find()
+                .filter(crate::entity::proxy::Column::ClientId.is_in(client_ids))
                 .all(db)
                 .await
             {
-                Ok(clients) => clients.into_iter().map(|c| c.id.to_string()).collect::<Vec<_>>(),
+                Ok(proxies) => proxies,
                 Err(e) => {
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         ApiResponse::<Vec<crate::entity::proxy::Model>>::error(format!(
-                            "Failed to get clients: {}",
+                            "Failed to list proxies: {}",
                             e
                         )),
                     )
-                }
-            };
-
-            if client_ids.is_empty() {
-                vec![]
-            } else {
-                // Get proxies for those clients
-                match Proxy::find()
-                    .filter(crate::entity::proxy::Column::ClientId.is_in(client_ids))
-                    .all(db)
-                    .await
-                {
-                    Ok(proxies) => proxies,
-                    Err(e) => {
-                        return (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            ApiResponse::<Vec<crate::entity::proxy::Model>>::error(format!(
-                                "Failed to list proxies: {}",
-                                e
-                            )),
-                        )
-                    }
                 }
             }
         }
@@ -165,35 +141,8 @@ pub async fn list_proxies_by_client(
             }
         };
 
-        // Check if user has access to the client's node
-        if let Some(node_id) = client.node_id {
-            match crate::entity::UserNode::find()
-                .filter(crate::entity::user_node::Column::UserId.eq(auth_user.id))
-                .filter(crate::entity::user_node::Column::NodeId.eq(node_id))
-                .one(db)
-                .await
-            {
-                Ok(Some(_)) => {}
-                Ok(None) => {
-                    return (
-                        StatusCode::FORBIDDEN,
-                        ApiResponse::<Vec<crate::entity::proxy::Model>>::error(
-                            "Access denied to this client".to_string(),
-                        ),
-                    )
-                }
-                Err(e) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        ApiResponse::<Vec<crate::entity::proxy::Model>>::error(format!(
-                            "Failed to check access: {}",
-                            e
-                        )),
-                    )
-                }
-            }
-        } else {
-            // Client has no node assigned, deny access for non-admin
+        // Check if user owns the client
+        if client.user_id != Some(auth_user.id) {
             return (
                 StatusCode::FORBIDDEN,
                 ApiResponse::<Vec<crate::entity::proxy::Model>>::error(
@@ -220,10 +169,95 @@ pub async fn list_proxies_by_client(
 }
 
 pub async fn create_proxy(
-    Extension(_auth_user): Extension<Option<AuthUser>>,
+    Extension(auth_user_opt): Extension<Option<AuthUser>>,
     Extension(app_state): Extension<AppState>,
     Json(req): Json<CreateProxyRequest>,
 ) -> impl IntoResponse {
+    let auth_user = match auth_user_opt {
+        Some(user) => user,
+        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<crate::entity::proxy::Model>::error("未认证".to_string())),
+    };
+
+    let db = get_connection().await;
+
+    // 验证节点权限
+    if let Some(node_id) = req.node_id {
+        // 获取节点信息
+        let node = match crate::entity::Node::find_by_id(node_id).one(db).await {
+            Ok(Some(n)) => n,
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    ApiResponse::<crate::entity::proxy::Model>::error("节点不存在".to_string()),
+                )
+            }
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    ApiResponse::<crate::entity::proxy::Model>::error(format!("查询节点失败: {}", e)),
+                )
+            }
+        };
+
+        // 如果是独享节点，需要检查用户是否有权限
+        if node.node_type == "dedicated" && !auth_user.is_admin {
+            // 获取客户端所属用户
+            let client = match crate::entity::Client::find()
+                .filter(crate::entity::client::Column::Id.eq(req.client_id.parse::<i64>().unwrap_or(0)))
+                .one(db)
+                .await
+            {
+                Ok(Some(c)) => c,
+                Ok(None) => {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        ApiResponse::<crate::entity::proxy::Model>::error("客户端不存在".to_string()),
+                    )
+                }
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        ApiResponse::<crate::entity::proxy::Model>::error(format!("查询客户端失败: {}", e)),
+                    )
+                }
+            };
+
+            // 检查客户端是否属于当前用户
+            if client.user_id != Some(auth_user.id) {
+                return (
+                    StatusCode::FORBIDDEN,
+                    ApiResponse::<crate::entity::proxy::Model>::error("无权访问此客户端".to_string()),
+                );
+            }
+
+            // 检查节点是否分配给了该用户
+            let user_node = crate::entity::UserNode::find()
+                .filter(crate::entity::user_node::Column::UserId.eq(auth_user.id))
+                .filter(crate::entity::user_node::Column::NodeId.eq(node_id))
+                .one(db)
+                .await;
+
+            match user_node {
+                Ok(Some(_)) => {
+                    // 用户有权限使用此独享节点
+                }
+                Ok(None) => {
+                    return (
+                        StatusCode::FORBIDDEN,
+                        ApiResponse::<crate::entity::proxy::Model>::error("此独享节点未分配给您，无法使用".to_string()),
+                    );
+                }
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        ApiResponse::<crate::entity::proxy::Model>::error(format!("检查节点权限失败: {}", e)),
+                    );
+                }
+            }
+        }
+        // 共享节点对所有用户可用，无需额外检查
+    }
+
     let now = chrono::Utc::now().naive_utc();
 
     let new_proxy = crate::entity::proxy::ActiveModel {

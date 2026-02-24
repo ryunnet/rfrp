@@ -61,18 +61,41 @@ pub async fn get_client_connect_config(
         );
     }
 
-    // 3. 检查是否分配了节点
-    let node_id = match client_model.node_id {
-        Some(id) => id,
-        None => {
+    // 3. 查找客户端的第一个启用的代理，并获取其节点配置
+    let proxies = match crate::entity::Proxy::find()
+        .filter(crate::entity::proxy::Column::ClientId.eq(client_model.id.to_string()))
+        .filter(crate::entity::proxy::Column::Enabled.eq(true))
+        .all(db)
+        .await
+    {
+        Ok(p) => p,
+        Err(e) => {
             return (
-                StatusCode::BAD_REQUEST,
+                StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
-                    "error": "no_node_assigned",
-                    "message": format!("客户端 '{}' (ID: {}) 未分配节点，请在管理面板中分配节点", client_model.name, client_model.id)
+                    "error": "db_error",
+                    "message": format!("数据库查询失败: {}", e)
                 })),
             );
         }
+    };
+
+    // 找到第一个指定了节点的代理
+    let node_id = proxies.iter()
+        .find_map(|p| p.node_id)
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "no_node_assigned",
+                    "message": format!("客户端 '{}' (ID: {}) 的代理未分配节点，请在管理面板中为代理分配节点", client_model.name, client_model.id)
+                })),
+            )
+        });
+
+    let node_id = match node_id {
+        Ok(id) => id,
+        Err(e) => return e,
     };
 
     // 4. 查找节点

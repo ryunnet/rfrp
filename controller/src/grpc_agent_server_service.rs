@@ -283,20 +283,10 @@ async fn get_client_proxies_filtered(client_id: i64, filter_node_id: i64) -> Vec
         Err(_) => return vec![],
     };
 
-    // 获取 client 的默认 node_id
-    let client_node_id = Client::find_by_id(client_id)
-        .one(db)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|c| c.node_id);
-
+    // 过滤出属于指定节点的代理
     proxies
         .into_iter()
-        .filter(|p| {
-            let effective_node_id = p.node_id.or(client_node_id);
-            effective_node_id == Some(filter_node_id)
-        })
+        .filter(|p| p.node_id == Some(filter_node_id))
         .map(|p| rfrp::ProxyConfig {
             proxy_id: p.id,
             client_id: p.client_id,

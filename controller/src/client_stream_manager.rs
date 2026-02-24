@@ -112,13 +112,12 @@ impl ClientStreamManager {
             .all(db)
             .await?;
 
-        // 按 node_id 分组
+        // 按 node_id 分组（只使用 proxy.node_id）
         let mut node_proxy_map: HashMap<i64, Vec<rfrp::ProxyInfo>> = HashMap::new();
         for p in &proxies {
-            let effective_node_id = p.node_id.or(client_model.node_id);
-            let nid = match effective_node_id {
+            let nid = match p.node_id {
                 Some(id) => id,
-                None => continue,
+                None => continue, // 跳过没有指定节点的代理
             };
 
             node_proxy_map

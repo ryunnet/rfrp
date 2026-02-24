@@ -14,8 +14,6 @@ export interface User {
   updated_at: string;
   totalBytesSent: number;
   totalBytesReceived: number;
-  uploadLimitGb: number | null;
-  downloadLimitGb: number | null;
   trafficQuotaGb: number | null;
   remainingQuotaGb: number | null;
   trafficResetCycle: string;
@@ -44,13 +42,9 @@ export interface Client {
   name: string;
   token: string;
   is_online: boolean;
-  nodeId: number | null;
   userId: number | null;
-  node_name?: string;
   totalBytesSent: number;
   totalBytesReceived: number;
-  uploadLimitGb: number | null;
-  downloadLimitGb: number | null;
   trafficQuotaGb: number | null;
   trafficResetCycle: string;
   lastResetAt: string | null;
@@ -165,6 +159,7 @@ export interface Node {
   tunnelPort: number;
   tunnelProtocol: string;
   kcpConfig: string | null;
+  nodeType: string;
   created_at: string;
   updated_at: string;
 }
