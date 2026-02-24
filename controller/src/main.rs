@@ -15,6 +15,7 @@ mod client_stream_manager;
 mod grpc_agent_server_service;
 mod grpc_agent_client_service;
 mod grpc_server;
+mod geo_ip;
 
 use crate::migration::{get_connection, init_sqlite};
 use anyhow::Result;

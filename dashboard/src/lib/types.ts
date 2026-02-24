@@ -157,6 +157,7 @@ export interface Node {
   secret: string;
   isOnline: boolean;
   region: string | null;
+  publicIp: string | null;
   description: string | null;
   tunnelAddr: string;
   tunnelPort: number;

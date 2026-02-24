@@ -12,6 +12,8 @@ pub struct Model {
     #[serde(rename = "isOnline")]
     pub is_online: bool,
     pub region: Option<String>,
+    #[serde(rename = "publicIp")]
+    pub public_ip: Option<String>,
     pub description: Option<String>,
     #[serde(rename = "tunnelAddr")]
     pub tunnel_addr: String,

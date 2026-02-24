@@ -128,6 +128,7 @@ pub async fn create_node(
         secret: Set(req.secret.unwrap_or_else(|| Uuid::new_v4().to_string())),
         is_online: Set(false),
         region: Set(req.region),
+        public_ip: Set(None),
         description: Set(req.description),
         tunnel_addr: Set(req.tunnel_addr.unwrap_or_default()),
         tunnel_port: Set(req.tunnel_port.unwrap_or(7000)),

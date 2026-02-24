@@ -37,6 +37,9 @@ impl AgentServerService for AgentServerServiceImpl {
         &self,
         request: Request<Streaming<rfrp::AgentServerMessage>>,
     ) -> Result<Response<Self::AgentServerChannelStream>, Status> {
+        // 在消费 request 之前提取客户端 IP
+        let client_ip = crate::geo_ip::extract_client_ip_from_request(&request);
+
         let mut in_stream = request.into_inner();
         let (tx, rx) = mpsc::channel::<Result<rfrp::ControllerToAgentMessage, Status>>(256);
 
@@ -88,12 +91,28 @@ impl AgentServerService for AgentServerServiceImpl {
             let node_id = node_model.id;
             let node_name = node_model.name.clone();
 
+            // 查询地理位置信息
+            let geo_info = if let Some(ref ip) = client_ip {
+                crate::geo_ip::query_geo_ip(ip).await.ok()
+            } else {
+                None
+            };
+
             // 更新节点信息
             let mut active: crate::entity::node::ActiveModel = node_model.into();
             active.tunnel_port = Set(register_req.tunnel_port as i32);
             active.tunnel_protocol = Set(register_req.tunnel_protocol.clone());
             active.is_online = Set(true);
             active.updated_at = Set(Utc::now().naive_utc());
+
+            // 更新公网IP和地理位置
+            if let Some(geo) = geo_info {
+                active.public_ip = Set(Some(geo.ip));
+                active.region = Set(Some(geo.region));
+            } else if let Some(ip) = client_ip {
+                active.public_ip = Set(Some(ip));
+            }
+
             if let Err(e) = active.update(db).await {
                 error!("更新节点 #{} 失败: {}", node_id, e);
             }
