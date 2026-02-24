@@ -49,6 +49,8 @@ export const userService = {
       traffic_quota_gb?: number | null;
       traffic_reset_cycle?: string;
       is_traffic_exceeded?: boolean;
+      max_port_count?: number | null;
+      allowed_port_range?: string | null;
     }
   ): Promise<ApiResponse<any>> {
     const response = await api.put<ApiResponse<any>>(`/users/${id}`, data);

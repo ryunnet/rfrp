@@ -34,6 +34,8 @@ export default function Login() {
           trafficResetCycle: 'none',
           lastResetAt: null,
           isTrafficExceeded: false,
+          maxPortCount: null,
+          allowedPortRange: null,
         });
         navigate('/');
       } else {

@@ -19,6 +19,9 @@ export interface User {
   trafficResetCycle: string;
   lastResetAt: string | null;
   isTrafficExceeded: boolean;
+  maxPortCount: number | null;
+  allowedPortRange: string | null;
+  currentPortCount?: number;
 }
 
 export interface UserWithNodeCount extends User {

@@ -21,6 +21,10 @@ pub struct Model {
     pub is_traffic_exceeded: bool,
     #[serde(rename = "trafficQuotaGb")]
     pub traffic_quota_gb: Option<f64>,
+    #[serde(rename = "maxPortCount")]
+    pub max_port_count: Option<i32>,
+    #[serde(rename = "allowedPortRange")]
+    pub allowed_port_range: Option<String>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

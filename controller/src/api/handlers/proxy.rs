@@ -180,6 +180,49 @@ pub async fn create_proxy(
 
     let db = get_connection().await;
 
+    // 获取客户端信息以验证端口限制
+    let client = match crate::entity::Client::find()
+        .filter(crate::entity::client::Column::Id.eq(req.client_id.parse::<i64>().unwrap_or(0)))
+        .one(db)
+        .await
+    {
+        Ok(Some(c)) => c,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                ApiResponse::<crate::entity::proxy::Model>::error("客户端不存在".to_string()),
+            )
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ApiResponse::<crate::entity::proxy::Model>::error(format!("查询客户端失败: {}", e)),
+            )
+        }
+    };
+
+    // 验证端口限制（仅对非管理员用户）
+    if !auth_user.is_admin {
+        if let Some(user_id) = client.user_id {
+            match crate::port_limiter::validate_user_port_limit(user_id, req.remote_port, db).await {
+                Ok((allowed, reason)) => {
+                    if !allowed {
+                        return (
+                            StatusCode::FORBIDDEN,
+                            ApiResponse::<crate::entity::proxy::Model>::error(reason),
+                        );
+                    }
+                }
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        ApiResponse::<crate::entity::proxy::Model>::error(format!("验证端口限制失败: {}", e)),
+                    );
+                }
+            }
+        }
+    }
+
     // 验证节点权限
     if let Some(node_id) = req.node_id {
         // 获取节点信息

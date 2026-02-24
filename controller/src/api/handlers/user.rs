@@ -38,6 +38,12 @@ pub struct UserWithNodeCount {
     pub last_reset_at: Option<String>,
     #[serde(rename = "isTrafficExceeded")]
     pub is_traffic_exceeded: bool,
+    #[serde(rename = "maxPortCount")]
+    pub max_port_count: Option<i32>,
+    #[serde(rename = "allowedPortRange")]
+    pub allowed_port_range: Option<String>,
+    #[serde(rename = "currentPortCount")]
+    pub current_port_count: u64,
 }
 
 #[derive(Deserialize)]
@@ -57,6 +63,8 @@ pub struct UpdateUserRequest {
     pub traffic_quota_gb: Option<f64>,
     pub traffic_reset_cycle: Option<String>,
     pub is_traffic_exceeded: Option<bool>,
+    pub max_port_count: Option<i32>,
+    pub allowed_port_range: Option<String>,
 }
 
 /// GET /api/users - Get all users (admin only)
@@ -82,6 +90,7 @@ pub async fn list_users(Extension(auth_user_opt): Extension<Option<AuthUser>>) -
                 };
 
                 let remaining_quota_gb = crate::traffic_limiter::calculate_user_remaining_quota(&user);
+                let current_port_count = crate::port_limiter::get_user_port_count(user.id, db).await.unwrap_or(0);
 
                 users_with_count.push(UserWithNodeCount {
                     id: user.id,
@@ -97,6 +106,9 @@ pub async fn list_users(Extension(auth_user_opt): Extension<Option<AuthUser>>) -
                     traffic_reset_cycle: user.traffic_reset_cycle,
                     last_reset_at: user.last_reset_at.map(|d| d.to_string()),
                     is_traffic_exceeded: user.is_traffic_exceeded,
+                    max_port_count: user.max_port_count,
+                    allowed_port_range: user.allowed_port_range,
+                    current_port_count,
                 });
             }
 
@@ -165,6 +177,8 @@ pub async fn create_user(
         traffic_reset_cycle: Set(req.traffic_reset_cycle.unwrap_or_else(|| "none".to_string())),
         last_reset_at: Set(None),
         is_traffic_exceeded: Set(false),
+        max_port_count: Set(None),
+        allowed_port_range: Set(None),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -288,6 +302,32 @@ pub async fn update_user(
     }
     if let Some(exceeded) = req.is_traffic_exceeded {
         user.is_traffic_exceeded = Set(exceeded);
+    }
+
+    // Update port limits if provided
+    if let Some(max_count) = req.max_port_count {
+        user.max_port_count = Set(Some(max_count));
+    }
+    if let Some(range) = &req.allowed_port_range {
+        // 验证端口范围格式
+        if !range.is_empty() {
+            match crate::port_limiter::parse_port_ranges(range) {
+                Ok(_) => {
+                    user.allowed_port_range = Set(Some(range.clone()));
+                }
+                Err(e) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        ApiResponse::<serde_json::Value>::error(format!(
+                            "端口范围格式错误: {}",
+                            e
+                        )),
+                    );
+                }
+            }
+        } else {
+            user.allowed_port_range = Set(None);
+        }
     }
 
     user.updated_at = Set(Utc::now().naive_utc());

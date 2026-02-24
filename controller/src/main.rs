@@ -6,6 +6,7 @@ mod jwt;
 mod middleware;
 mod traffic;
 mod traffic_limiter;
+mod port_limiter;
 mod config_manager;
 mod api;
 mod node_manager;
@@ -245,6 +246,8 @@ async fn initialize_admin_user() {
                 traffic_reset_cycle: Set("none".to_string()),
                 last_reset_at: Set(None),
                 is_traffic_exceeded: Set(false),
+                max_port_count: Set(None),
+                allowed_port_range: Set(None),
                 created_at: Set(now),
                 updated_at: Set(now),
             };

@@ -765,6 +765,28 @@ export default function Proxies() {
                       placeholder="如: 8080"
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
                     />
+                    {formData.client_id && (() => {
+                      const client = clients.find(c => c.id.toString() === formData.client_id);
+                      const authUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+                      // 只对非管理员显示端口限制提示
+                      if (!authUser.is_admin && client?.userId) {
+                        return (
+                          <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="flex items-start gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                              </svg>
+                              <div className="text-xs text-blue-700">
+                                <p className="font-medium mb-1">端口限制提示</p>
+                                <p>创建代理时请注意您的端口使用限制，超出限制将无法创建</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 </div>
                 {editingProxy && (
