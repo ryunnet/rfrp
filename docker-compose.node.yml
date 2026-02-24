@@ -3,31 +3,26 @@ version: '3.8'
 services:
   # ==================== RFRP Node (Agent Server) ====================
   # 节点服务，运行在公网服务器上，提供隧道服务
+  #
+  # 使用前请先配置：
+  # 1. 复制 .env.example 为 .env
+  # 2. 在 .env 中填写实际的 CONTROLLER_URL 和 NODE_TOKEN
+  # 3. 运行: docker compose up -d
   node:
     image: docker.yunnet.top/all/rfrp:latest
     container_name: rfrp-node
     restart: unless-stopped
     network_mode: host
-    # 环境变量
+
+    # 环境变量（仅用于容器运行时配置）
     environment:
-      # Controller 地址（必填）
-      # 格式: http://controller-ip:3100
-      - CONTROLLER_URL=http://8.138.128.12:3100
-
-      # 节点 Token（必填）
-      # 从 Controller Web 界面的节点管理页面获取
-      - NODE_TOKEN=your-node-token-here
-
-      # 隧道绑定端口（可选，默认 7000）
-      - BIND_PORT=7000
-
       # 时区设置
       - TZ=Asia/Shanghai
-
       # 日志级别
       - RUST_LOG=info,tokio_kcp=off
 
     # 启动命令
+    # 注意: ${CONTROLLER_URL} 等变量从 .env 文件或宿主机环境变量读取
     command:
       - /app/agent
       - server
