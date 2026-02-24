@@ -168,14 +168,14 @@ export default function UserSubscriptions() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-gray-900">用户订阅管理</h1>
         <button
           onClick={() => {
             resetForm();
             setShowCreateModal(true);
           }}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl shadow-sm hover:from-blue-700 hover:to-indigo-700 transition-all"
         >
           分配订阅
         </button>
@@ -184,11 +184,11 @@ export default function UserSubscriptions() {
       {loading ? (
         <TableSkeleton />
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead>
+              <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   用户
                 </th>
@@ -235,7 +235,8 @@ export default function UserSubscriptions() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(userSub)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
                     {!userSub.isExpired && (
                       <button
                         onClick={() => handleToggleActive(userSub)}
@@ -250,6 +251,7 @@ export default function UserSubscriptions() {
                     >
                       删除
                     </button>
+                    </div>
                   </td>
                 </tr>
               ))}

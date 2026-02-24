@@ -85,7 +85,7 @@ export default function MySubscription() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-gray-900">我的订阅</h1>
       </div>
 
@@ -95,7 +95,7 @@ export default function MySubscription() {
         <>
           {/* 当前激活的订阅 */}
           {activeSubscription && (
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-lg p-6 border border-blue-200">
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-sm p-6 border border-blue-200">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-gray-900">当前订阅</h2>
                 {getStatusBadge(activeSubscription)}
@@ -144,7 +144,7 @@ export default function MySubscription() {
           )}
 
           {/* 订阅历史 */}
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">订阅历史</h2>
             </div>
@@ -159,9 +159,9 @@ export default function MySubscription() {
               </div>
             ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead>
+                  <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       套餐名称
                     </th>

@@ -229,7 +229,7 @@ export default function Clients() {
   return (
     <div className="space-y-6">
       {/* 页面标题 */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">客户端管理</h2>
           <p className="mt-1 text-sm text-gray-500">管理所有客户端连接</p>
@@ -250,7 +250,7 @@ export default function Clients() {
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full">
+            <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -396,7 +396,7 @@ export default function Clients() {
                       {formatDate(client.created_at)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
                         <button
                           onClick={() => handleAllocateQuota(client)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
