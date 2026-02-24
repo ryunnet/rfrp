@@ -29,7 +29,7 @@ struct IpApiResponse {
 /// 查询 IP 地址的地理位置信息
 /// 使用 ip-api.com 免费服务（每分钟限制 45 次请求）
 pub async fn query_geo_ip(ip: &str) -> Result<GeoIpInfo> {
-    let url = format!("http://ip-api.com/json/{}", ip);
+    let url = format!("http://ip-api.com/json/{}?lang=zh-CN", ip);
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
