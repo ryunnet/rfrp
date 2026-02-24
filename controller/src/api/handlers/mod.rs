@@ -8,6 +8,8 @@ pub mod client_logs;
 pub mod system_config;
 pub mod node;
 pub mod client_config;
+pub mod subscription;
+pub mod user_subscription;
 
 // Re-export common handler modules
 pub use auth::*;
@@ -20,6 +22,8 @@ pub use client_logs::*;
 pub use system_config::*;
 pub use node::*;
 pub use client_config::*;
+pub use subscription::*;
+pub use user_subscription::*;
 
 use serde::Serialize;
 

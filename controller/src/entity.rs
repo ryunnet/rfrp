@@ -6,6 +6,8 @@ pub mod user_node;
 pub mod traffic_daily;
 pub mod system_config;
 pub mod node;
+pub mod subscription;
+pub mod user_subscription;
 
 pub use client::Entity as Client;
 pub use proxy::Entity as Proxy;
@@ -15,3 +17,5 @@ pub use user_node::Entity as UserNode;
 pub use traffic_daily::Entity as TrafficDaily;
 pub use system_config::Entity as SystemConfig;
 pub use node::Entity as Node;
+pub use subscription::Entity as Subscription;
+pub use user_subscription::Entity as UserSubscription;

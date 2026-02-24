@@ -11,6 +11,8 @@ import Users from './pages/Users';
 import Traffic from './pages/Traffic';
 import Settings from './pages/Settings';
 import Nodes from './pages/Nodes';
+import Subscriptions from './pages/Subscriptions';
+import UserSubscriptions from './pages/UserSubscriptions';
 
 function App() {
   return (
@@ -46,6 +48,22 @@ function App() {
                         }
                       />
                       <Route path="/nodes" element={<Nodes />} />
+                      <Route
+                        path="/subscriptions"
+                        element={
+                          <ProtectedRoute requireAdmin>
+                            <Subscriptions />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/user-subscriptions"
+                        element={
+                          <ProtectedRoute requireAdmin>
+                            <UserSubscriptions />
+                          </ProtectedRoute>
+                        }
+                      />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </Layout>

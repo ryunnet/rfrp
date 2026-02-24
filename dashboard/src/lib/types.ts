@@ -190,3 +190,34 @@ export interface LogEntry {
   level: string;
   message: string;
 }
+
+// 订阅套餐类型
+export interface Subscription {
+  id: number;
+  name: string;
+  durationType: string; // daily, weekly, monthly, yearly
+  durationValue: number;
+  trafficQuotaGb: number;
+  price: number | null;
+  description: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 用户订阅类型
+export interface UserSubscription {
+  id: number;
+  userId: number;
+  subscriptionId: number;
+  subscriptionName: string;
+  startDate: string;
+  endDate: string;
+  trafficQuotaGb: number;
+  trafficUsedGb: number;
+  trafficRemainingGb: number;
+  isActive: boolean;
+  isExpired: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

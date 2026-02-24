@@ -51,6 +51,15 @@ pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
             .route("/nodes/{id}", get(handlers::get_node).put(handlers::update_node).delete(handlers::delete_node))
             .route("/nodes/{id}/test", post(handlers::test_node_connection))
             .route("/nodes/{id}/status", get(handlers::get_node_status))
+            // 订阅管理路由
+            .route("/subscriptions", get(handlers::list_subscriptions).post(handlers::create_subscription))
+            .route("/subscriptions/active", get(handlers::list_active_subscriptions))
+            .route("/subscriptions/{id}", get(handlers::get_subscription).put(handlers::update_subscription).delete(handlers::delete_subscription))
+            // 用户订阅路由
+            .route("/user-subscriptions", get(handlers::list_user_subscriptions).post(handlers::create_user_subscription))
+            .route("/user-subscriptions/{id}", put(handlers::update_user_subscription).delete(handlers::delete_user_subscription))
+            .route("/users/{user_id}/subscriptions", get(handlers::get_user_subscriptions))
+            .route("/users/{user_id}/subscriptions/active", get(handlers::get_user_active_subscription))
             // 应用认证中间件
             .layer(from_fn(auth_middleware))
             // 添加应用状态

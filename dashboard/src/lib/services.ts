@@ -11,6 +11,8 @@ import type {
   LoginResponse,
   LogEntry,
   Node,
+  Subscription,
+  UserSubscription,
 } from './types';
 
 // ============ 认证服务 ============
@@ -293,6 +295,101 @@ export const nodeService = {
 
   async getNodeStatus(id: number): Promise<ApiResponse<any>> {
     const response = await api.get<ApiResponse<any>>(`/nodes/${id}/status`);
+    return response.data;
+  },
+};
+
+// ============ 订阅服务 ============
+export const subscriptionService = {
+  async getSubscriptions(): Promise<ApiResponse<Subscription[]>> {
+    const response = await api.get<ApiResponse<Subscription[]>>('/subscriptions');
+    return response.data;
+  },
+
+  async getActiveSubscriptions(): Promise<ApiResponse<Subscription[]>> {
+    const response = await api.get<ApiResponse<Subscription[]>>('/subscriptions/active');
+    return response.data;
+  },
+
+  async getSubscription(id: number): Promise<ApiResponse<Subscription>> {
+    const response = await api.get<ApiResponse<Subscription>>(`/subscriptions/${id}`);
+    return response.data;
+  },
+
+  async createSubscription(data: {
+    name: string;
+    duration_type: string;
+    duration_value?: number;
+    traffic_quota_gb: number;
+    price?: number;
+    description?: string;
+    is_active?: boolean;
+  }): Promise<ApiResponse<Subscription>> {
+    const response = await api.post<ApiResponse<Subscription>>('/subscriptions', data);
+    return response.data;
+  },
+
+  async updateSubscription(
+    id: number,
+    data: {
+      name?: string;
+      duration_type?: string;
+      duration_value?: number;
+      traffic_quota_gb?: number;
+      price?: number;
+      description?: string;
+      is_active?: boolean;
+    }
+  ): Promise<ApiResponse<Subscription>> {
+    const response = await api.put<ApiResponse<Subscription>>(`/subscriptions/${id}`, data);
+    return response.data;
+  },
+
+  async deleteSubscription(id: number): Promise<ApiResponse<string>> {
+    const response = await api.delete<ApiResponse<string>>(`/subscriptions/${id}`);
+    return response.data;
+  },
+};
+
+// ============ 用户订阅服务 ============
+export const userSubscriptionService = {
+  async getAllUserSubscriptions(): Promise<ApiResponse<UserSubscription[]>> {
+    const response = await api.get<ApiResponse<UserSubscription[]>>('/user-subscriptions');
+    return response.data;
+  },
+
+  async getUserSubscriptions(userId: number): Promise<ApiResponse<UserSubscription[]>> {
+    const response = await api.get<ApiResponse<UserSubscription[]>>(`/users/${userId}/subscriptions`);
+    return response.data;
+  },
+
+  async getUserActiveSubscription(userId: number): Promise<ApiResponse<UserSubscription | null>> {
+    const response = await api.get<ApiResponse<UserSubscription | null>>(`/users/${userId}/subscriptions/active`);
+    return response.data;
+  },
+
+  async createUserSubscription(data: {
+    user_id: number;
+    subscription_id: number;
+    start_date?: string;
+  }): Promise<ApiResponse<UserSubscription>> {
+    const response = await api.post<ApiResponse<UserSubscription>>('/user-subscriptions', data);
+    return response.data;
+  },
+
+  async updateUserSubscription(
+    id: number,
+    data: {
+      is_active?: boolean;
+      traffic_used_gb?: number;
+    }
+  ): Promise<ApiResponse<UserSubscription>> {
+    const response = await api.put<ApiResponse<UserSubscription>>(`/user-subscriptions/${id}`, data);
+    return response.data;
+  },
+
+  async deleteUserSubscription(id: number): Promise<ApiResponse<string>> {
+    const response = await api.delete<ApiResponse<string>>(`/user-subscriptions/${id}`);
     return response.data;
   },
 };
