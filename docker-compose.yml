@@ -1,37 +1,57 @@
 version: '3.8'
 
+# ==================== RFRP Docker Compose 配置 ====================
+#
+# 本文件提供完整的 RFRP 部署示例（Controller + Node）
+#
+# 如需单独部署，请使用以下文件：
+# - docker-compose.controller.yml  # 仅部署 Controller
+# - docker-compose.node.yml        # 仅部署 Node (Agent Server)
+# - docker-compose.client.yml      # 仅部署 Client (Agent Client)
+#
+# 使用方法：
+# 1. 完整部署: docker-compose up -d
+# 2. 仅 Controller: docker-compose -f docker-compose.controller.yml up -d
+# 3. 仅 Node: docker-compose -f docker-compose.node.yml up -d
+# 4. 仅 Client: docker-compose -f docker-compose.client.yml up -d
+#
+# ================================================================
+
 services:
-  # ==================== RFRP 服务端 ====================
-  # 反向代理服务端，提供 QUIC 协议支持和 Web 管理界面
-  rfrps:
+  # ==================== RFRP Controller ====================
+  # 中央控制器，提供 Web 管理界面和 gRPC 服务
+  controller:
     image: docker.yunnet.top/all/rfrp:latest
-    container_name: rfrps
+    container_name: rfrp-controller
     restart: unless-stopped
-    # 端口映射配置
+
+    # 端口映射
     ports:
-      # QUIC 主服务端口 (必须使用 UDP 协议)
-      - "7000:7000/udp"
       # Web 管理界面端口 (HTTP)
       # 访问: http://your-server-ip:3000
       # 默认账号: admin (密码见首次启动日志)
       - "3000:3000"
-    # 卷挂载配置
+      # gRPC 服务端口 (Agent 连接使用)
+      - "3100:3100"
+
+    # 卷挂载
     volumes:
-      # 服务端配置文件 (只读)
-      - ./rfrps.toml:/app/rfrps.toml:ro
       # 数据持久化目录 (SQLite 数据库、日志等)
       - ./data:/app/data
-    # 环境变量配置
+
+    # 环境变量
     environment:
-      # JWT 密钥（可选，不设置则系统自动生成并保存到 ./data/jwt_secret.key）
-      # - JWT_SECRET=your-secret-key
+      # JWT 密钥（可选，不设置则系统自动生成）
+      # - JWT_SECRET=your-secret-key-here
       # 时区设置
       - TZ=Asia/Shanghai
-      # 日志级别: trace, debug, info, warn, error
-      # tokio_kcp=off 过滤公网 UDP 扫描产生的无害错误日志
-      - RUST_LOG=info,tokio_kcp=off,yamux=debug,common=debug
-    command: ["/app/agent", "server"]
-    # 健康检查 (用于监控服务状态)
+      # 日志级别
+      - RUST_LOG=info,tokio_kcp=off
+
+    # 启动命令
+    command: ["/app/controller"]
+
+    # 健康检查
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:3000 || exit 1"]
       interval: 30s
@@ -39,16 +59,85 @@ services:
       retries: 3
       start_period: 30s
 
-  # ==================== RFRP 客户端 (可选) ====================
-  # 如果需要在同一台机器上运行客户端，取消下面的注释
-  # 通常客户端部署在需要被访问的内网机器上
-  # rfrpc:
+    networks:
+      - rfrp-network
+
+  # ==================== RFRP Node (可选) ====================
+  # 节点服务，提供隧道服务
+  # 如果 Node 部署在其他服务器上，可以注释掉此服务
+  node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rfrp:latest
+    container_name: rfrp-node
+    restart: unless-stopped
+
+    # 端口映射
+    ports:
+      # 隧道服务端口 (QUIC/KCP 协议)
+      - "7000:7000/udp"
+
+    # 环境变量
+    environment:
+      # Controller 地址
+      # 如果 Controller 在同一 docker-compose 中，使用服务名
+      - CONTROLLER_URL=http://controller:3100
+      # 节点 Token（从 Controller Web 界面获取）
+      # 首次启动前需要在 Controller 中创建节点并获取 token
+      - NODE_TOKEN=${NODE_TOKEN:-your-node-token-here}
+      # 隧道绑定端口
+      - BIND_PORT=7000
+      # 时区设置
+      - TZ=Asia/Shanghai
+      # 日志级别
+      - RUST_LOG=info,tokio_kcp=off
+
+    # 启动命令
+    command:
+      - /app/agent
+      - server
+      - --controller-url
+      - http://controller:3100
+      - --token
+      - ${NODE_TOKEN:-your-node-token-here}
+      - --bind-port
+      - "7000"
+
+    # 依赖关系
+    depends_on:
+      controller:
+        condition: service_healthy
+
+    networks:
+      - rfrp-network
+
+  # ==================== RFRP Client (可选) ====================
+  # 客户端服务，通常部署在内网机器上
+  # 如果 Client 部署在其他服务器上，可以注释掉此服务
+  # client:
   #   image: docker.yunnet.top/all/rfrp:latest
-  #   container_name: rfrpc
+  #   container_name: rfrp-client
   #   restart: unless-stopped
-  #   volumes:
-  #     - ./rfrpc.toml:/app/rfrpc.toml:ro
+  #   network_mode: host
+  #
   #   environment:
+  #     # Controller 地址（需要改为实际的 Controller IP）
+  #     - CONTROLLER_URL=http://your-controller-ip:3100
+  #     # 客户端 Token（从 Controller Web 界面获取）
+  #     - CLIENT_TOKEN=${CLIENT_TOKEN:-your-client-token-here}
   #     - TZ=Asia/Shanghai
-  #     - RUST_LOG=info
-  #   command: ["/app/agent", "client"]
+  #     - RUST_LOG=info,tokio_kcp=off
+  #
+  #   command:
+  #     - /app/agent
+  #     - client
+  #     - --controller-url
+  #     - ${CONTROLLER_URL:-http://your-controller-ip:3100}
+  #     - --token
+  #     - ${CLIENT_TOKEN:-your-client-token-here}
+
+# 网络配置
+networks:
+  rfrp-network:
+    driver: bridge

@@ -1,0 +1,58 @@
+services:
+  # ==================== RFRP Controller ====================
+  # 中央控制器，提供 Web 管理界面和 gRPC 服务
+  controller:
+    image: docker.yunnet.top/all/rfrp:latest
+    container_name: rfrp-controller
+    restart: unless-stopped
+
+    # 端口映射
+    ports:
+      # Web 管理界面端口 (HTTP)
+      # 访问: http://your-server-ip:3000
+      # 默认账号: admin (密码见首次启动日志)
+      - "3000:3000"
+      # gRPC 服务端口 (Agent 连接使用)
+      # 注意: 如果 Agent 在其他机器上，需要确保此端口可访问
+      - "3100:3100"
+
+    # 卷挂载
+    volumes:
+      # 数据持久化目录 (SQLite 数据库、日志等)
+      - ./data:/app/data
+      # 前端静态文件（如果需要自定义）
+      # - ./dist:/app/dist:ro
+
+    # 环境变量
+    environment:
+      # JWT 密钥（可选，不设置则系统自动生成并保存到 ./data/jwt_secret.key）
+      # - JWT_SECRET=your-secret-key-here
+
+      # 时区设置
+      - TZ=Asia/Shanghai
+
+      # 日志级别: trace, debug, info, warn, error
+      - RUST_LOG=info,tokio_kcp=off
+
+      # 数据库路径（可选，默认为 data/rfrp.db）
+      # - DATABASE_URL=sqlite:data/rfrp.db
+
+    # 启动命令
+    command: ["/app/controller"]
+
+    # 健康检查
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # 网络配置（可选）
+    # networks:
+    #   - rfrp-network
+
+# 网络配置（可选）
+# networks:
+#   rfrp-network:
+#     driver: bridge
