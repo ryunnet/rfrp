@@ -20,7 +20,7 @@ RUN npm run build
 FROM rust:alpine AS rust-builder
 
 # 安装编译依赖
-RUN apk add --no-cache musl-dev openssl-dev pkgconfig
+RUN apk add --no-cache musl-dev openssl-dev pkgconfig protobuf-dev
 
 WORKDIR /build
 
