@@ -331,6 +331,7 @@ async fn run_controller() -> Result<()> {
         config.internal_port,
         node_manager.clone(),
         client_stream_manager.clone(),
+        config_manager.clone(),
     );
 
     // 启动节点健康监控

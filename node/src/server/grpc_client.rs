@@ -107,6 +107,11 @@ impl AgentGrpcClient {
         tunnel_protocol: &str,
     ) -> Result<(Arc<Self>, mpsc::Receiver<ControllerCommand>)> {
         let channel = Channel::from_shared(controller_url.to_string())?
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .tcp_keepalive(Some(Duration::from_secs(60)))
+            .http2_keep_alive_interval(Duration::from_secs(30))
+            .keep_alive_timeout(Duration::from_secs(10))
             .connect()
             .await
             .map_err(|e| anyhow!("连接 Controller gRPC 失败: {}", e))?;

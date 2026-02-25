@@ -19,6 +19,10 @@ const configHints: Record<string, string> = {
   internal_port: 'Node 和 Client 连接到 Controller 的 gRPC 端口',
   jwt_expiration_hours: 'JWT 令牌的有效期，过期后需要重新登录',
   db_path: '数据库文件的存储路径',
+  grpc_tls_enabled: '启用后 gRPC 连接将使用 TLS 加密，可避免 GFW 干扰',
+  grpc_tls_cert_path: 'TLS 证书文件的绝对路径（PEM 格式）',
+  grpc_tls_key_path: 'TLS 私钥文件的绝对路径（PEM 格式）',
+  grpc_domain: 'gRPC 服务器域名（可选，用于 SNI）',
 };
 
 export default function Settings() {
