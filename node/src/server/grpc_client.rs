@@ -16,7 +16,7 @@ use common::grpc::rfrp::controller_to_agent_message::Payload as ControllerPayloa
 use common::grpc::rfrp::agent_server_response::Result as AgentResult;
 use common::grpc::AgentServerServiceClient;
 use common::grpc::pending_requests::PendingRequests;
-use common::protocol::control::ProxyControl;
+use common::protocol::control::{ProxyControl, LogEntry};
 
 /// gRPC 流发送器类型
 pub type GrpcSender = mpsc::Sender<rfrp::AgentServerMessage>;
@@ -332,6 +332,13 @@ impl AgentGrpcClient {
                     }).await;
                 }
 
+                ControllerPayload::GetNodeLogs(cmd) => {
+                    let _ = cmd_tx.send(ControllerCommand::GetNodeLogs {
+                        request_id: cmd.request_id,
+                        lines: cmd.lines,
+                    }).await;
+                }
+
                 _ => {
                     warn!("收到未知的 Controller 消息类型");
                 }
@@ -407,6 +414,10 @@ pub enum ControllerCommand {
         request_id: String,
         client_id: String,
         count: u32,
+    },
+    GetNodeLogs {
+        request_id: String,
+        lines: u32,
     },
 }
 
@@ -508,7 +519,100 @@ pub async fn handle_controller_commands(
                     };
                     let _ = grpc.send_response(resp).await;
                 }
+
+                ControllerCommand::GetNodeLogs { request_id, lines } => {
+                    // 读取节点日志文件
+                    let logs = read_node_logs(lines).await;
+                    let resp = match logs {
+                        Ok(entries) => {
+                            let log_entries: Vec<rfrp::LogEntry> = entries
+                                .into_iter()
+                                .map(|l| rfrp::LogEntry {
+                                    timestamp: l.timestamp,
+                                    level: l.level,
+                                    message: l.message,
+                                })
+                                .collect();
+                            rfrp::AgentServerResponse {
+                                request_id,
+                                result: Some(AgentResult::NodeLogs(rfrp::NodeLogsResponse {
+                                    logs: log_entries,
+                                })),
+                            }
+                        }
+                        Err(e) => rfrp::AgentServerResponse {
+                            request_id,
+                            result: Some(AgentResult::CommandAck(rfrp::CommandAck {
+                                success: false,
+                                error: Some(e.to_string()),
+                            })),
+                        },
+                    };
+                    let _ = grpc.send_response(resp).await;
+                }
             }
         });
     }
+}
+
+/// 读取节点日志（从内存缓冲区或日志文件）
+async fn read_node_logs(lines: u32) -> Result<Vec<LogEntry>> {
+    // 优先从内存缓冲区读取
+    if let Some(buffer) = super::node_logs::get_global_log_buffer() {
+        let logs = buffer.get_last(lines as usize);
+        if !logs.is_empty() {
+            return Ok(logs);
+        }
+    }
+
+    // 如果内存缓冲区不可用或为空，尝试从日志文件读取（守护进程模式）
+    #[cfg(unix)]
+    {
+        use tokio::process::Command;
+
+        let log_file = std::env::var("RFRP_LOG_FILE")
+            .unwrap_or_else(|_| "/var/log/rfrp-agent.log".to_string());
+
+        let output = Command::new("tail")
+            .arg("-n")
+            .arg(lines.to_string())
+            .arg(&log_file)
+            .output()
+            .await;
+
+        if let Ok(out) = output {
+            if out.status.success() {
+                let content = String::from_utf8_lossy(&out.stdout);
+                let logs: Vec<LogEntry> = content.lines()
+                    .map(|line| {
+                        let parts: Vec<&str> = line.splitn(3, ' ').collect();
+                        if parts.len() >= 3 {
+                            LogEntry {
+                                timestamp: parts[0].to_string(),
+                                level: parts[1].to_string(),
+                                message: parts[2].to_string(),
+                            }
+                        } else {
+                            LogEntry {
+                                timestamp: chrono::Utc::now().to_rfc3339(),
+                                level: "INFO".to_string(),
+                                message: line.to_string(),
+                            }
+                        }
+                    })
+                    .collect();
+
+                if !logs.is_empty() {
+                    return Ok(logs);
+                }
+            }
+        }
+    }
+
+    // 如果所有方法都失败，返回提示信息
+    Ok(vec![LogEntry {
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        level: "INFO".to_string(),
+        message: "日志系统正在初始化，暂无日志记录".to_string(),
+    }])
 }

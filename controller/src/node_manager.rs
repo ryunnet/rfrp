@@ -147,6 +147,27 @@ impl NodeManager {
         let streams = self.streams.read().await;
         streams.keys().cloned().collect()
     }
+
+    /// 获取节点日志
+    pub async fn get_node_logs(&self, node_id: i64, lines: u32) -> Result<Vec<LogEntry>> {
+        let cmd = ControllerPayload::GetNodeLogs(rfrp::GetNodeLogsCommand {
+            request_id: String::new(),
+            lines,
+        });
+
+        let resp = self.send_command_and_wait(node_id, cmd).await?;
+
+        match resp.result {
+            Some(AgentResult::NodeLogs(logs)) => {
+                Ok(logs.logs.into_iter().map(|l| LogEntry {
+                    timestamp: l.timestamp,
+                    level: l.level,
+                    message: l.message,
+                }).collect())
+            }
+            _ => Err(anyhow!("收到意外的响应类型")),
+        }
+    }
 }
 
 /// 替换 payload 中的 request_id
@@ -167,6 +188,10 @@ fn replace_request_id(payload: ControllerPayload, request_id: &str) -> Controlle
         ControllerPayload::GetClientLogs(mut cmd) => {
             cmd.request_id = request_id.to_string();
             ControllerPayload::GetClientLogs(cmd)
+        }
+        ControllerPayload::GetNodeLogs(mut cmd) => {
+            cmd.request_id = request_id.to_string();
+            ControllerPayload::GetNodeLogs(cmd)
         }
         other => other,
     }

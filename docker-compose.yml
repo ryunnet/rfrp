@@ -95,8 +95,7 @@ services:
 
     # 启动命令
     command:
-      - /app/agent
-      - server
+      - /app/node
       - --controller-url
       - http://controller:3100
       - --token
@@ -130,8 +129,7 @@ services:
   #     - RUST_LOG=info,tokio_kcp=off
   #
   #   command:
-  #     - /app/agent
-  #     - client
+  #     - /app/client
   #     - --controller-url
   #     - ${CONTROLLER_URL:-http://your-controller-ip:3100}
   #     - --token

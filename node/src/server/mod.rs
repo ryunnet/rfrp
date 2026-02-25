@@ -5,6 +5,7 @@ pub mod config_manager;
 pub mod local_proxy_control;
 pub mod grpc_client;
 pub mod grpc_auth_provider;
+pub mod node_logs;
 
 use anyhow::Result;
 use std::sync::Arc;
@@ -23,6 +24,10 @@ pub async fn run_server_controller_mode(
     bind_port: u16,
     protocol: String,
 ) -> Result<()> {
+    // 初始化内存日志缓冲区（保存最近 1000 条日志）
+    let log_buffer = node_logs::init_global_log_buffer(1000);
+    let log_layer = node_logs::NodeLogLayer::new(log_buffer);
+
     // 初始化 tracing 日志系统
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,sqlx::query=warn"));
@@ -30,6 +35,7 @@ pub async fn run_server_controller_mode(
     tracing_subscriber::registry()
         .with(env_filter)
         .with(fmt::layer())
+        .with(log_layer)
         .init();
 
     info!("Agent Server 启动 (Controller gRPC 模式)");

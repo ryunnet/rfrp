@@ -7,7 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 RFRP 是一个基于 Rust 的高性能反向代理工具（内网穿透解决方案），采用三层架构：
 
 - **Controller**：中央控制器，提供 Web 管理界面、RESTful API 和 gRPC 服务
-- **Agent**：可运行在 Server 模式（节点）或 Client 模式（客户端）
+- **Node**：节点服务器，提供 QUIC/KCP 隧道服务，通过 gRPC 连接到 Controller
+- **Client**：客户端，通过 gRPC 连接到 Controller，建立到 Node 的隧道连接
 - **Dashboard**：React + TypeScript 前端管理界面
 
 ## 核心架构
@@ -17,28 +18,28 @@ RFRP 是一个基于 Rust 的高性能反向代理工具（内网穿透解决方
 ```
 Dashboard (React) ──HTTP/REST──> Controller (Axum)
                                       │
-                                      ├──gRPC Stream──> Agent (Server Mode / 节点)
+                                      ├──gRPC Stream──> Node (节点服务器)
                                       │                      │
                                       │                      └──QUIC/KCP──> 本地服务
                                       │
-                                      └──gRPC Stream──> Agent (Client Mode / 客户端)
+                                      └──gRPC Stream──> Client (客户端)
                                                              │
                                                              └──TCP/UDP──> 本地服务
 ```
 
 ### 关键概念
 
-- **Node (节点)**：运行 Agent Server 模式的服务器，通过 gRPC 连接到 Controller
-- **Client (客户端)**：运行 Agent Client 模式的客户端，通过 gRPC 连接到 Controller
+- **Node (节点)**：独立的节点服务器程序，提供 QUIC/KCP 隧道服务，通过 gRPC 连接到 Controller
+- **Client (客户端)**：独立的客户端程序，通过 gRPC 连接到 Controller，建立到 Node 的隧道连接
 - **Proxy (隧道)**：端口映射配置，定义本地端口到远程端口的转发规则
 - **User (用户)**：可以被分配多个节点，管理自己的客户端和隧道
 - **流量配额**：Admin 分配给 User，User 分配给 Client 的流量限制系统
 
 ### gRPC 双向流
 
-Controller 与 Agent 之间使用 gRPC bidirectional streaming：
-- **Agent Server**：通过 `AgentServerService` 注册节点并接收代理配置
-- **Agent Client**：通过 `AgentClientService` 注册客户端并接收代理配置
+Controller 与 Node/Client 之间使用 gRPC bidirectional streaming：
+- **Node**：通过 `AgentServerService` 注册节点并接收代理配置
+- **Client**：通过 `AgentClientService` 注册客户端并接收代理配置
 - 流管理器：`node_manager.rs` 和 `client_stream_manager.rs` 维护活跃连接
 
 ## 常用命令
@@ -51,12 +52,18 @@ cargo build --release
 
 # 运行 Controller
 cargo run --release -p controller
+# 或直接运行二进制文件
+./target/release/controller
 
-# 运行 Agent (Server 模式)
-cargo run --release -p agent -- server --controller-url http://localhost:3100 --token <token> --bind-port 7000
+# 运行 Node（节点服务器）
+cargo run --release -p node -- --controller-url http://localhost:3100 --token <token> --bind-port 7000
+# 或直接运行二进制文件
+./target/release/node --controller-url http://localhost:3100 --token <token> --bind-port 7000
 
-# 运行 Agent (Client 模式)
-cargo run --release -p agent -- client --controller-url http://localhost:3100 --token <token>
+# 运行 Client（客户端）
+cargo run --release -p client -- --controller-url http://localhost:3100 --token <token>
+# 或直接运行二进制文件
+./target/release/client --controller-url http://localhost:3100 --token <token>
 
 # 运行测试
 cargo test
@@ -108,8 +115,8 @@ cargo run --release
 
 - `main.rs` - 启动入口，初始化数据库、gRPC 服务器、Web 服务器
 - `grpc_server.rs` - gRPC 服务器实现
-- `grpc_agent_server_service.rs` - Agent Server 的 gRPC 服务
-- `grpc_agent_client_service.rs` - Agent Client 的 gRPC 服务
+- `grpc_agent_server_service.rs` - Node 的 gRPC 服务
+- `grpc_agent_client_service.rs` - Client 的 gRPC 服务
 - `node_manager.rs` - 节点管理器，维护节点 gRPC 流和状态
 - `client_stream_manager.rs` - 客户端流管理器，维护客户端 gRPC 流
 - `api/` - RESTful API handlers
@@ -118,14 +125,19 @@ cargo run --release
 - `traffic.rs` - 流量记录和统计
 - `traffic_limiter.rs` - 流量限制和配额验证逻辑
 
-### Agent (agent/src/)
+### Node (node/src/)
 
 - `main.rs` - 启动入口，解析命令行参数
-- `server/` - Server 模式实现
+- `server/` - 节点服务器实现
   - `proxy_server.rs` - QUIC/KCP 代理服务器
   - `grpc_client.rs` - 连接到 Controller 的 gRPC 客户端
   - `local_proxy_control.rs` - 本地代理控制实现
-- `client/` - Client 模式实现
+  - `node_logs.rs` - 节点日志缓冲区（跨平台日志查询）
+
+### Client (client/src/)
+
+- `main.rs` - 启动入口，解析命令行参数
+- `client/` - 客户端实现
   - `connector.rs` - 连接管理
   - `grpc_client.rs` - 连接到 Controller 的 gRPC 客户端
 
@@ -198,7 +210,7 @@ Controller 启动时会启动两个健康监控任务（`main.rs:191-254`）：
 
 1. 修改 `common/proto/rfrp.proto`
 2. 运行 `cargo build` 自动重新生成代码（通过 `build.rs`）
-3. 更新 Controller 和 Agent 中的实现
+3. 更新 Controller、Node 和 Client 中的实现
 
 ### 流量统计
 
@@ -212,7 +224,7 @@ Controller 启动时会启动两个健康监控任务（`main.rs:191-254`）：
 默认端口：
 - **3000** - Web 管理界面 (HTTP)
 - **3100** - Controller 内部 API (gRPC)
-- **7000** - Agent Server 隧道端口 (QUIC/KCP)
+- **7000** - Node 隧道端口 (QUIC/KCP)
 
 ## 环境变量
 
@@ -236,10 +248,10 @@ Controller 启动时会启动两个健康监控任务（`main.rs:191-254`）：
 - 检查数据库文件权限
 - 查看日志中的数据库迁移错误
 
-### Agent 无法连接到 Controller
+### Node/Client 无法连接到 Controller
 - 确认 Controller gRPC 服务运行在 3100 端口
 - 检查 token 是否正确
-- 查看 Agent 日志中的连接错误
+- 查看 Node/Client 日志中的连接错误
 
 ### 前端构建失败
 - 确保使用 Bun 1.0+

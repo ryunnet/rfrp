@@ -51,6 +51,7 @@ pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
             .route("/nodes/{id}", get(handlers::get_node).put(handlers::update_node).delete(handlers::delete_node))
             .route("/nodes/{id}/test", post(handlers::test_node_connection))
             .route("/nodes/{id}/status", get(handlers::get_node_status))
+            .route("/nodes/{id}/logs", get(handlers::get_node_logs))
             // 订阅管理路由
             .route("/subscriptions", get(handlers::list_subscriptions).post(handlers::create_subscription))
             .route("/subscriptions/active", get(handlers::list_active_subscriptions))

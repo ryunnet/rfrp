@@ -26,7 +26,8 @@ WORKDIR /build
 
 # 先复制依赖文件，利用Docker缓存层
 COPY Cargo.toml Cargo.lock ./
-COPY agent/Cargo.toml ./agent/
+COPY node/Cargo.toml ./node/
+COPY client/Cargo.toml ./client/
 COPY common/Cargo.toml ./common/
 COPY controller/Cargo.toml ./controller/
 
@@ -35,18 +36,21 @@ COPY common/build.rs ./common/
 COPY common/proto ./common/proto
 
 # 创建虚拟源文件以构建依赖
-RUN mkdir -p agent/src common/src controller/src && \
-    echo "fn main() {}" > agent/src/main.rs && \
+RUN mkdir -p node/src client/src common/src controller/src && \
+    echo "fn main() {}" > node/src/main.rs && \
+    echo "fn main() {}" > client/src/main.rs && \
     echo "fn main() {}" > controller/src/main.rs && \
     echo "pub fn dummy() {}" > common/src/lib.rs
 
 # 构建依赖（这一层会被缓存）
-RUN cargo build --release -p agent && \
+RUN cargo build --release -p node && \
+    cargo build --release -p client && \
     cargo build --release -p controller && \
-    rm -rf agent/src common/src controller/src
+    rm -rf node/src client/src common/src controller/src
 
 # 复制实际源码
-COPY agent/src ./agent/src
+COPY node/src ./node/src
+COPY client/src ./client/src
 COPY common/src ./common/src
 COPY controller/src ./controller/src
 
@@ -56,13 +60,16 @@ COPY --from=web-builder /build/dist ./dist
 # 清除本地 crate 的编译缓存，确保使用真实源码重新编译
 RUN rm -rf target/release/.fingerprint/common-* \
            target/release/deps/libcommon-* \
-           target/release/.fingerprint/agent-* \
-           target/release/deps/agent-* \
+           target/release/.fingerprint/node-* \
+           target/release/deps/node-* \
+           target/release/.fingerprint/client-* \
+           target/release/deps/client-* \
            target/release/.fingerprint/controller-* \
            target/release/deps/controller-*
 
 # 重新构建（只编译变更的代码）
-RUN cargo build --release -p agent && \
+RUN cargo build --release -p node && \
+    cargo build --release -p client && \
     cargo build --release -p controller
 
 # 阶段3: 最终镜像
@@ -76,12 +83,10 @@ RUN apk add --no-cache libgcc ca-certificates && \
 WORKDIR /app
 
 # 从构建阶段复制二进制文件
-COPY --from=rust-builder /build/target/release/agent /app/
+COPY --from=rust-builder /build/target/release/node /app/
+COPY --from=rust-builder /build/target/release/client /app/
 COPY --from=rust-builder /build/target/release/controller /app/
 COPY --from=rust-builder /build/dist /app/dist
-
-# 复制配置文件模板（使用示例后缀）
-COPY controller.toml /app/controller.toml.example
 
 # 创建数据目录并设置权限
 RUN mkdir -p /app/data && \
@@ -91,7 +96,8 @@ RUN mkdir -p /app/data && \
 USER rfrp
 
 # 暴露端口
-EXPOSE 7000 3000/tcp
+EXPOSE 7000 3000 3100
 
-# 默认运行服务端
-CMD ["/app/agent", "server"]
+# 默认运行 controller
+# 可以通过 docker run 时指定不同的命令来运行 node 或 client
+CMD ["/app/controller"]

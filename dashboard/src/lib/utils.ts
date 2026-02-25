@@ -1,3 +1,11 @@
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+// 合并 Tailwind CSS 类名
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
 // 格式化字节大小
 export function formatBytes(bytes: number | undefined | null): string {
   if (!bytes || bytes === 0 || isNaN(bytes)) return '0 B';

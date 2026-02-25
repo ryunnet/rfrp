@@ -297,6 +297,11 @@ export const nodeService = {
     const response = await api.get<ApiResponse<any>>(`/nodes/${id}/status`);
     return response.data;
   },
+
+  async getNodeLogs(id: number, lines: number = 100): Promise<ApiResponse<{ node_id: number; node_name: string; logs: LogEntry[] }>> {
+    const response = await api.get<ApiResponse<{ node_id: number; node_name: string; logs: LogEntry[] }>>(`/nodes/${id}/logs?lines=${lines}`);
+    return response.data;
+  },
 };
 
 // ============ 订阅服务 ============

@@ -50,6 +50,7 @@ message ControllerToAgentMessage {
     StopProxyCommand stop_proxy = 11;
     GetStatusCommand get_status = 12;
     GetClientLogsCommand get_client_logs = 13;
+    GetNodeLogsCommand get_node_logs = 14;
   }
 }
 
@@ -194,6 +195,11 @@ message GetClientLogsCommand {
   uint32 count = 3;
 }
 
+message GetNodeLogsCommand {
+  string request_id = 1;
+  uint32 lines = 2;  // 获取最近 N 行日志
+}
+
 // ===== Agent Server 对指令的响应 =====
 
 message AgentServerResponse {
@@ -202,6 +208,7 @@ message AgentServerResponse {
     CommandAck command_ack = 2;
     ServerStatus server_status = 3;
     ClientLogsResponse client_logs = 4;
+    NodeLogsResponse node_logs = 5;
   }
 }
 
@@ -228,6 +235,10 @@ message LogEntry {
 }
 
 message ClientLogsResponse {
+  repeated LogEntry logs = 1;
+}
+
+message NodeLogsResponse {
   repeated LogEntry logs = 1;
 }
 

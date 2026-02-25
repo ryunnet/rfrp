@@ -13,9 +13,13 @@ export default function Nodes() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCommandModal, setShowCommandModal] = useState(false);
+  const [showLogsModal, setShowLogsModal] = useState(false);
   const [createdNodeInfo, setCreatedNodeInfo] = useState<{ name: string; secret: string } | null>(null);
   const [editingNode, setEditingNode] = useState<Node | null>(null);
   const [commandNode, setCommandNode] = useState<Node | null>(null);
+  const [logsNode, setLogsNode] = useState<Node | null>(null);
+  const [nodeLogs, setNodeLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
   const [controllerUrl, setControllerUrl] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [formData, setFormData] = useState({
@@ -245,6 +249,27 @@ export default function Nodes() {
     setShowCommandModal(true);
   };
 
+  const handleShowLogs = async (node: Node) => {
+    setLogsNode(node);
+    setShowLogsModal(true);
+    setLoadingLogs(true);
+    setNodeLogs([]);
+
+    try {
+      const response = await nodeService.getNodeLogs(node.id, 100);
+      if (response.success && response.data) {
+        setNodeLogs(response.data.logs);
+      } else {
+        showToast(response.message || '获取日志失败', 'error');
+      }
+    } catch (error) {
+      console.error('获取节点日志失败:', error);
+      showToast('获取日志失败', 'error');
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* 页面标题 */}
@@ -412,6 +437,16 @@ export default function Nodes() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
                               </svg>
                               启动命令
+                            </button>
+                            <button
+                              onClick={() => handleShowLogs(node)}
+                              disabled={!node.isOnline}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                              </svg>
+                              查看日志
                             </button>
                             <button
                               onClick={() => handleTestConnection(node)}
@@ -724,6 +759,83 @@ export default function Nodes() {
                   className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 transition-all"
                 >
                   知道了
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 日志查看弹窗 */}
+      {showLogsModal && logsNode && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden transform transition-all">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">节点日志</h3>
+                    <p className="text-sm text-gray-500">{logsNode.name} - 最近 100 行</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowLogsModal(false);
+                    setLogsNode(null);
+                    setNodeLogs([]);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {loadingLogs ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+                </div>
+              ) : (
+                <div className="bg-gray-900 rounded-xl p-4 max-h-[60vh] overflow-y-auto">
+                  {nodeLogs.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">
+                      暂无日志数据
+                    </div>
+                  ) : (
+                    <div className="space-y-1 font-mono text-sm">
+                      {nodeLogs.map((log, index) => (
+                        <div key={index} className="flex gap-3 text-gray-300 hover:bg-gray-800/50 px-2 py-1 rounded">
+                          <span className="text-gray-500 flex-shrink-0">{log.timestamp}</span>
+                          <span className={`flex-shrink-0 font-semibold ${
+                            log.level === 'ERROR' ? 'text-red-400' :
+                            log.level === 'WARN' ? 'text-yellow-400' :
+                            log.level === 'INFO' ? 'text-blue-400' :
+                            'text-gray-400'
+                          }`}>{log.level}</span>
+                          <span className="text-gray-200 break-all">{log.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => {
+                    setShowLogsModal(false);
+                    setLogsNode(null);
+                    setNodeLogs([]);
+                  }}
+                  className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-500/25 transition-all"
+                >
+                  关闭
                 </button>
               </div>
             </div>

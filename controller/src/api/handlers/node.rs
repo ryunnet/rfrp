@@ -362,3 +362,59 @@ pub async fn get_node_status(
         ),
     }
 }
+
+#[derive(Deserialize)]
+pub struct GetNodeLogsQuery {
+    #[serde(default = "default_log_lines")]
+    lines: u32,
+}
+
+fn default_log_lines() -> u32 {
+    100
+}
+
+/// GET /api/nodes/{id}/logs — 获取节点日志（仅管理员）
+pub async fn get_node_logs(
+    Path(id): Path<i64>,
+    Extension(auth_user_opt): Extension<Option<AuthUser>>,
+    Extension(app_state): Extension<AppState>,
+    axum::extract::Query(query): axum::extract::Query<GetNodeLogsQuery>,
+) -> impl IntoResponse {
+    let auth_user = match auth_user_opt {
+        Some(user) => user,
+        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<serde_json::Value>::error("Not authenticated".to_string())),
+    };
+
+    if !auth_user.is_admin {
+        return (StatusCode::FORBIDDEN, ApiResponse::<serde_json::Value>::error("Only admin can view node logs".to_string()));
+    }
+
+    let db = get_connection().await;
+    let node_model = match Node::find_by_id(id).one(db).await {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, ApiResponse::<serde_json::Value>::error("Node not found".to_string())),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<serde_json::Value>::error(format!("Failed to find node: {}", e))),
+    };
+
+    // 检查节点是否在线
+    let connected_ids = app_state.node_manager.get_loaded_node_ids().await;
+    if !connected_ids.contains(&id) {
+        return (StatusCode::BAD_REQUEST, ApiResponse::<serde_json::Value>::error("Node is offline, cannot retrieve logs".to_string()));
+    }
+
+    // 通过 gRPC 获取节点日志
+    match app_state.node_manager.get_node_logs(id, query.lines).await {
+        Ok(logs) => {
+            let result = serde_json::json!({
+                "node_id": id,
+                "node_name": node_model.name,
+                "logs": logs,
+            });
+            (StatusCode::OK, ApiResponse::success(result))
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ApiResponse::<serde_json::Value>::error(format!("Failed to get node logs: {}", e)),
+        ),
+    }
+}

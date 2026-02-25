@@ -24,6 +24,8 @@ mod m20260224_000001_add_node_type;
 mod m20260224_000002_add_port_limits;
 mod m20260224_000003_add_node_public_ip;
 mod m20260224_000004_create_subscription;
+mod m20260225_000001_add_controller_configs;
+mod m20260225_000002_remove_unused_quic_configs;
 
 pub struct Migrator;
 
@@ -51,6 +53,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260224_000002_add_port_limits::Migration),
             Box::new(m20260224_000003_add_node_public_ip::Migration),
             Box::new(m20260224_000004_create_subscription::Migration),
+            Box::new(m20260225_000001_add_controller_configs::Migration),
+            Box::new(m20260225_000002_remove_unused_quic_configs::Migration),
         ]
     }
 }

@@ -1,10 +1,10 @@
 [package]
-name = "agent"
+name = "node"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "agent"
+name = "node"
 path = "src/main.rs"
 
 [dependencies]
@@ -32,3 +32,7 @@ rcgen = "0.14.6"
 # gRPC
 tonic = "0.12"
 prost = "0.13"
+
+# Daemon (Unix only)
+[target.'cfg(unix)'.dependencies]
+daemonize = "0.5"

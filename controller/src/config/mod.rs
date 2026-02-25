@@ -147,7 +147,59 @@ pub async fn get_config() -> &'static Config {
 
 /// 初始化配置
 pub async fn init_config() -> Config {
-    // 尝试多个可能的配置文件位置
+    use crate::entity::{SystemConfig, system_config};
+    use sea_orm::{EntityTrait, ColumnTrait, QueryFilter};
+
+    // 尝试从数据库读取配置
+    if let Ok(db) = crate::migration::get_connection().await.try_into() {
+        let db: &sea_orm::DatabaseConnection = db;
+
+        // 读取所有配置项
+        if let Ok(configs) = SystemConfig::find().all(db).await {
+            let mut config = Config {
+                web_port: default_web_port(),
+                internal_port: default_internal_port(),
+                jwt_secret: None,
+                jwt_expiration_hours: default_jwt_expiration(),
+                db_path: default_db_path(),
+                internal_secret: None,
+                frps_url: None,
+                frps_secret: None,
+            };
+
+            // 从数据库配置项中填充
+            for item in configs {
+                match item.key.as_str() {
+                    "web_port" => {
+                        if let Ok(port) = item.value.parse::<u16>() {
+                            config.web_port = port;
+                        }
+                    }
+                    "internal_port" => {
+                        if let Ok(port) = item.value.parse::<u16>() {
+                            config.internal_port = port;
+                        }
+                    }
+                    "jwt_expiration_hours" => {
+                        if let Ok(hours) = item.value.parse::<i64>() {
+                            config.jwt_expiration_hours = hours;
+                        }
+                    }
+                    "db_path" => {
+                        if let Ok(path) = serde_json::from_str::<String>(&item.value) {
+                            config.db_path = path;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            tracing::info!("📋 从数据库加载配置");
+            return config;
+        }
+    }
+
+    // 如果数据库读取失败，尝试从配置文件读取（向后兼容）
     let config_paths = [
         "controller.toml",
         "../controller.toml",
@@ -169,7 +221,7 @@ pub async fn init_config() -> Config {
         }
     }
 
-    tracing::warn!("未找到配置文件 controller.toml，使用默认配置");
+    tracing::warn!("未找到配置文件或数据库配置，使用默认配置");
     Config {
         web_port: default_web_port(),
         internal_port: default_internal_port(),
