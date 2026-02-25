@@ -39,7 +39,7 @@ pub fn install_service(controller_url: &str, token: &str) -> Result<()> {
         error_control: ServiceErrorControl::Normal,
         executable_path: exe_path.clone(),
         launch_arguments: vec![
-            OsString::from("--service"),
+            OsString::from("service"),
             OsString::from("--controller-url"),
             OsString::from(controller_url),
             OsString::from("--token"),
@@ -62,7 +62,7 @@ pub fn install_service(controller_url: &str, token: &str) -> Result<()> {
     println!("使用以下命令管理服务:");
     println!("  启动服务: sc start {}", SERVICE_NAME);
     println!("  停止服务: sc stop {}", SERVICE_NAME);
-    println!("  卸载服务: {} --uninstall-service", exe_path.display());
+    println!("  卸载服务: {} uninstall-service", exe_path.display());
 
     Ok(())
 }
