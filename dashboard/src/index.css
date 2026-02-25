@@ -41,6 +41,16 @@ code {
   background: #94a3b8;
 }
 
+/* 隐藏滚动条但保留滚动功能 */
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 /* Toast 滑入动画 */
 @keyframes slide-in {
   from {
@@ -168,4 +178,72 @@ code {
   background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
   background-size: 1000px 100%;
   animation: shimmer 2s infinite;
+}
+
+/* 登录页面动画 */
+@keyframes login-float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -20px) scale(1.05);
+  }
+  66% {
+    transform: translate(-15px, 15px) scale(0.97);
+  }
+}
+
+.login-float {
+  animation: login-float 12s ease-in-out infinite;
+}
+
+.login-float-delayed {
+  animation: login-float 14s ease-in-out infinite;
+  animation-delay: -4s;
+}
+
+.login-float-slow {
+  animation: login-float 18s ease-in-out infinite;
+  animation-delay: -8s;
+}
+
+/* Logo 光晕 */
+@keyframes logo-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3), 0 0 60px rgba(99, 102, 241, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.4), 0 0 80px rgba(99, 102, 241, 0.15);
+  }
+}
+
+.login-logo-glow {
+  animation: logo-glow 3s ease-in-out infinite;
+}
+
+/* 错误抖动 */
+@keyframes login-shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 50%, 90% { transform: translateX(-4px); }
+  30%, 70% { transform: translateX(4px); }
+}
+
+.login-shake {
+  animation: login-shake 0.4s ease-in-out;
+}
+
+/* 淡入 */
+@keyframes login-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-fade-in {
+  animation: login-fade-in 0.3s ease-out;
 }
