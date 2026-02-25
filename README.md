@@ -63,14 +63,10 @@ docker-compose logs rfrps
 
 ### 4. 部署客户端
 
+#### Docker 方式（推荐）
+
 ```bash
 mkdir -p /opt/rfrpc && cd /opt/rfrpc
-
-cat > rfrpc.toml << EOF
-server_addr = "your-server-ip"
-server_port = 7000
-token = "your-client-token"
-EOF
 
 cat > docker-compose.yml << EOF
 version: '3.8'
@@ -79,12 +75,36 @@ services:
     image: harbor.yunnet.top/rfrp:latest
     container_name: rfrpc
     restart: unless-stopped
-    volumes:
-      - ./rfrpc.toml:/app/rfrpc.toml:ro
-    command: ["/app/rfrpc"]
+    command: ["/app/client", "--controller-url", "http://your-server-ip:3100", "--token", "your-client-token"]
 EOF
 
 docker-compose up -d
+```
+
+#### 原生部署
+
+**Linux/macOS (守护进程模式)**
+```bash
+# 前台运行
+./client --controller-url http://your-server-ip:3100 --token your-client-token
+
+# 守护进程模式
+./client --controller-url http://your-server-ip:3100 --token your-client-token --daemon
+```
+
+**Windows (服务模式)**
+```powershell
+# 安装为 Windows 服务（需要管理员权限）
+.\client.exe --install-service --controller-url http://your-server-ip:3100 --token your-client-token
+
+# 启动服务
+sc start RfrpClient
+
+# 停止服务
+sc stop RfrpClient
+
+# 卸载服务
+.\client.exe --uninstall-service
 ```
 
 ### 5. 使用示例
@@ -289,13 +309,19 @@ sudo systemctl enable --now rfrps
 |--------|------|--------|
 | `bind_port` | QUIC 监听端口 | `7000` |
 
-### 客户端配置 (rfrpc.toml)
+### 客户端配置
 
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| `server_addr` | 服务器地址 | - |
-| `server_port` | 服务器端口 | `7000` |
-| `token` | 客户端认证令牌 | - |
+客户端通过命令行参数配置：
+
+| 参数 | 说明 | 必需 |
+|------|------|------|
+| `--controller-url` | Controller 地址（例如 http://server:3100） | 是 |
+| `--token` | 客户端认证令牌 | 是 |
+| `--daemon` | 守护进程模式（仅 Unix 系统） | 否 |
+| `--pid-file` | PID 文件路径（守护进程模式） | 否 |
+| `--log-file` | 日志文件路径（守护进程模式） | 否 |
+| `--install-service` | 安装为 Windows 服务 | 否 |
+| `--uninstall-service` | 卸载 Windows 服务 | 否 |
 
 ## 🌐 Web 管理界面
 
@@ -348,30 +374,33 @@ sudo systemctl enable --now rfrps
 ## 🏗️ 架构
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         RFRP 架构                            │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│   ┌──────────────┐            ┌──────────────┐             │
-│   │   rfrpc      │            │   rfrps      │             │
-│   │   (客户端)   │◄───QUIC───►│  (服务端)    │             │
-│   │              │   加密通信   │              │             │
-│   └──────┬───────┘            └──────┬───────┘             │
-│          │                           │                      │
-│          │ TCP/UDP                   │                      │
-│          ▼                           ▼                      │
-│   ┌──────────────┐            ┌──────────────┐             │
-│   │  本地服务    │            │  Web 界面    │             │
-│   │              │            │  (React)     │             │
-│   └──────────────┘            └──────────────┘             │
-│                                          │                  │
-│                                          ▼                  │
-│                                  ┌──────────────┐          │
-│                                  │  SQLite DB   │          │
-│                                  └──────────────┘          │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         RFRP 三层架构                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Dashboard (React) ──HTTP/REST──> Controller (Axum)             │
+│                                         │                        │
+│                                         ├──gRPC Stream──> Node   │
+│                                         │                   │    │
+│                                         │                   └──QUIC/KCP──> 本地服务
+│                                         │                        │
+│                                         └──gRPC Stream──> Client │
+│                                                             │    │
+│                                                             └──TCP/UDP──> 本地服务
+│                                                                 │
+│                                    ┌──────────────┐            │
+│                                    │  SQLite DB   │            │
+│                                    └──────────────┘            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+### 核心组件
+
+- **Controller**：中央控制器，提供 Web 管理界面、RESTful API 和 gRPC 服务
+- **Node**：节点服务器，提供 QUIC/KCP 隧道服务，通过 gRPC 连接到 Controller
+- **Client**：客户端，通过 gRPC 连接到 Controller，建立到 Node 的隧道连接
+- **Dashboard**：React + TypeScript 前端管理界面
 
 ### 技术栈
 
@@ -412,14 +441,17 @@ cd rfrp
 # 构建所有组件
 cargo build --release
 
-# 构建并运行服务端
-cargo run --release -p rfrps
+# 运行 Controller
+cargo run --release -p controller
 
-# 构建并运行客户端
-cargo run --release -p rfrpc
+# 运行 Node（节点服务器）
+cargo run --release -p node -- --controller-url http://localhost:3100 --token <token> --bind-port 7000
 
-# 开发 Web 界面
-cd web
+# 运行 Client（客户端）
+cargo run --release -p client -- --controller-url http://localhost:3100 --token <token>
+
+# 开发 Dashboard
+cd dashboard
 bun install
 bun run dev
 ```
@@ -484,11 +516,21 @@ RFRP 提供详细的流量统计功能：
 - 检查容器是否正常运行：`docker-compose ps`
 - 查看日志排查错误：`docker-compose logs rfrps`
 
-**Q: 客户端无法连接到服务端？**
-- 确认服务端防火墙开放 7000/udp 端口
-- 检查客户端配置中的 server_addr 和 token 是否正确
-- 查看客户端日志：`docker-compose logs rfrpc`
-- 确认服务端健康状态：访问 `http://server-ip:3000`
+**Q: 客户端无法连接到 Controller？**
+- 确认 Controller 的 gRPC 端口（默认 3100）可访问
+- 检查客户端的 controller-url 和 token 是否正确
+- 查看客户端日志：`docker-compose logs rfrpc` 或查看守护进程日志
+- 确认 Controller 健康状态：访问 `http://server-ip:3000`
+
+**Q: Windows 服务安装失败？**
+- 确保以管理员权限运行命令提示符或 PowerShell
+- 检查是否已存在同名服务：`sc query RfrpClient`
+- 查看 Windows 事件查看器中的应用程序日志
+
+**Q: Unix 守护进程无法启动？**
+- 检查 PID 文件路径是否有写入权限
+- 检查日志文件路径是否有写入权限
+- 查看日志文件：`tail -f /var/log/rfrp-client.log`
 
 **Q: 忘记 admin 密码怎么办？**
 ```bash

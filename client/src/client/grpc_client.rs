@@ -7,7 +7,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
-use tracing::{error, info, warn};
+use tracing::{error, info, warn, debug};
 
 use common::config::KcpConfig;
 use common::grpc::rfrp;
@@ -78,10 +78,7 @@ pub async fn connect_and_run(
 
     let client_id = auth_resp.client_id;
     let client_name = auth_resp.client_name.clone();
-    info!(
-        "gRPC 认证成功: Client #{} ({})",
-        client_id, auth_resp.client_name
-    );
+    info!("客户端认证成功: {} (ID: {})", client_name, client_id);
 
     // 启动消息接收循环
     tokio::spawn(async move {
@@ -122,10 +119,7 @@ async fn message_loop(
             }
 
             ControllerPayload::ProxyUpdate(update) => {
-                info!(
-                    "收到代理列表推送: {} 个 Server 分组",
-                    update.server_groups.len()
-                );
+                debug!("收到代理配置更新: {} 个节点", update.server_groups.len());
                 let groups = convert_server_groups(update.server_groups);
                 if update_tx.send(groups).await.is_err() {
                     warn!("代理列表更新通道已关闭");
@@ -143,7 +137,7 @@ async fn message_loop(
         }
     }
 
-    warn!("Agent Client gRPC 连接断开");
+    warn!("gRPC 连接断开");
 }
 
 /// 心跳循环

@@ -26,8 +26,8 @@ pub async fn run_client(
         .with(LogCollectorLayer::new(log_collector.clone()))
         .init();
 
-    info!("Agent Client 启动 (Controller gRPC 模式)");
-    info!("Controller: {}", controller_url);
+    info!("RFRP 客户端启动");
+    info!("控制器地址: {}", controller_url);
 
     // Controller 模式：通过 gRPC 双向流接收代理列表推送
     let conn_manager = connection_manager::ConnectionManager::new(
@@ -39,22 +39,22 @@ pub async fn run_client(
     loop {
         match grpc_client::connect_and_run(&controller_url, &token).await {
             Ok((_client_id, client_name, mut update_rx)) => {
-                info!("已连接 Controller，客户端: {}", client_name);
+                info!("已连接控制器: {}", client_name);
 
                 // 接收代理列表推送并调和连接
                 while let Some(server_groups) = update_rx.recv().await {
-                    info!("收到代理列表更新: {} 个 Server 分组", server_groups.len());
+                    info!("代理配置已更新: {} 个节点", server_groups.len());
                     conn_manager.reconcile(server_groups).await;
                 }
 
-                warn!("与 Controller 的 gRPC 连接断开");
+                warn!("控制器连接断开");
             }
             Err(e) => {
-                error!("连接 Controller 失败: {}", e);
+                error!("连接控制器失败: {}", e);
             }
         }
 
-        warn!("5秒后重连 Controller...");
+        warn!("5 秒后重连...");
         tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }

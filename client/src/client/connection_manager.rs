@@ -8,7 +8,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tracing::{info, error, warn};
+use tracing::{info, error, warn, debug};
 
 use common::{TunnelConnector, QuicConnector, KcpConnector, TunnelProtocol};
 use common::protocol::client_config::ServerProxyGroup;
@@ -68,8 +68,8 @@ impl ConnectionManager {
                     Some(conn) => {
                         // 已有连接，更新代理列表（暂不需要重连）
                         if conn.proxy_ids != new_proxy_ids {
-                            info!(
-                                "节点 #{} 代理列表已更新: {} -> {} 个",
+                            debug!(
+                                "节点 #{} 代理数量: {} -> {}",
                                 group.node_id,
                                 conn.proxy_ids.len(),
                                 new_proxy_ids.len()

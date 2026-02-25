@@ -23,7 +23,7 @@ pub async fn connect_once(
     token: &str,
     log_collector: LogCollector,
 ) -> Result<()> {
-    info!("Connecting to server: {}", server_addr);
+    info!("连接节点: {}", server_addr);
     connect_to_server(connector, server_addr, token, log_collector).await
 }
 
@@ -37,10 +37,8 @@ async fn connect_to_server(
     let conn = connector.connect(server_addr).await?;
     let conn = Arc::new(conn);
 
-    info!("Connected to server: {}", server_addr);
-
     // Send token for authentication
-    info!("Sending token for authentication: {}", token);
+    debug!("发送认证令牌");
     let mut uni_stream = conn.open_uni().await?;
     let token_bytes = token.as_bytes();
     let len = token_bytes.len() as u16;
@@ -48,8 +46,7 @@ async fn connect_to_server(
     uni_stream.write_all(token_bytes).await?;
     uni_stream.finish().await?;
 
-    info!("Authentication successful");
-    info!("Waiting for proxy requests...");
+    info!("节点认证成功: {}", server_addr);
 
     // Start application-level heartbeat task
     let conn_heartbeat = conn.clone();
@@ -66,7 +63,7 @@ async fn connect_to_server(
 
             // Check if connection is still valid
             if conn_heartbeat.close_reason().is_some() {
-                warn!("Detected connection to server is closed");
+                warn!("检测到连接已关闭");
                 heartbeat_failed_clone.store(true, Ordering::SeqCst);
                 break;
             }
@@ -79,10 +76,10 @@ async fn connect_to_server(
                 }
                 Err(e) => {
                     consecutive_failures += 1;
-                    warn!("Heartbeat failed ({}/{}): {}", consecutive_failures, MAX_FAILURES, e);
+                    warn!("心跳失败 ({}/{}): {}", consecutive_failures, MAX_FAILURES, e);
 
                     if consecutive_failures >= MAX_FAILURES {
-                        error!("Heartbeat failed {} consecutive times, connection is broken", MAX_FAILURES);
+                        error!("心跳连续失败 {} 次，连接已断开", MAX_FAILURES);
                         heartbeat_failed_clone.store(true, Ordering::SeqCst);
                         break;
                     }
@@ -95,15 +92,15 @@ async fn connect_to_server(
     loop {
         // Check if heartbeat failed
         if heartbeat_failed.load(Ordering::SeqCst) {
-            error!("Heartbeat check failed, preparing to reconnect");
-            return Err(anyhow::anyhow!("Heartbeat failed"));
+            error!("心跳检查失败，准备重连");
+            return Err(anyhow::anyhow!("心跳失败"));
         }
 
         tokio::select! {
             // Monitor heartbeat task
             _ = &mut heartbeat_handle => {
-                error!("Heartbeat task ended, preparing to reconnect");
-                return Err(anyhow::anyhow!("Heartbeat task ended"));
+                error!("心跳任务结束，准备重连");
+                return Err(anyhow::anyhow!("心跳任务结束"));
             }
             // Accept new streams
             result = conn.accept_bi() => {
@@ -121,27 +118,26 @@ async fn connect_to_server(
                             match msg_type_buf[0] {
                                 b'p' => {
                                     // 'p' = proxy request
-                                    info!("Received new proxy request");
+                                    debug!("收到代理请求");
                                     if let Err(e) = handle_proxy_stream(quic_send, quic_recv).await {
-                                        error!("Error handling proxy stream: {}", e);
+                                        error!("代理流处理错误: {}", e);
                                     }
-                                    info!("Proxy stream closed");
                                 }
                                 b'l' => {
                                     // 'l' = log request
-                                    info!("Received log request");
+                                    debug!("收到日志请求");
                                     if let Err(e) = handle_log_request(quic_send, quic_recv, collector).await {
-                                        error!("Error handling log request: {}", e);
+                                        error!("日志请求处理错误: {}", e);
                                     }
                                 }
                                 _ => {
-                                    warn!("Unknown message type: {}", msg_type_buf[0]);
+                                    warn!("未知消息类型: {}", msg_type_buf[0]);
                                 }
                             }
                         });
                     }
                     Err(e) => {
-                        error!("Failed to accept stream: {}", e);
+                        error!("接受流失败: {}", e);
                         return Err(e);
                     }
                 }
@@ -168,7 +164,7 @@ async fn handle_proxy_stream(
     quic_recv.read_exact(&mut addr_buf).await?;
     let target_addr = String::from_utf8(addr_buf)?;
 
-    info!("Target address: {}, Protocol: {}", target_addr,
+    debug!("目标地址: {}, 协议: {}", target_addr,
           if protocol_type == b'u' { "UDP" } else { "TCP" });
 
     // Connect to target service based on protocol type
@@ -182,8 +178,8 @@ async fn handle_proxy_stream(
             handle_udp_proxy(quic_send, quic_recv, &target_addr).await?;
         }
         _ => {
-            error!("Unknown protocol type: {}", protocol_type);
-            return Err(anyhow::anyhow!("Unknown protocol type: {}", protocol_type));
+            error!("未知协议类型: {}", protocol_type);
+            return Err(anyhow::anyhow!("未知协议类型: {}", protocol_type));
         }
     }
 
@@ -198,7 +194,7 @@ async fn handle_tcp_proxy(
     // Connect to target service
     let mut tcp_stream = TcpStream::connect(target_addr).await?;
 
-    info!("Connected to target service");
+    debug!("已连接目标服务: {}", target_addr);
 
     let (mut tcp_read, mut tcp_write) = tcp_stream.split();
 
@@ -235,12 +231,12 @@ async fn handle_tcp_proxy(
     tokio::select! {
         res = quic_to_tcp => {
             if let Err(e) = res {
-                error!("QUIC->TCP error: {}", e);
+                debug!("QUIC->TCP 传输结束: {}", e);
             }
         }
         res = tcp_to_quic => {
             if let Err(e) = res {
-                error!("TCP->QUIC error: {}", e);
+                debug!("TCP->QUIC 传输结束: {}", e);
             }
         }
     }
@@ -258,15 +254,14 @@ async fn handle_udp_proxy(
 ) -> Result<()> {
     // Bind a UDP socket
     let socket = create_configured_udp_socket("0.0.0.0:0".parse()?).await?;
-    let local_addr = socket.local_addr()?;
-    info!("UDP Socket bound: {}", local_addr);
+    debug!("UDP 代理已启动: {}", target_addr);
 
     // Read initial UDP data from server
     let mut recv_buf = vec![0u8; 65535];
     let initial_len = match quic_recv.read(&mut recv_buf).await? {
         Some(n) => n,
         None => {
-            error!("No initial UDP data received");
+            debug!("未收到初始 UDP 数据");
             return Ok(());
         }
     };
@@ -303,10 +298,9 @@ async fn handle_udp_proxy(
                     Ok((len, _from)) => {
                         // Send back to server
                         quic_send.write_all(&response_buf[..len]).await?;
-                        debug!("Forwarded UDP response: {} bytes", len);
                     }
                     Err(e) => {
-                        error!("UDP receive error: {}", e);
+                        error!("UDP 接收错误: {}", e);
                         break;
                     }
                 }
@@ -382,7 +376,7 @@ async fn handle_log_request(
     quic_send.write_all(logs_bytes).await?;
     quic_send.finish().await?;
 
-    info!("Sent {} logs ({} bytes)", logs.len(), logs_bytes.len());
+    debug!("已发送 {} 条日志 ({} 字节)", logs.len(), logs_bytes.len());
 
     Ok(())
 }

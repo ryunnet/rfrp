@@ -28,3 +28,11 @@ clap = { version = "4.5", features = ["derive"] }
 # gRPC
 tonic = "0.12"
 prost = "0.13"
+
+# Daemon (Unix only)
+[target.'cfg(unix)'.dependencies]
+daemonize = "0.5"
+
+# Windows Service
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.7"
