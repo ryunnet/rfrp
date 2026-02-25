@@ -5,6 +5,15 @@ import { formatDate } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { TableSkeleton } from '../components/Skeleton';
+import {
+  TableContainer,
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '../components/ui/table';
 
 export default function Nodes() {
   const { showToast } = useToast();
@@ -296,44 +305,25 @@ export default function Nodes() {
       {loading ? (
         <TableSkeleton rows={3} cols={7} />
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-            <thead>
-              <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  名称
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  类型
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  地区
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  公网IP
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  隧道地址
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  协议
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  状态
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  创建时间
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+        <TableContainer>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>名称</TableHead>
+                <TableHead>类型</TableHead>
+                <TableHead>地区</TableHead>
+                <TableHead>公网IP</TableHead>
+                <TableHead>隧道地址</TableHead>
+                <TableHead>协议</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead>创建时间</TableHead>
+                <TableHead className="text-right">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {nodes.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-6 py-16 text-center">
+                <TableRow>
+                  <TableCell colSpan={9} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
@@ -343,12 +333,12 @@ export default function Nodes() {
                       <p className="text-gray-500">暂无节点</p>
                       <p className="text-sm text-gray-400">点击"添加节点"来添加第一个节点</p>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : (
                 nodes.map((node) => (
-                  <tr key={node.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                  <TableRow key={node.id}>
+                    <TableCell className="whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white text-sm font-semibold shadow-sm">
                           {node.name.charAt(0).toUpperCase()}
@@ -360,8 +350,8 @@ export default function Nodes() {
                           )}
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg ${
                         node.nodeType === 'dedicated'
                           ? 'bg-purple-50 text-purple-700'
@@ -376,8 +366,8 @@ export default function Nodes() {
                         </svg>
                         {node.nodeType === 'dedicated' ? '独享' : '共享'}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       {node.region ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-50 text-blue-700">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
@@ -389,8 +379,8 @@ export default function Nodes() {
                       ) : (
                         <span className="text-xs text-gray-400">-</span>
                       )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       {node.publicIp ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-emerald-50 text-emerald-700 font-mono">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
@@ -401,18 +391,18 @@ export default function Nodes() {
                       ) : (
                         <span className="text-xs text-gray-400">-</span>
                       )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <span className="text-sm text-gray-600 font-mono">
                         {node.tunnelAddr ? `${node.tunnelAddr}:${node.tunnelPort}` : node.url}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 uppercase">
                         {node.tunnelProtocol || 'quic'}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
                         node.isOnline
                           ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700'
@@ -421,11 +411,11 @@ export default function Nodes() {
                         <span className={`w-1.5 h-1.5 rounded-full ${node.isOnline ? 'bg-green-500' : 'bg-red-400'}`}></span>
                         {node.isOnline ? '在线' : '离线'}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-gray-500">
                       {formatDate(node.created_at)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right">
                       <div className="flex flex-wrap items-center justify-end gap-1.5">
                         {isAdmin && (
                           <>
@@ -484,14 +474,13 @@ export default function Nodes() {
                           </span>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-            </table>
-          </div>
-        </div>
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
       {/* 创建节点弹窗 */}

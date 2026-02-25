@@ -5,6 +5,15 @@ import { formatBytes } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { TableSkeleton } from '../components/Skeleton';
+import {
+  TableContainer,
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '../components/ui/table';
 
 export default function Proxies() {
   const { showToast } = useToast();
@@ -302,41 +311,24 @@ export default function Proxies() {
       {loading ? (
         <TableSkeleton rows={5} cols={7} />
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-            <thead>
-              <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  名称
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  客户端
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  节点
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  类型
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  端口映射
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  状态
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  流量
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+        <TableContainer>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>名称</TableHead>
+                <TableHead>客户端</TableHead>
+                <TableHead>节点</TableHead>
+                <TableHead>类型</TableHead>
+                <TableHead>端口映射</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead>流量</TableHead>
+                <TableHead className="text-right">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {proxies.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-16 text-center">
+                <TableRow>
+                  <TableCell colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
@@ -354,31 +346,31 @@ export default function Proxies() {
                         创建第一个代理
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : (
                 proxies.map((proxy) => (
-                  <tr key={proxy.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                  <TableRow key={proxy.id}>
+                    <TableCell className="whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center text-white text-sm font-semibold shadow-sm">
                           {proxy.name.charAt(0).toUpperCase()}
                         </div>
                         <span className="text-sm font-semibold text-gray-900">{proxy.name}</span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <span className="text-sm text-gray-600">{getClientName(proxy.client_id)}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <span className="text-sm text-gray-600">{getNodeName(proxy.nodeId)}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-100 text-blue-700">
                         {(proxy.type || 'tcp').toUpperCase()}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <div className="flex items-center gap-2 text-sm">
                         <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-lg font-mono text-xs">
                           :{proxy.remotePort}
@@ -390,8 +382,8 @@ export default function Proxies() {
                           {proxy.localIP}:{proxy.localPort}
                         </span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg ${
                         proxy.enabled
                           ? 'bg-green-100 text-green-700'
@@ -400,8 +392,8 @@ export default function Proxies() {
                         <span className={`w-1.5 h-1.5 rounded-full ${proxy.enabled ? 'bg-green-500' : 'bg-gray-400'}`}></span>
                         {proxy.enabled ? '启用' : '禁用'}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1.5 text-xs">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-blue-500">
@@ -416,8 +408,8 @@ export default function Proxies() {
                           <span className="text-gray-600">{formatBytes(proxy.totalBytesReceived)}</span>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right">
                       <div className="flex flex-wrap items-center justify-end gap-1.5">
                         <button
                           onClick={() => handleToggleEnabled(proxy)}
@@ -442,14 +434,13 @@ export default function Proxies() {
                           删除
                         </button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-            </table>
-          </div>
-        </div>
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
       {/* 创建/编辑代理模态框 */}

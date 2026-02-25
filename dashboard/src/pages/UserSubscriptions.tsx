@@ -5,6 +5,15 @@ import { formatDate } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { TableSkeleton } from '../components/Skeleton';
+import {
+  TableContainer,
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '../components/ui/table';
 
 export default function UserSubscriptions() {
   const { showToast } = useToast();
@@ -184,46 +193,33 @@ export default function UserSubscriptions() {
       {loading ? (
         <TableSkeleton />
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead>
-              <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  用户
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  订阅套餐
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  有效期
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  流量使用
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  状态
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+        <TableContainer>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>用户</TableHead>
+                <TableHead>订阅套餐</TableHead>
+                <TableHead>有效期</TableHead>
+                <TableHead>流量使用</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead className="text-right">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {userSubscriptions.map((userSub) => (
-                <tr key={userSub.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                <TableRow key={userSub.id}>
+                  <TableCell className="whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{getUserName(userSub.userId)}</div>
                     <div className="text-sm text-gray-500">ID: {userSub.userId}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-gray-900">
                     {userSub.subscriptionName}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
                     <div className="text-sm text-gray-900">{formatDate(userSub.startDate)}</div>
                     <div className="text-sm text-gray-500">至 {formatDate(userSub.endDate)}</div>
-                  </td>
-                  <td className="px-6 py-4">
+                  </TableCell>
+                  <TableCell>
                     <div className="text-sm text-gray-900 mb-1">
                       {userSub.trafficUsedGb.toFixed(2)} / {userSub.trafficQuotaGb.toFixed(2)} GB
                     </div>
@@ -231,11 +227,11 @@ export default function UserSubscriptions() {
                     <div className="text-xs text-gray-500 mt-1">
                       剩余: {userSub.trafficRemainingGb.toFixed(2)} GB
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
                     {getStatusBadge(userSub)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex flex-wrap items-center justify-end gap-1.5">
                     {!userSub.isExpired && (
                       <button
@@ -252,72 +248,112 @@ export default function UserSubscriptions() {
                       删除
                     </button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-            </table>
-          </div>
-        </div>
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
-      {/* 创建用户订阅模态框 */}
+      {/* 分配订阅模态框 */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">分配订阅</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">选择用户 *</label>
-                <select
-                  value={formData.userId}
-                  onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+            <div className="p-6">
+              {/* 头部 */}
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">分配订阅</h3>
+                  <p className="text-sm text-gray-500">为用户分配订阅套餐</p>
+                </div>
+              </div>
+
+              {/* 表单 */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">选择用户 *</label>
+                  <select
+                    value={formData.userId}
+                    onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                  >
+                    <option value="">请选择用户</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.username} (ID: {user.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">选择订阅套餐 *</label>
+                  <select
+                    value={formData.subscriptionId}
+                    onChange={(e) => setFormData({ ...formData, subscriptionId: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                  >
+                    <option value="">请选择订阅套餐</option>
+                    {subscriptions.map((sub) => (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.name} - {sub.trafficQuotaGb} GB
+                        {sub.price && ` (¥${sub.price})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {formData.subscriptionId && (() => {
+                  const selected = subscriptions.find(s => s.id === parseInt(formData.subscriptionId));
+                  if (!selected) return null;
+                  const typeMap: Record<string, string> = { daily: '天', weekly: '周', monthly: '月', yearly: '年' };
+                  return (
+                    <div className="px-4 py-3 bg-blue-50/80 rounded-xl border border-blue-100">
+                      <div className="flex items-center gap-2 mb-1">
+                        <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                        </svg>
+                        <span className="text-sm font-medium text-blue-700">套餐详情</span>
+                      </div>
+                      <div className="text-sm text-blue-600 space-y-0.5">
+                        <p>周期：{selected.durationValue} {typeMap[selected.durationType] || selected.durationType}</p>
+                        <p>流量：{selected.trafficQuotaGb} GB</p>
+                        {selected.price && <p>价格：¥{selected.price}</p>}
+                        {selected.description && <p>描述：{selected.description}</p>}
+                      </div>
+                    </div>
+                  );
+                })()}
+                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50/80 rounded-xl border border-gray-200">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                  </svg>
+                  <span className="text-sm text-gray-500">订阅将从当前时间开始生效</span>
+                </div>
+              </div>
+
+              {/* 按钮 */}
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    resetForm();
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
                 >
-                  <option value="">请选择用户</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.username} (ID: {user.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">选择订阅套餐 *</label>
-                <select
-                  value={formData.subscriptionId}
-                  onChange={(e) => setFormData({ ...formData, subscriptionId: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  取消
+                </button>
+                <button
+                  onClick={handleCreateUserSubscription}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium rounded-xl hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-500/25 transition-all"
                 >
-                  <option value="">请选择订阅套餐</option>
-                  {subscriptions.map((sub) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.name} - {sub.trafficQuotaGb} GB
-                      {sub.price && ` (¥${sub.price})`}
-                    </option>
-                  ))}
-                </select>
+                  分配
+                </button>
               </div>
-              <div className="text-sm text-gray-500">
-                订阅将从当前时间开始生效
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  resetForm();
-                }}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleCreateUserSubscription}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                分配
-              </button>
             </div>
           </div>
         </div>

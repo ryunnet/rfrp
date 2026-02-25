@@ -5,6 +5,15 @@ import { formatDate } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { TableSkeleton } from '../components/Skeleton';
+import {
+  TableContainer,
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '../components/ui/table';
 
 export default function MySubscription() {
   const { showToast } = useToast();
@@ -144,7 +153,7 @@ export default function MySubscription() {
           )}
 
           {/* 订阅历史 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <TableContainer>
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">订阅历史</h2>
             </div>
@@ -158,56 +167,44 @@ export default function MySubscription() {
                 <p className="text-sm mt-2">请联系管理员为您分配订阅套餐</p>
               </div>
             ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead>
-                  <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      套餐名称
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      有效期
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      流量配额
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      已使用
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      状态
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {subscriptions.map((sub) => (
-                    <tr key={sub.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{sub.subscriptionName}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{formatDate(sub.startDate)}</div>
-                        <div className="text-sm text-gray-500">至 {formatDate(sub.endDate)}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatTraffic(sub.trafficQuotaGb)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{formatTraffic(sub.trafficUsedGb)}</div>
-                        <div className="text-xs text-gray-500">
-                          {((sub.trafficUsedGb / sub.trafficQuotaGb) * 100).toFixed(1)}%
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(sub)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>套餐名称</TableHead>
+                  <TableHead>有效期</TableHead>
+                  <TableHead>流量配额</TableHead>
+                  <TableHead>已使用</TableHead>
+                  <TableHead>状态</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {subscriptions.map((sub) => (
+                  <TableRow key={sub.id}>
+                    <TableCell className="whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{sub.subscriptionName}</div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{formatDate(sub.startDate)}</div>
+                      <div className="text-sm text-gray-500">至 {formatDate(sub.endDate)}</div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-gray-900">
+                      {formatTraffic(sub.trafficQuotaGb)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{formatTraffic(sub.trafficUsedGb)}</div>
+                      <div className="text-xs text-gray-500">
+                        {((sub.trafficUsedGb / sub.trafficQuotaGb) * 100).toFixed(1)}%
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {getStatusBadge(sub)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
             )}
-          </div>
+          </TableContainer>
         </>
       )}
     </div>

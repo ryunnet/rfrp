@@ -4,6 +4,15 @@ import { trafficService } from '../lib/services';
 import type { TrafficOverview } from '../lib/types';
 import { formatBytes, formatShortDate } from '../lib/utils';
 import SkeletonBlock, { CardSkeleton } from '../components/Skeleton';
+import {
+  TableContainer,
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '../components/ui/table';
 
 export default function Traffic() {
   const { user } = useAuth();
@@ -231,164 +240,132 @@ export default function Traffic() {
 
       {/* 用户流量排行 */}
       {traffic && traffic.by_user.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <TableContainer>
           <div className="px-6 py-4 border-b border-gray-100">
             <h3 className="text-lg font-semibold text-gray-900">用户流量排行</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead>
-                <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    用户
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    上传
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    下载
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    总流量
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {traffic.by_user.map((userTraffic) => (
-                  <tr key={userTraffic.user_id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-semibold">
-                          {userTraffic.username.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-sm font-medium text-gray-900">{userTraffic.username}</span>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>用户</TableHead>
+                <TableHead>上传</TableHead>
+                <TableHead>下载</TableHead>
+                <TableHead>总流量</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {traffic.by_user.map((userTraffic) => (
+                <TableRow key={userTraffic.user_id}>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-semibold">
+                        {userTraffic.username.charAt(0).toUpperCase()}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {formatBytes(userTraffic.total_bytes_sent)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {formatBytes(userTraffic.total_bytes_received)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-semibold text-gray-900">{formatBytes(userTraffic.total_bytes)}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      <span className="text-sm font-medium text-gray-900">{userTraffic.username}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-gray-600">
+                    {formatBytes(userTraffic.total_bytes_sent)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-gray-600">
+                    {formatBytes(userTraffic.total_bytes_received)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <span className="text-sm font-semibold text-gray-900">{formatBytes(userTraffic.total_bytes)}</span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
       {/* 客户端流量排行 */}
       {traffic && traffic.by_client.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <TableContainer>
           <div className="px-6 py-4 border-b border-gray-100">
             <h3 className="text-lg font-semibold text-gray-900">节点流量排行</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead>
-                <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    节点
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    上传
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    下载
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    总流量
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {traffic.by_client.map((clientTraffic) => (
-                  <tr key={clientTraffic.client_id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center text-white text-xs font-semibold">
-                          {clientTraffic.client_name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-sm font-medium text-gray-900">{clientTraffic.client_name}</span>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>节点</TableHead>
+                <TableHead>上传</TableHead>
+                <TableHead>下载</TableHead>
+                <TableHead>总流量</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {traffic.by_client.map((clientTraffic) => (
+                <TableRow key={clientTraffic.client_id}>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center text-white text-xs font-semibold">
+                        {clientTraffic.client_name.charAt(0).toUpperCase()}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {formatBytes(clientTraffic.total_bytes_sent)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {formatBytes(clientTraffic.total_bytes_received)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-semibold text-gray-900">{formatBytes(clientTraffic.total_bytes)}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      <span className="text-sm font-medium text-gray-900">{clientTraffic.client_name}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-gray-600">
+                    {formatBytes(clientTraffic.total_bytes_sent)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-gray-600">
+                    {formatBytes(clientTraffic.total_bytes_received)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <span className="text-sm font-semibold text-gray-900">{formatBytes(clientTraffic.total_bytes)}</span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
       {/* 代理流量排行 */}
       {traffic && traffic.by_proxy.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <TableContainer>
           <div className="px-6 py-4 border-b border-gray-100">
             <h3 className="text-lg font-semibold text-gray-900">代理流量排行</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead>
-                <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    代理名称
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    所属节点
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    上传
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    下载
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    总流量
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {traffic.by_proxy.map((proxyTraffic) => (
-                  <tr key={proxyTraffic.proxy_id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center text-white text-xs font-semibold">
-                          {proxyTraffic.proxy_name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-sm font-medium text-gray-900">{proxyTraffic.proxy_name}</span>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>代理名称</TableHead>
+                <TableHead>所属节点</TableHead>
+                <TableHead>上传</TableHead>
+                <TableHead>下载</TableHead>
+                <TableHead>总流量</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {traffic.by_proxy.map((proxyTraffic) => (
+                <TableRow key={proxyTraffic.proxy_id}>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center text-white text-xs font-semibold">
+                        {proxyTraffic.proxy_name.charAt(0).toUpperCase()}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {proxyTraffic.client_name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {formatBytes(proxyTraffic.total_bytes_sent)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {formatBytes(proxyTraffic.total_bytes_received)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-semibold text-gray-900">{formatBytes(proxyTraffic.total_bytes)}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      <span className="text-sm font-medium text-gray-900">{proxyTraffic.proxy_name}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-gray-600">
+                    {proxyTraffic.client_name}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-gray-600">
+                    {formatBytes(proxyTraffic.total_bytes_sent)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-gray-600">
+                    {formatBytes(proxyTraffic.total_bytes_received)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <span className="text-sm font-semibold text-gray-900">{formatBytes(proxyTraffic.total_bytes)}</span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
     </div>
   );
