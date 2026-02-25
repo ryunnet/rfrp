@@ -21,8 +21,8 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             archive: tar.gz
-          # Linux ARM64
-          - os: ubuntu-latest
+          # Linux ARM64 (原生 ARM64 runner)
+          - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             archive: tar.gz
           # Windows x86_64
@@ -47,13 +47,7 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross (for Linux ARM64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          cargo install cross --git https://github.com/cross-rs/cross
-
       - name: Install Protobuf Compiler
-        if: matrix.target != 'aarch64-unknown-linux-gnu'
         uses: arduino/setup-protoc@v3
         with:
           version: '25.x'
@@ -77,13 +71,7 @@ jobs:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build binaries (cross for ARM64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          cross build --release --target ${{ matrix.target }} -p controller -p node -p client
-
-      - name: Build binaries (cargo for other targets)
-        if: matrix.target != 'aarch64-unknown-linux-gnu'
+      - name: Build binaries
         run: |
           cargo build --release --target ${{ matrix.target }} -p controller -p node -p client
 
