@@ -4,7 +4,6 @@
 //! 根据客户端所属节点自动路由操作到正确的节点。
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -20,7 +19,7 @@ use common::protocol::control::{
     ConnectedClient, LogEntry, ProxyControl, ServerStatus,
 };
 
-use crate::entity::{Client, Node};
+use crate::entity::Node;
 use crate::migration::get_connection;
 
 /// 单个节点的 gRPC 流连接

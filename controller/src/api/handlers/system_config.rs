@@ -4,7 +4,6 @@ use axum::{
 };
 use sea_orm::{EntityTrait, Set, ActiveModelTrait, ColumnTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use crate::entity::{SystemConfig, system_config};
 use crate::migration::get_connection;
 use crate::AppState;

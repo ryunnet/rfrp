@@ -13,6 +13,8 @@ pub struct Model {
     pub duration_value: i32,
     #[serde(rename = "trafficQuotaGb")]
     pub traffic_quota_gb: f64,
+    #[serde(rename = "maxPortCount")]
+    pub max_port_count: Option<i32>,
     pub price: Option<f64>,
     pub description: Option<String>,
     #[serde(rename = "isActive")]

@@ -94,8 +94,16 @@ pub async fn validate_user_port_limit(
         }
     }
 
-    // 检查端口数量限制
-    if let Some(max_count) = user.max_port_count {
+    // 检查端口数量限制（使用套餐累加配额）
+    let (_, final_max_port_count) = crate::subscription_quota::get_user_final_quota(
+        user_id,
+        user.traffic_quota_gb,
+        user.max_port_count,
+        db,
+    )
+    .await?;
+
+    if let Some(max_count) = final_max_port_count {
         // 查询用户所有客户端的代理数量
         let user_clients = crate::entity::Client::find()
             .filter(crate::entity::client::Column::UserId.eq(user_id))

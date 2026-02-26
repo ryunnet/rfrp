@@ -7,6 +7,7 @@ mod middleware;
 mod traffic;
 mod traffic_limiter;
 mod port_limiter;
+mod subscription_quota;
 mod config_manager;
 mod api;
 mod node_manager;
@@ -20,7 +21,7 @@ mod geo_ip;
 use crate::migration::{get_connection, init_sqlite};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, PaginatorTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, QueryFilter, Set};
 use sea_orm_migration::MigratorTrait;
 use std::fs;
 use std::path::PathBuf;
@@ -359,10 +360,10 @@ async fn run_controller() -> Result<()> {
     };
 
     // 启动 Web API 服务
-    let web_handle = api::start_web_server(app_state.clone());
+    let _web_handle = api::start_web_server(app_state.clone());
 
     // 启动 gRPC Server（供 Agent Server 和 Agent Client 连接）
-    let grpc_handle = grpc_server::start_grpc_server(
+    let _grpc_handle = grpc_server::start_grpc_server(
         config.internal_port,
         node_manager.clone(),
         client_stream_manager.clone(),

@@ -199,6 +199,7 @@ export interface Subscription {
   durationType: string; // daily, weekly, monthly, yearly
   durationValue: number;
   trafficQuotaGb: number;
+  maxPortCount: number | null;
   price: number | null;
   description: string | null;
   isActive: boolean;

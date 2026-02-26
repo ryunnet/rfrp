@@ -12,7 +12,7 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use common::grpc::rfrp;
 use common::KcpConfig;
 
-use crate::entity::{Client, Node, Proxy, client, proxy, node};
+use crate::entity::{Client, Node, Proxy, proxy, node};
 use crate::migration::get_connection;
 
 /// 管理已连接的 Agent Client 流

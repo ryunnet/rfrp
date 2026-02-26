@@ -10,7 +10,7 @@ use common::protocol::auth::{
 };
 use common::protocol::control::ProxyConfig;
 
-use crate::entity::{Client, Proxy, User, UserNode, client, proxy, user_node};
+use crate::entity::{Client, Proxy, User, client, proxy};
 use crate::migration::get_connection;
 
 pub struct LocalControllerAuthProvider;

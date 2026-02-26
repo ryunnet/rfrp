@@ -40,6 +40,13 @@ export default function Proxies() {
     remotePort: '',
     enabled: true,
   });
+  const [userPortInfo, setUserPortInfo] = useState<{
+    maxPortCount: number | null;
+    currentPortCount: number;
+    allowedPortRange: string | null;
+  } | null>(null);
+  const [parsedPorts, setParsedPorts] = useState<number[]>([]);
+  const [portParseError, setPortParseError] = useState<string>('');
 
   useEffect(() => {
     loadData();
@@ -96,6 +103,9 @@ export default function Proxies() {
           setAvailableNodes(nodesRes.data.filter((node: Node) => node.nodeType === 'shared'));
         }
       }
+
+      // 加载用户端口配额信息
+      await loadUserPortInfo();
     } catch (error) {
       console.error('加载数据失败:', error);
       showToast('加载失败', 'error');
@@ -124,23 +134,80 @@ export default function Proxies() {
       return;
     }
 
+    // 解析端口
+    const { ports, error } = parsePortString(formData.remotePort);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+
+    if (ports.length === 0) {
+      showToast('请输入有效的端口', 'error');
+      return;
+    }
+
+    // 验证端口配额（仅对非管理员）
+    const authUser = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!authUser.is_admin && userPortInfo) {
+      if (userPortInfo.maxPortCount !== null) {
+        const availableCount = userPortInfo.maxPortCount - userPortInfo.currentPortCount;
+        if (ports.length > availableCount) {
+          showToast(
+            `端口配额不足：需要 ${ports.length} 个端口，可用 ${availableCount} 个（总配额 ${userPortInfo.maxPortCount}）`,
+            'error'
+          );
+          return;
+        }
+      }
+    }
+
     try {
-      const response = await proxyService.createProxy({
-        client_id: formData.client_id,
-        name: formData.name,
-        type: formData.type,
-        localIP: formData.localIP,
-        localPort: parseInt(formData.localPort),
-        remotePort: parseInt(formData.remotePort),
-        nodeId: parseInt(formData.node_id),
-      });
-      if (response.success) {
-        showToast('代理创建成功', 'success');
+      // 批量创建代理
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < ports.length; i++) {
+        const port = ports[i];
+        const proxyName = ports.length === 1 ? formData.name : `${formData.name}-${port}`;
+
+        try {
+          const response = await proxyService.createProxy({
+            client_id: formData.client_id,
+            name: proxyName,
+            type: formData.type,
+            localIP: formData.localIP,
+            localPort: parseInt(formData.localPort),
+            remotePort: port,
+            nodeId: parseInt(formData.node_id),
+          });
+
+          if (response.success) {
+            successCount++;
+          } else {
+            failCount++;
+            errors.push(`端口 ${port}: ${response.message || '创建失败'}`);
+          }
+        } catch (error) {
+          failCount++;
+          errors.push(`端口 ${port}: 创建失败`);
+        }
+      }
+
+      // 显示结果
+      if (successCount > 0 && failCount === 0) {
+        showToast(`成功创建 ${successCount} 个代理`, 'success');
         resetForm();
         setShowCreateModal(false);
         loadData();
+      } else if (successCount > 0 && failCount > 0) {
+        showToast(`部分成功：${successCount} 个成功，${failCount} 个失败`, 'error');
+        if (errors.length > 0) {
+          console.error('创建失败的代理:', errors);
+        }
+        loadData();
       } else {
-        showToast(response.message || '创建失败', 'error');
+        showToast(`创建失败：${errors[0] || '未知错误'}`, 'error');
       }
     } catch (error) {
       console.error('创建代理失败:', error);
@@ -237,6 +304,115 @@ export default function Proxies() {
     const node = nodes.find((n) => n.id === nodeId);
     return node?.name || String(nodeId);
   };
+
+  // 解析端口字符串，支持范围和逗号分隔
+  // 格式: "8000-8010" 或 "8000,8001,8002" 或 "8000-8002,8005,8010-8012"
+  const parsePortString = (portStr: string): { ports: number[]; error: string } => {
+    if (!portStr.trim()) {
+      return { ports: [], error: '' };
+    }
+
+    const ports: number[] = [];
+    const parts = portStr.split(',');
+
+    try {
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+
+        if (trimmed.includes('-')) {
+          // 范围格式: "8000-8010"
+          const rangeParts = trimmed.split('-');
+          if (rangeParts.length !== 2) {
+            return { ports: [], error: `无效的端口范围格式: ${trimmed}` };
+          }
+
+          const start = parseInt(rangeParts[0].trim());
+          const end = parseInt(rangeParts[1].trim());
+
+          if (isNaN(start) || isNaN(end)) {
+            return { ports: [], error: `无效的端口号: ${trimmed}` };
+          }
+
+          if (start < 1 || start > 65535 || end < 1 || end > 65535) {
+            return { ports: [], error: `端口号必须在 1-65535 之间: ${trimmed}` };
+          }
+
+          if (start > end) {
+            return { ports: [], error: `起始端口不能大于结束端口: ${trimmed}` };
+          }
+
+          // 限制范围大小，避免生成过多端口
+          if (end - start > 1000) {
+            return { ports: [], error: `端口范围过大（最多1000个）: ${trimmed}` };
+          }
+
+          for (let port = start; port <= end; port++) {
+            ports.push(port);
+          }
+        } else {
+          // 单个端口: "8000"
+          const port = parseInt(trimmed);
+          if (isNaN(port)) {
+            return { ports: [], error: `无效的端口号: ${trimmed}` };
+          }
+
+          if (port < 1 || port > 65535) {
+            return { ports: [], error: `端口号必须在 1-65535 之间: ${trimmed}` };
+          }
+
+          ports.push(port);
+        }
+      }
+
+      // 去重
+      const uniquePorts = Array.from(new Set(ports)).sort((a, b) => a - b);
+      return { ports: uniquePorts, error: '' };
+    } catch (e) {
+      return { ports: [], error: '端口解析失败' };
+    }
+  };
+
+  // 获取用户端口配额信息
+  const loadUserPortInfo = async () => {
+    try {
+      const authUser = JSON.parse(localStorage.getItem('user') || '{}');
+      if (authUser.is_admin) {
+        // 管理员没有端口限制
+        setUserPortInfo(null);
+        return;
+      }
+
+      if (authUser.id) {
+        const response = await userService.getUsers();
+        if (response.success && response.data) {
+          const currentUser = response.data.find((u: any) => u.id === authUser.id);
+          if (currentUser) {
+            setUserPortInfo({
+              maxPortCount: currentUser.maxPortCount,
+              currentPortCount: currentUser.currentPortCount || 0,
+              allowedPortRange: currentUser.allowedPortRange,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('加载端口配额信息失败:', error);
+    }
+  };
+
+  // 监听远程端口输入变化，实时解析
+  useEffect(() => {
+    if (!formData.remotePort) {
+      setParsedPorts([]);
+      setPortParseError('');
+      return;
+    }
+
+    const { ports, error } = parsePortString(formData.remotePort);
+    setParsedPorts(ports);
+    setPortParseError(error);
+  }, [formData.remotePort]);
 
   // 筛选节点
   const getFilteredNodes = () => {
@@ -752,34 +928,105 @@ export default function Proxies() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">节点端口 *</label>
                     <input
-                      type="number"
+                      type="text"
                       value={formData.remotePort}
                       onChange={(e) => setFormData({ ...formData, remotePort: e.target.value })}
-                      placeholder="如: 8080"
+                      placeholder="如: 8080 或 8000-8010 或 8000,8001,8002"
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
                     />
-                    {formData.client_id && (() => {
-                      const client = clients.find(c => c.id.toString() === formData.client_id);
-                      const authUser = JSON.parse(localStorage.getItem('user') || '{}');
 
-                      // 只对非管理员显示端口限制提示
-                      if (!authUser.is_admin && client?.userId) {
-                        return (
-                          <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    {/* 端口解析结果显示 */}
+                    {formData.remotePort && (
+                      <div className="mt-2 space-y-2">
+                        {portParseError ? (
+                          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                             <div className="flex items-start gap-2">
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                               </svg>
-                              <div className="text-xs text-blue-700">
-                                <p className="font-medium mb-1">端口限制提示</p>
-                                <p>创建代理时请注意您的端口使用限制，超出限制将无法创建</p>
+                              <div className="text-xs text-red-700">
+                                <p className="font-medium">{portParseError}</p>
                               </div>
                             </div>
                           </div>
-                        );
-                      }
-                      return null;
-                    })()}
+                        ) : parsedPorts.length > 0 && (
+                          <div className="space-y-2">
+                            {/* 端口数量显示 */}
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <div className="flex items-start gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div className="text-xs text-blue-700 flex-1">
+                                  <p className="font-medium mb-1">
+                                    将创建 {parsedPorts.length} 个代理
+                                  </p>
+                                  {parsedPorts.length <= 10 ? (
+                                    <p className="text-blue-600">
+                                      端口: {parsedPorts.join(', ')}
+                                    </p>
+                                  ) : (
+                                    <p className="text-blue-600">
+                                      端口: {parsedPorts.slice(0, 10).join(', ')} ... (共 {parsedPorts.length} 个)
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 端口配额验证 */}
+                            {userPortInfo && userPortInfo.maxPortCount !== null && (
+                              <div className={`p-3 border rounded-lg ${
+                                parsedPorts.length + userPortInfo.currentPortCount > userPortInfo.maxPortCount
+                                  ? 'bg-red-50 border-red-200'
+                                  : parsedPorts.length + userPortInfo.currentPortCount > userPortInfo.maxPortCount * 0.8
+                                  ? 'bg-amber-50 border-amber-200'
+                                  : 'bg-green-50 border-green-200'
+                              }`}>
+                                <div className="flex items-start gap-2">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+                                    parsedPorts.length + userPortInfo.currentPortCount > userPortInfo.maxPortCount
+                                      ? 'text-red-600'
+                                      : parsedPorts.length + userPortInfo.currentPortCount > userPortInfo.maxPortCount * 0.8
+                                      ? 'text-amber-600'
+                                      : 'text-green-600'
+                                  }`}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                                  </svg>
+                                  <div className={`text-xs flex-1 ${
+                                    parsedPorts.length + userPortInfo.currentPortCount > userPortInfo.maxPortCount
+                                      ? 'text-red-700'
+                                      : parsedPorts.length + userPortInfo.currentPortCount > userPortInfo.maxPortCount * 0.8
+                                      ? 'text-amber-700'
+                                      : 'text-green-700'
+                                  }`}>
+                                    <p className="font-medium mb-1">端口配额</p>
+                                    <div className="space-y-1">
+                                      <p>当前已用: {userPortInfo.currentPortCount} / {userPortInfo.maxPortCount}</p>
+                                      <p>本次创建: {parsedPorts.length} 个</p>
+                                      <p className="font-semibold">
+                                        创建后: {userPortInfo.currentPortCount + parsedPorts.length} / {userPortInfo.maxPortCount}
+                                        {parsedPorts.length + userPortInfo.currentPortCount > userPortInfo.maxPortCount && (
+                                          <span className="text-red-600"> (超出配额 {parsedPorts.length + userPortInfo.currentPortCount - userPortInfo.maxPortCount} 个)</span>
+                                        )}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 端口格式说明 */}
+                    <p className="mt-2 text-xs text-gray-500 flex items-start gap-1.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 mt-0.5 flex-shrink-0">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                      </svg>
+                      <span>支持单个端口（8080）、范围端口（8000-8010）或逗号分隔（8000,8001,8002）</span>
+                    </p>
                   </div>
                 </div>
                 {editingProxy && (

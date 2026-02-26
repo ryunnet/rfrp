@@ -85,8 +85,16 @@ pub async fn check_user_traffic_limit(user_id: i64, db: &DatabaseConnection) -> 
         return Ok((false, String::new()));
     }
 
+    // 获取最终配额（套餐配额 + 用户直接配额）
+    let (final_traffic_quota_gb, _) = crate::subscription_quota::get_user_final_quota(
+        user_id,
+        user.traffic_quota_gb,
+        user.max_port_count,
+        db,
+    ).await?;
+
     // 检查配额模式
-    if let Some(quota_gb) = user.traffic_quota_gb {
+    if let Some(quota_gb) = final_traffic_quota_gb {
         let total_used = user.total_bytes_sent + user.total_bytes_received;
         let quota_bytes = gb_to_bytes(quota_gb);
 
@@ -184,8 +192,16 @@ pub async fn check_user_quota_allocation(user_id: i64, additional_quota_gb: f64,
         None => return Ok((false, "用户不存在".to_string())),
     };
 
+    // 获取最终配额（套餐配额 + 用户直接配额）
+    let (final_traffic_quota_gb, _) = crate::subscription_quota::get_user_final_quota(
+        user_id,
+        user.traffic_quota_gb,
+        user.max_port_count,
+        db,
+    ).await?;
+
     // 如果用户没有配额限制，允许分配
-    let user_quota_gb = match user.traffic_quota_gb {
+    let user_quota_gb = match final_traffic_quota_gb {
         Some(q) => q,
         None => return Ok((true, String::new())),
     };

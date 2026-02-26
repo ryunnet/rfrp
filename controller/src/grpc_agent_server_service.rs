@@ -18,7 +18,7 @@ use common::grpc::AgentServerService;
 
 use crate::local_auth_provider::LocalControllerAuthProvider;
 use crate::node_manager::NodeManager;
-use crate::entity::{Node, Client, Proxy, node, proxy, client};
+use crate::entity::{Node, Proxy, node, proxy};
 use crate::migration::get_connection;
 
 use common::protocol::auth::ClientAuthProvider;

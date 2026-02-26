@@ -10,7 +10,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
-    entity::{Node, node, Client, client},
+    entity::{Node, node},
     migration::get_connection,
     middleware::AuthUser,
     AppState,
@@ -109,7 +109,7 @@ pub async fn list_nodes(
 /// POST /api/nodes — 创建节点
 pub async fn create_node(
     Extension(auth_user_opt): Extension<Option<AuthUser>>,
-    Extension(app_state): Extension<AppState>,
+    Extension(_app_state): Extension<AppState>,
     Json(req): Json<CreateNodeRequest>,
 ) -> impl IntoResponse {
     let auth_user = match auth_user_opt {
@@ -207,20 +207,13 @@ pub async fn update_node(
 
     let mut active: node::ActiveModel = node_model.into();
 
-    let mut url_changed = false;
-    let mut new_url = String::new();
-    let mut new_secret = String::new();
-
     if let Some(name) = req.name {
         active.name = Set(name);
     }
     if let Some(url) = req.url {
-        new_url = url.clone();
-        url_changed = true;
         active.url = Set(url);
     }
     if let Some(secret) = req.secret {
-        new_secret = secret.clone();
         active.secret = Set(secret);
     }
     if req.region.is_some() {
@@ -280,7 +273,7 @@ pub async fn update_node(
 pub async fn delete_node(
     Path(id): Path<i64>,
     Extension(auth_user_opt): Extension<Option<AuthUser>>,
-    Extension(app_state): Extension<AppState>,
+    Extension(_app_state): Extension<AppState>,
 ) -> impl IntoResponse {
     let auth_user = match auth_user_opt {
         Some(user) => user,

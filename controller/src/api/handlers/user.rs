@@ -89,25 +89,44 @@ pub async fn list_users(Extension(auth_user_opt): Extension<Option<AuthUser>>) -
                     Err(_) => 0,
                 };
 
-                let remaining_quota_gb = crate::traffic_limiter::calculate_user_remaining_quota(&user);
+                // 获取最终配额（套餐配额 + 用户直接配额）
+                let (final_traffic_quota_gb, final_max_port_count) = match crate::subscription_quota::get_user_final_quota(
+                    user.id,
+                    user.traffic_quota_gb,
+                    user.max_port_count,
+                    db,
+                ).await {
+                    Ok(quota) => quota,
+                    Err(_) => (user.traffic_quota_gb, user.max_port_count),
+                };
+
+                // 使用最终配额计算剩余配额
+                let remaining_quota_gb = if let Some(quota_gb) = final_traffic_quota_gb {
+                    let total_used = user.total_bytes_sent + user.total_bytes_received;
+                    let used_gb = crate::traffic_limiter::bytes_to_gb(total_used);
+                    Some((quota_gb - used_gb).max(0.0))
+                } else {
+                    None
+                };
+
                 let current_port_count = crate::port_limiter::get_user_port_count(user.id, db).await.unwrap_or(0);
 
                 users_with_count.push(UserWithNodeCount {
                     id: user.id,
-                    username: user.username,
+                    username: user.username.clone(),
                     is_admin: user.is_admin,
                     created_at: user.created_at.to_string(),
                     updated_at: user.updated_at.to_string(),
                     node_count,
                     total_bytes_sent: user.total_bytes_sent,
                     total_bytes_received: user.total_bytes_received,
-                    traffic_quota_gb: user.traffic_quota_gb,
+                    traffic_quota_gb: final_traffic_quota_gb,
                     remaining_quota_gb,
-                    traffic_reset_cycle: user.traffic_reset_cycle,
+                    traffic_reset_cycle: user.traffic_reset_cycle.clone(),
                     last_reset_at: user.last_reset_at.map(|d| d.to_string()),
                     is_traffic_exceeded: user.is_traffic_exceeded,
-                    max_port_count: user.max_port_count,
-                    allowed_port_range: user.allowed_port_range,
+                    max_port_count: final_max_port_count,
+                    allowed_port_range: user.allowed_port_range.clone(),
                     current_port_count,
                 });
             }
@@ -681,7 +700,18 @@ pub async fn get_user_quota_info(
         }
     }
 
-    let total_quota_gb = user.traffic_quota_gb;
+    // 获取最终配额（套餐配额 + 用户直接配额）
+    let (final_traffic_quota_gb, _) = match crate::subscription_quota::get_user_final_quota(
+        user_id,
+        user.traffic_quota_gb,
+        user.max_port_count,
+        db,
+    ).await {
+        Ok(quota) => quota,
+        Err(_) => (user.traffic_quota_gb, user.max_port_count),
+    };
+
+    let total_quota_gb = final_traffic_quota_gb;
     let available_gb = if let Some(quota) = total_quota_gb {
         (quota - used_gb - allocated_to_clients_gb).max(0.0)
     } else {

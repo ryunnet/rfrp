@@ -22,6 +22,8 @@ const configHints: Record<string, string> = {
   grpc_tls_enabled: '启用后 gRPC 连接将使用 TLS 加密，可避免 GFW 干扰',
   grpc_tls_cert_path: 'TLS 证书文件的绝对路径（PEM 格式）',
   grpc_tls_key_path: 'TLS 私钥文件的绝对路径（PEM 格式）',
+  grpc_tls_cert_content: 'TLS 证书内容（PEM 格式，可直接上传证书文件）',
+  grpc_tls_key_content: 'TLS 私钥内容（PEM 格式，可直接上传私钥文件）',
   grpc_domain: 'gRPC 服务器域名（可选，用于 SNI）',
 };
 
@@ -159,6 +161,56 @@ export default function Settings() {
   const renderConfigInput = (config: ConfigItem) => {
     const value = editedValues[config.key];
     const inputClassName = "w-full max-w-xs px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white";
+
+    // 文件上传组件（用于证书内容）
+    if (config.key === 'grpc_tls_cert_content' || config.key === 'grpc_tls_key_content') {
+      const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+          const text = await file.text();
+          // 将文件内容转换为 base64
+          const base64 = btoa(text);
+          handleValueChange(config.key, base64, config.valueType);
+          showToast(`${config.key === 'grpc_tls_cert_content' ? '证书' : '私钥'}文件已加载`, 'success');
+        } catch (error) {
+          showToast('文件读取失败', 'error');
+        }
+      };
+
+      const hasContent = value && value !== '';
+
+      return (
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-lg shadow-blue-500/25 transition-all duration-200 cursor-pointer">
+              <input
+                type="file"
+                accept=".pem,.crt,.key"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+              </svg>
+              上传文件
+            </label>
+            {hasContent && (
+              <span className="text-sm text-green-600 font-medium">✓ 已上传</span>
+            )}
+          </div>
+          {hasContent && (
+            <button
+              onClick={() => handleValueChange(config.key, '', config.valueType)}
+              className="text-sm text-red-600 hover:text-red-700 font-medium"
+            >
+              清除内容
+            </button>
+          )}
+        </div>
+      );
+    }
 
     switch (config.valueType) {
       case 'number':

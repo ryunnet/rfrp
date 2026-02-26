@@ -42,6 +42,7 @@ export default function Subscriptions() {
     durationType: 'monthly',
     durationValue: '1',
     trafficQuotaGb: '',
+    maxPortCount: '',
     price: '',
     description: '',
     isActive: true,
@@ -72,6 +73,7 @@ export default function Subscriptions() {
       durationType: 'monthly',
       durationValue: '1',
       trafficQuotaGb: '',
+      maxPortCount: '',
       price: '',
       description: '',
       isActive: true,
@@ -90,6 +92,7 @@ export default function Subscriptions() {
         duration_type: formData.durationType,
         duration_value: parseInt(formData.durationValue) || 1,
         traffic_quota_gb: parseFloat(formData.trafficQuotaGb),
+        max_port_count: formData.maxPortCount ? parseInt(formData.maxPortCount) : undefined,
         price: formData.price ? parseFloat(formData.price) : undefined,
         description: formData.description || undefined,
         is_active: formData.isActive,
@@ -120,6 +123,7 @@ export default function Subscriptions() {
         duration_type: formData.durationType,
         duration_value: parseInt(formData.durationValue) || 1,
         traffic_quota_gb: parseFloat(formData.trafficQuotaGb),
+        max_port_count: formData.maxPortCount ? parseInt(formData.maxPortCount) : undefined,
         price: formData.price ? parseFloat(formData.price) : undefined,
         description: formData.description || undefined,
         is_active: formData.isActive,
@@ -187,6 +191,7 @@ export default function Subscriptions() {
       durationType: subscription.durationType,
       durationValue: subscription.durationValue.toString(),
       trafficQuotaGb: subscription.trafficQuotaGb.toString(),
+      maxPortCount: subscription.maxPortCount?.toString() || '',
       price: subscription.price?.toString() || '',
       description: subscription.description || '',
       isActive: subscription.isActive,
@@ -229,6 +234,7 @@ export default function Subscriptions() {
                 <TableHead>套餐名称</TableHead>
                 <TableHead>周期</TableHead>
                 <TableHead>流量配额</TableHead>
+                <TableHead>端口数量</TableHead>
                 <TableHead>价格</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>创建时间</TableHead>
@@ -249,6 +255,9 @@ export default function Subscriptions() {
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm text-gray-900">
                     {subscription.trafficQuotaGb} GB
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-gray-900">
+                    {subscription.maxPortCount || '无限制'}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm text-gray-900">
                     {subscription.price ? `¥${subscription.price}` : '-'}
@@ -361,6 +370,17 @@ export default function Subscriptions() {
                     placeholder="例如：100"
                     min="0"
                     step="0.1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">端口数量限制</label>
+                  <input
+                    type="number"
+                    value={formData.maxPortCount}
+                    onChange={(e) => setFormData({ ...formData, maxPortCount: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    placeholder="留空表示无限制"
+                    min="1"
                   />
                 </div>
                 <div>

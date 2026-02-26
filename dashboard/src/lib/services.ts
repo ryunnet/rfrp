@@ -326,6 +326,7 @@ export const subscriptionService = {
     duration_type: string;
     duration_value?: number;
     traffic_quota_gb: number;
+    max_port_count?: number;
     price?: number;
     description?: string;
     is_active?: boolean;
@@ -341,6 +342,7 @@ export const subscriptionService = {
       duration_type?: string;
       duration_value?: number;
       traffic_quota_gb?: number;
+      max_port_count?: number;
       price?: number;
       description?: string;
       is_active?: boolean;

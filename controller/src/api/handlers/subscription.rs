@@ -21,6 +21,7 @@ pub struct CreateSubscriptionRequest {
     pub duration_type: String, // daily, weekly, monthly, yearly
     pub duration_value: Option<i32>,
     pub traffic_quota_gb: f64,
+    pub max_port_count: Option<i32>,
     pub price: Option<f64>,
     pub description: Option<String>,
     pub is_active: Option<bool>,
@@ -32,6 +33,7 @@ pub struct UpdateSubscriptionRequest {
     pub duration_type: Option<String>,
     pub duration_value: Option<i32>,
     pub traffic_quota_gb: Option<f64>,
+    pub max_port_count: Option<i32>,
     pub price: Option<f64>,
     pub description: Option<String>,
     pub is_active: Option<bool>,
@@ -164,6 +166,7 @@ pub async fn create_subscription(
         duration_type: Set(req.duration_type),
         duration_value: Set(req.duration_value.unwrap_or(1)),
         traffic_quota_gb: Set(req.traffic_quota_gb),
+        max_port_count: Set(req.max_port_count),
         price: Set(req.price),
         description: Set(req.description),
         is_active: Set(req.is_active.unwrap_or(true)),
@@ -240,6 +243,9 @@ pub async fn update_subscription(
     }
     if let Some(traffic_quota_gb) = req.traffic_quota_gb {
         subscription.traffic_quota_gb = Set(traffic_quota_gb);
+    }
+    if let Some(max_port_count) = req.max_port_count {
+        subscription.max_port_count = Set(Some(max_port_count));
     }
     if let Some(price) = req.price {
         subscription.price = Set(Some(price));
