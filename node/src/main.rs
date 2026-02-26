@@ -87,6 +87,9 @@ enum Command {
         #[arg(long, default_value = "rfrp-node.log")]
         log_file: String,
     },
+
+    /// 更新到最新版本
+    Update,
 }
 
 async fn run_node(controller_url: String, token: String, bind_port: u16, protocol: String) -> anyhow::Result<()> {
@@ -149,6 +152,10 @@ async fn main() -> anyhow::Result<()> {
             }
 
             run_node(controller_url, token, bind_port, protocol).await?;
+        }
+
+        Command::Update => {
+            update_binary()?;
         }
     }
 
@@ -218,6 +225,8 @@ fn main() -> anyhow::Result<()> {
             &pid_file,
             &log_file,
         ),
+
+        Command::Update => update_binary(),
     }
 }
 
@@ -307,5 +316,31 @@ fn stop_daemon_windows(pid_file: &str) -> anyhow::Result<()> {
 
     println!("已停止守护进程 (PID: {})", pid);
     fs::remove_file(pid_file).ok();
+    Ok(())
+}
+
+/// 更新二进制文件到最新版本
+fn update_binary() -> anyhow::Result<()> {
+    println!("正在检查更新...");
+
+    let status = self_update::backends::github::Update::configure()
+        .repo_owner("ryunnet")
+        .repo_name("rfrp")
+        .bin_name("node")
+        .show_download_progress(true)
+        .current_version(env!("CARGO_PKG_VERSION"))
+        .build()?
+        .update()?;
+
+    match status {
+        self_update::Status::UpToDate(version) => {
+            println!("✓ 已是最新版本: v{}", version);
+        }
+        self_update::Status::Updated(version) => {
+            println!("✓ 成功更新到版本: v{}", version);
+            println!("请重启 node 服务以使用新版本");
+        }
+    }
+
     Ok(())
 }
