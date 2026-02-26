@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, ClientTlsConfig};
 use tracing::{error, info, warn, debug};
 
 use common::config::KcpConfig;
@@ -24,13 +24,19 @@ pub async fn connect_and_run(
     controller_url: &str,
     token: &str,
 ) -> Result<(i64, String, mpsc::Receiver<Vec<ClientServerProxyGroup>>)> {
-    let channel = Channel::from_shared(controller_url.to_string())?
+    let mut endpoint = Channel::from_shared(controller_url.to_string())?
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(10))
         .tcp_keepalive(Some(Duration::from_secs(60)))
         .http2_keep_alive_interval(Duration::from_secs(30))
-        .keep_alive_timeout(Duration::from_secs(10))
-        .connect()
+        .keep_alive_timeout(Duration::from_secs(10));
+
+    if controller_url.starts_with("https://") {
+        endpoint = endpoint.tls_config(ClientTlsConfig::new())
+            .map_err(|e| anyhow!("TLS 配置失败: {}", e))?;
+    }
+
+    let channel = endpoint.connect()
         .await
         .map_err(|e| anyhow!("连接 Controller gRPC 失败: {}", e))?;
 

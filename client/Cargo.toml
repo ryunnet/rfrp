@@ -27,7 +27,7 @@ clap = { version = "4.5", features = ["derive"] }
 self_update = { version = "0.41", features = ["archive-tar", "compression-flate2"] }
 
 # gRPC
-tonic = "0.12"
+tonic = { version = "0.12", features = ["tls", "tls-webpki-roots"] }
 prost = "0.13"
 
 # Daemon (Unix only)

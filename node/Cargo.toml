@@ -31,7 +31,7 @@ quinn = { version = "0.11", features = ["rustls", "ring"] }
 rcgen = "0.14.6"
 
 # gRPC
-tonic = "0.12"
+tonic = { version = "0.12", features = ["tls", "tls-webpki-roots"] }
 prost = "0.13"
 
 # Daemon (Unix only)

@@ -7,7 +7,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::StreamExt;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, ClientTlsConfig};
 use tracing::{error, info, warn};
 
 use common::grpc::rfrp;
@@ -108,13 +108,19 @@ impl AgentGrpcClient {
         tunnel_port: u16,
         tunnel_protocol: &str,
     ) -> Result<(Arc<Self>, mpsc::Receiver<ControllerCommand>, String)> {
-        let channel = Channel::from_shared(controller_url.to_string())?
+        let mut endpoint = Channel::from_shared(controller_url.to_string())?
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
             .tcp_keepalive(Some(Duration::from_secs(60)))
             .http2_keep_alive_interval(Duration::from_secs(30))
-            .keep_alive_timeout(Duration::from_secs(10))
-            .connect()
+            .keep_alive_timeout(Duration::from_secs(10));
+
+        if controller_url.starts_with("https://") {
+            endpoint = endpoint.tls_config(ClientTlsConfig::new())
+                .map_err(|e| anyhow!("TLS 配置失败: {}", e))?;
+        }
+
+        let channel = endpoint.connect()
             .await
             .map_err(|e| anyhow!("连接 Controller gRPC 失败: {}", e))?;
 
@@ -198,8 +204,14 @@ impl AgentGrpcClient {
         tunnel_port: u16,
         tunnel_protocol: &str,
     ) -> Result<(mpsc::Receiver<ControllerCommand>, String)> {
-        let channel = Channel::from_shared(controller_url.to_string())?
-            .connect()
+        let mut endpoint = Channel::from_shared(controller_url.to_string())?;
+
+        if controller_url.starts_with("https://") {
+            endpoint = endpoint.tls_config(ClientTlsConfig::new())
+                .map_err(|e| anyhow!("TLS 配置失败: {}", e))?;
+        }
+
+        let channel = endpoint.connect()
             .await
             .map_err(|e| anyhow!("重连 Controller gRPC 失败: {}", e))?;
 
