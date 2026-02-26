@@ -6,6 +6,7 @@ pub mod local_proxy_control;
 pub mod grpc_client;
 pub mod grpc_auth_provider;
 pub mod node_logs;
+pub mod tunnel_manager;
 
 use anyhow::Result;
 use std::sync::Arc;
@@ -43,8 +44,8 @@ pub async fn run_server_controller_mode(
     info!("隧道端口: {}", bind_port);
     info!("隧道协议: {}", protocol);
 
-    // 首次连接 Controller 并认证
-    let (grpc_client, cmd_rx) = grpc_client::AgentGrpcClient::connect_and_authenticate(
+    // 首次连接 Controller 并认证（protocol 作为回退值，最终以 Controller 返回为准）
+    let (grpc_client, cmd_rx, authoritative_protocol) = grpc_client::AgentGrpcClient::connect_and_authenticate(
         &controller_url,
         &token,
         bind_port,
@@ -52,7 +53,7 @@ pub async fn run_server_controller_mode(
     ).await?;
 
     let node_id = grpc_client.node_id().await;
-    info!("连接认证成功: 节点 #{}", node_id);
+    info!("连接认证成功: 节点 #{}, Controller 协议: {}", node_id, authoritative_protocol);
 
     // 创建 gRPC 认证提供者（使用 SharedGrpcSender，重连后自动使用新 sender）
     let auth_provider: Arc<dyn ClientAuthProvider> = Arc::new(
@@ -84,41 +85,24 @@ pub async fn run_server_controller_mode(
         auth_provider.clone(),
     ));
 
+    // 创建并启动隧道管理器（使用 Controller 下发的权威协议）
+    let tunnel_manager = Arc::new(tunnel_manager::TunnelManager::new(proxy_server.clone(), bind_port));
+    tunnel_manager.start(&authoritative_protocol, None).await?;
+
     // 启动首次 Controller 命令处理器
     let grpc_client_clone = grpc_client.clone();
     let proxy_control_clone = proxy_control.clone();
+    let tunnel_manager_clone = tunnel_manager.clone();
     tokio::spawn(async move {
-        grpc_client::handle_controller_commands(cmd_rx, grpc_client_clone, proxy_control_clone).await;
+        grpc_client::handle_controller_commands(cmd_rx, grpc_client_clone, proxy_control_clone, tunnel_manager_clone).await;
     });
-
-    // 启动隧道服务（只启动一次，不受 gRPC 重连影响）
-    let bind_addr = format!("0.0.0.0:{}", bind_port);
-    let proxy_server_clone = proxy_server.clone();
-
-    match protocol.as_str() {
-        "kcp" => {
-            info!("启动 KCP 隧道服务: {}", bind_addr);
-            tokio::spawn(async move {
-                if let Err(e) = proxy_server_clone.run_kcp(bind_addr, None).await {
-                    error!("KCP server error: {}", e);
-                }
-            });
-        }
-        _ => {
-            info!("启动 QUIC 隧道服务: {}", bind_addr);
-            tokio::spawn(async move {
-                if let Err(e) = proxy_server_clone.run(bind_addr).await {
-                    error!("QUIC server error: {}", e);
-                }
-            });
-        }
-    }
 
     info!("所有服务已启动");
 
     // gRPC 断线重连监控循环
     let grpc_client_reconnect = grpc_client.clone();
     let proxy_control_reconnect = proxy_control.clone();
+    let tunnel_manager_reconnect = tunnel_manager.clone();
     let controller_url_clone = controller_url.clone();
     let token_clone = token.clone();
     let protocol_clone = protocol.clone();
@@ -148,15 +132,23 @@ pub async fn run_server_controller_mode(
                         bind_port,
                         &protocol_clone,
                     ).await {
-                        Ok(new_cmd_rx) => {
+                        Ok((new_cmd_rx, new_protocol)) => {
                             info!("gRPC 重连成功");
+
+                            // 如果协议变更，切换隧道协议
+                            if !new_protocol.is_empty() {
+                                if let Err(e) = tunnel_manager_reconnect.switch_protocol(&new_protocol).await {
+                                    error!("重连后切换协议失败: {}", e);
+                                }
+                            }
 
                             // 启动新的命令处理器
                             let grpc_clone = grpc_client_reconnect.clone();
                             let control_clone = proxy_control_reconnect.clone();
+                            let tm_clone = tunnel_manager_reconnect.clone();
                             tokio::spawn(async move {
                                 grpc_client::handle_controller_commands(
-                                    new_cmd_rx, grpc_clone, control_clone,
+                                    new_cmd_rx, grpc_clone, control_clone, tm_clone,
                                 ).await;
                             });
 

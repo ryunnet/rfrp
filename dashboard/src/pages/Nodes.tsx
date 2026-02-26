@@ -22,6 +22,7 @@ export default function Nodes() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCommandModal, setShowCommandModal] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<'windows' | 'linux' | 'macos'>('linux');
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [createdNodeInfo, setCreatedNodeInfo] = useState<{ name: string; secret: string } | null>(null);
   const [editingNode, setEditingNode] = useState<Node | null>(null);
@@ -246,10 +247,30 @@ export default function Nodes() {
     });
   };
 
-  const getStartupCommand = (node?: Node | { name: string; secret: string }) => {
+  const getStartupCommand = (node?: Node | { name: string; secret: string }, platform: 'windows' | 'linux' | 'macos' = 'linux') => {
     if (!node) return '';
     const url = controllerUrl || `${window.location.hostname}:3100`;
-    return `agent server --controller-url http://${url} --token ${node.secret}`;
+    const token = node.secret;
+
+    if (platform === 'windows') {
+      return `node.exe start --controller-url http://${url} --token ${token} --bind-port 7000`;
+    } else if (platform === 'macos') {
+      return `./node start --controller-url http://${url} --token ${token} --bind-port 7000`;
+    } else {
+      return `./node start --controller-url http://${url} --token ${token} --bind-port 7000`;
+    }
+  };
+
+  const getDaemonCommand = (node?: Node | { name: string; secret: string }, platform: 'windows' | 'linux' | 'macos' = 'linux') => {
+    if (!node) return '';
+    const url = controllerUrl || `${window.location.hostname}:3100`;
+    const token = node.secret;
+
+    if (platform === 'windows') {
+      return `node.exe start --controller-url http://${url} --token ${token} --bind-port 7000 --install-service`;
+    } else {
+      return `./node start --controller-url http://${url} --token ${token} --bind-port 7000 --daemon`;
+    }
   };
 
   const handleShowCommand = (node: Node) => {
@@ -672,8 +693,8 @@ export default function Nodes() {
 
       {/* 启动命令弹窗 */}
       {showCommandModal && (createdNodeInfo || commandNode) && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50 p-4">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
@@ -683,18 +704,41 @@ export default function Nodes() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">
-                    {createdNodeInfo ? '节点创建成功' : '节点启动命令'}
+                    {createdNodeInfo ? '节点创建成功 - 启动教程' : '节点启动教程'}
                   </h3>
                   <p className="text-sm text-gray-500">
-                    {createdNodeInfo
-                      ? '请在目标服务器上执行以下启动命令'
-                      : `节点 "${commandNode?.name}" 的启动命令`}
+                    按照以下步骤在目标服务器上启动节点
                   </p>
                 </div>
               </div>
 
+              {/* 平台选择 */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-3">选择操作系统</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { value: 'linux', label: 'Linux', icon: '🐧' },
+                    { value: 'windows', label: 'Windows', icon: '🪟' },
+                    { value: 'macos', label: 'macOS', icon: '🍎' }
+                  ].map((platform) => (
+                    <button
+                      key={platform.value}
+                      onClick={() => setSelectedPlatform(platform.value as any)}
+                      className={`px-4 py-3 rounded-xl border-2 transition-all ${
+                        selectedPlatform === platform.value
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      <div className="text-2xl mb-1">{platform.icon}</div>
+                      <div className="text-sm font-medium">{platform.label}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Controller 地址 */}
-              <div className="mb-4">
+              <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Controller 地址</label>
                 <input
                   type="text"
@@ -704,37 +748,118 @@ export default function Nodes() {
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white font-mono text-sm"
                 />
                 <p className="mt-1.5 text-xs text-gray-500">
-                  修改为 Agent 可以访问的 Controller 地址（IP:端口）
+                  修改为节点服务器可以访问的 Controller 地址（IP:端口）
                 </p>
               </div>
 
-              {/* 启动命令 */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-gray-700">启动命令</label>
+              {/* 步骤 1: 下载 */}
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</div>
+                  <h4 className="text-sm font-semibold text-gray-900">下载节点程序</h4>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <p className="text-sm text-gray-700 mb-3">从 GitHub Releases 下载对应平台的节点程序：</p>
+                  <a
+                    href="https://github.com/your-repo/rfrp/releases/latest"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                    </svg>
+                    下载最新版本
+                  </a>
+                  <div className="mt-3 text-xs text-gray-600">
+                    <p className="font-medium mb-1">文件名参考：</p>
+                    <ul className="space-y-1 ml-4">
+                      {selectedPlatform === 'linux' && <li>• node-x86_64-unknown-linux-musl.tar.gz</li>}
+                      {selectedPlatform === 'windows' && <li>• node-x86_64-pc-windows-msvc.zip</li>}
+                      {selectedPlatform === 'macos' && <li>• node-x86_64-apple-darwin.tar.gz</li>}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* 步骤 2: 启动命令 */}
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</div>
+                  <h4 className="text-sm font-semibold text-gray-900">启动节点（前台运行）</h4>
+                </div>
+                <div className="relative">
                   <button
-                    onClick={() => copyToClipboard(getStartupCommand(createdNodeInfo || commandNode!), '启动命令')}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                    onClick={() => copyToClipboard(getStartupCommand(createdNodeInfo || commandNode!, selectedPlatform), '启动命令')}
+                    className="absolute top-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 bg-white/90 hover:bg-white rounded-lg transition-colors shadow-sm"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
                     </svg>
                     复制
                   </button>
+                  <pre className="bg-gray-900 text-green-400 rounded-xl px-4 py-3 pr-24 text-sm font-mono overflow-x-auto">{getStartupCommand(createdNodeInfo || commandNode!, selectedPlatform)}</pre>
                 </div>
-                <pre className="bg-gray-900 text-green-400 rounded-xl px-4 py-3 text-sm font-mono overflow-x-auto">{getStartupCommand(createdNodeInfo || commandNode!)}</pre>
               </div>
 
-              {/* 提示 */}
+              {/* 步骤 3: 后台运行 */}
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</div>
+                  <h4 className="text-sm font-semibold text-gray-900">后台运行（可选）</h4>
+                </div>
+                <div className="relative">
+                  <button
+                    onClick={() => copyToClipboard(getDaemonCommand(createdNodeInfo || commandNode!, selectedPlatform), '后台运行命令')}
+                    className="absolute top-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 bg-white/90 hover:bg-white rounded-lg transition-colors shadow-sm"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                    </svg>
+                    复制
+                  </button>
+                  <pre className="bg-gray-900 text-green-400 rounded-xl px-4 py-3 pr-24 text-sm font-mono overflow-x-auto">{getDaemonCommand(createdNodeInfo || commandNode!, selectedPlatform)}</pre>
+                </div>
+                <p className="mt-2 text-xs text-gray-600">
+                  {selectedPlatform === 'windows'
+                    ? '使用 --install-service 将节点安装为 Windows 服务，开机自动启动'
+                    : '使用 --daemon 参数在后台运行节点，进程会持续运行'}
+                </p>
+              </div>
+
+              {/* 步骤 4: 验证 */}
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">4</div>
+                  <h4 className="text-sm font-semibold text-gray-900">验证节点状态</h4>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                  <p className="text-sm text-green-800">
+                    节点启动后会自动向 Controller 注册。刷新本页面，如果节点状态显示为
+                    <span className="inline-flex items-center gap-1 mx-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                      在线
+                    </span>
+                    则表示连接成功。
+                  </p>
+                </div>
+              </div>
+
+              {/* 常见问题 */}
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6">
                 <div className="flex items-start gap-2">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
                   </svg>
-                  <p className="text-sm text-amber-800">
-                    <strong>提示：</strong>节点启动后会自动向 Controller 注册。
-                    注册成功后可在节点列表中查看状态。
-                  </p>
+                  <div className="text-sm text-amber-800">
+                    <p className="font-semibold mb-2">常见问题：</p>
+                    <ul className="space-y-1 text-xs">
+                      <li>• 确保防火墙允许 7000 端口（UDP）的入站连接</li>
+                      <li>• 确保节点服务器可以访问 Controller 地址</li>
+                      <li>• 如果连接失败，检查 token 是否正确</li>
+                      <li>• 查看节点日志以获取详细错误信息</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
 

@@ -51,6 +51,8 @@ message ControllerToAgentMessage {
     GetStatusCommand get_status = 12;
     GetClientLogsCommand get_client_logs = 13;
     GetNodeLogsCommand get_node_logs = 14;
+    // Controller 主动推送协议变更
+    UpdateProtocolCommand update_protocol = 15;
   }
 }
 
@@ -90,6 +92,7 @@ message NodeRegisterRequest {
 message NodeRegisterResponse {
   int64 node_id = 1;
   string node_name = 2;
+  string tunnel_protocol = 3;  // Controller 下发的权威隧道协议
 }
 
 // ===== 认证 =====
@@ -198,6 +201,11 @@ message GetClientLogsCommand {
 message GetNodeLogsCommand {
   string request_id = 1;
   uint32 lines = 2;  // 获取最近 N 行日志
+}
+
+message UpdateProtocolCommand {
+  string request_id = 1;
+  string tunnel_protocol = 2;  // "quic" 或 "kcp"
 }
 
 // ===== Agent Server 对指令的响应 =====

@@ -35,6 +35,15 @@ export default function Clients() {
   const [quotaSaving, setQuotaSaving] = useState(false);
   const [userQuotaInfo, setUserQuotaInfo] = useState<any>(null);
 
+  // 命令生成相关状态
+  const [showCommandModal, setShowCommandModal] = useState(false);
+  const [commandClient, setCommandClient] = useState<Client | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<'windows' | 'linux' | 'macos'>('linux');
+  const [controllerUrl] = useState(() => {
+    const hostname = window.location.hostname;
+    return hostname === 'localhost' ? 'localhost:3100' : `${hostname}:3100`;
+  });
+
   useEffect(() => {
     loadClients();
     loadUserQuotaInfo();
@@ -235,6 +244,37 @@ export default function Clients() {
     }
   };
 
+  // 生成客户端启动命令
+  const getClientStartupCommand = (client?: Client, platform: 'windows' | 'linux' | 'macos' = 'linux') => {
+    if (!client) return '';
+    const url = controllerUrl || `${window.location.hostname}:3100`;
+    const token = client.token;
+
+    if (platform === 'windows') {
+      return `client.exe start --controller-url http://${url} --token ${token}`;
+    } else {
+      return `./client start --controller-url http://${url} --token ${token}`;
+    }
+  };
+
+  // 生成客户端后台运行命令
+  const getClientDaemonCommand = (client?: Client, platform: 'windows' | 'linux' | 'macos' = 'linux') => {
+    if (!client) return '';
+    const url = controllerUrl || `${window.location.hostname}:3100`;
+    const token = client.token;
+
+    if (platform === 'windows') {
+      return `client.exe install-service --controller-url http://${url} --token ${token}`;
+    } else {
+      return `./client start --controller-url http://${url} --token ${token} --daemon --pid-file /var/run/rfrp-client.pid --log-file /var/log/rfrp-client.log`;
+    }
+  };
+
+  const handleShowCommand = (client: Client) => {
+    setCommandClient(client);
+    setShowCommandModal(true);
+  };
+
   return (
     <div className="space-y-6">
       {/* 页面标题 */}
@@ -391,6 +431,16 @@ export default function Clients() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-right">
                       <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleShowCommand(client)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                          title="查看启动命令"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+                          </svg>
+                          启动命令
+                        </button>
                         <button
                           onClick={() => handleAllocateQuota(client)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -706,6 +756,276 @@ export default function Clients() {
                   {quotaSaving ? '分配中...' : '确认分配'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 启动命令教程模态框 */}
+      {showCommandModal && commandClient && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
+            <div className="sticky top-0 bg-white border-b border-gray-100 p-6 z-10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">客户端启动教程</h3>
+                    <p className="text-sm text-gray-500">{commandClient.name}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowCommandModal(false);
+                    setCommandClient(null);
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* 平台选择器 */}
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => setSelectedPlatform('windows')}
+                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                    selectedPlatform === 'windows'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  🪟 Windows
+                </button>
+                <button
+                  onClick={() => setSelectedPlatform('linux')}
+                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                    selectedPlatform === 'linux'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  🐧 Linux
+                </button>
+                <button
+                  onClick={() => setSelectedPlatform('macos')}
+                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                    selectedPlatform === 'macos'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  🍎 macOS
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* 步骤 1: 下载 */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-bold">1</div>
+                  <h4 className="text-base font-bold text-gray-900">下载客户端程序</h4>
+                </div>
+                <div className="ml-9 space-y-2">
+                  <p className="text-sm text-gray-600">从 GitHub Releases 下载对应平台的客户端程序：</p>
+                  <a
+                    href="https://github.com/your-repo/rfrp/releases/latest"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    前往 GitHub Releases
+                  </a>
+                  <div className="mt-2 p-3 bg-blue-50 rounded-lg">
+                    <p className="text-xs text-blue-900 font-medium">
+                      {selectedPlatform === 'windows' && '下载文件: rfrp-client-windows-amd64.exe'}
+                      {selectedPlatform === 'linux' && '下载文件: rfrp-client-linux-amd64'}
+                      {selectedPlatform === 'macos' && '下载文件: rfrp-client-darwin-amd64 或 rfrp-client-darwin-arm64 (M系列芯片)'}
+                    </p>
+                  </div>
+                  {selectedPlatform !== 'windows' && (
+                    <div className="mt-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <p className="text-xs text-amber-900">
+                        <span className="font-bold">重要：</span>下载后需要添加执行权限：
+                      </p>
+                      <code className="block mt-1 text-xs bg-amber-100 text-amber-900 px-2 py-1 rounded font-mono">
+                        chmod +x client
+                      </code>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 步骤 2: 前台启动 */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm font-bold">2</div>
+                  <h4 className="text-base font-bold text-gray-900">前台启动（测试用）</h4>
+                </div>
+                <div className="ml-9 space-y-2">
+                  <p className="text-sm text-gray-600">在终端中运行以下命令启动客户端：</p>
+                  <div className="relative">
+                    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm font-mono overflow-x-auto">
+                      {getClientStartupCommand(commandClient, selectedPlatform)}
+                    </pre>
+                    <button
+                      onClick={() => {
+                        copyToClipboard(getClientStartupCommand(commandClient, selectedPlatform));
+                        showToast('命令已复制', 'success');
+                      }}
+                      className="absolute top-2 right-2 p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
+                      title="复制命令"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">前台运行可以直接看到日志输出，适合测试和调试。按 Ctrl+C 可停止运行。</p>
+                </div>
+              </div>
+
+              {/* 步骤 3: 后台运行 */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-bold">3</div>
+                  <h4 className="text-base font-bold text-gray-900">后台运行（生产环境）</h4>
+                </div>
+                <div className="ml-9 space-y-2">
+                  <p className="text-sm text-gray-600">
+                    {selectedPlatform === 'windows'
+                      ? '在 Windows 上，可以将客户端安装为系统服务：'
+                      : '在 Linux/macOS 上，使用 --daemon 参数后台运行：'
+                    }
+                  </p>
+                  <div className="relative">
+                    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm font-mono overflow-x-auto">
+                      {getClientDaemonCommand(commandClient, selectedPlatform)}
+                    </pre>
+                    <button
+                      onClick={() => {
+                        copyToClipboard(getClientDaemonCommand(commandClient, selectedPlatform));
+                        showToast('命令已复制', 'success');
+                      }}
+                      className="absolute top-2 right-2 p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
+                      title="复制命令"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                      </svg>
+                    </button>
+                  </div>
+                  {selectedPlatform === 'windows' ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-500">安装为服务后，客户端会在系统启动时自动运行。</p>
+                      <div className="p-3 bg-blue-50 rounded-lg">
+                        <p className="text-xs text-blue-900 font-medium mb-1">服务管理命令：</p>
+                        <code className="block text-xs bg-blue-100 text-blue-900 px-2 py-1 rounded font-mono mb-1">
+                          client.exe uninstall-service  # 卸载服务
+                        </code>
+                        <code className="block text-xs bg-blue-100 text-blue-900 px-2 py-1 rounded font-mono">
+                          sc query RfrpClient  # 查看服务状态
+                        </code>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-500">后台运行后，日志会写入指定的日志文件。</p>
+                      <div className="p-3 bg-blue-50 rounded-lg">
+                        <p className="text-xs text-blue-900 font-medium mb-1">管理后台进程：</p>
+                        <code className="block text-xs bg-blue-100 text-blue-900 px-2 py-1 rounded font-mono mb-1">
+                          cat /var/run/rfrp-client.pid  # 查看进程 ID
+                        </code>
+                        <code className="block text-xs bg-blue-100 text-blue-900 px-2 py-1 rounded font-mono mb-1">
+                          kill $(cat /var/run/rfrp-client.pid)  # 停止客户端
+                        </code>
+                        <code className="block text-xs bg-blue-100 text-blue-900 px-2 py-1 rounded font-mono">
+                          tail -f /var/log/rfrp-client.log  # 查看日志
+                        </code>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 步骤 4: 验证 */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-sm font-bold">4</div>
+                  <h4 className="text-base font-bold text-gray-900">验证客户端状态</h4>
+                </div>
+                <div className="ml-9 space-y-2">
+                  <p className="text-sm text-gray-600">启动后，在本页面查看客户端状态：</p>
+                  <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <span className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                        </span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-green-900">客户端在线</p>
+                        <p className="text-xs text-green-700 mt-1">
+                          如果看到绿色的"在线"状态，说明客户端已成功连接到 Controller。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 常见问题 */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-amber-600">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+                  </svg>
+                  <h4 className="text-base font-bold text-gray-900">常见问题</h4>
+                </div>
+                <div className="ml-7 space-y-3">
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm font-medium text-gray-900 mb-1">❓ 客户端显示离线？</p>
+                    <p className="text-xs text-gray-600">
+                      检查 Controller URL 是否正确，确保网络连接正常，查看客户端日志排查错误。
+                    </p>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm font-medium text-gray-900 mb-1">❓ Token 无效？</p>
+                    <p className="text-xs text-gray-600">
+                      确认复制的 Token 完整无误，没有多余的空格或换行符。
+                    </p>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm font-medium text-gray-900 mb-1">❓ 如何查看客户端日志？</p>
+                    <p className="text-xs text-gray-600">
+                      前台运行时日志直接输出到终端；后台运行时查看日志文件；或在本页面点击"日志"按钮查看在线日志。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t border-gray-100 p-4 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowCommandModal(false);
+                  setCommandClient(null);
+                }}
+                className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 transition-all"
+              >
+                关闭
+              </button>
             </div>
           </div>
         </div>

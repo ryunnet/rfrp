@@ -6,6 +6,7 @@ use axum::{
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, PaginatorTrait, QueryFilter, Set};
 use serde::Deserialize;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -200,6 +201,10 @@ pub async fn update_node(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<node::Model>::error(format!("Failed to find node: {}", e))),
     };
 
+    // 保存旧的协议值，用于检测变更
+    let old_protocol = node_model.tunnel_protocol.clone();
+    let new_protocol_opt = req.tunnel_protocol.clone();
+
     let mut active: node::ActiveModel = node_model.into();
 
     let mut url_changed = false;
@@ -230,8 +235,8 @@ pub async fn update_node(
     if let Some(tunnel_port) = req.tunnel_port {
         active.tunnel_port = Set(tunnel_port);
     }
-    if let Some(tunnel_protocol) = req.tunnel_protocol {
-        active.tunnel_protocol = Set(tunnel_protocol);
+    if let Some(ref tunnel_protocol) = new_protocol_opt {
+        active.tunnel_protocol = Set(tunnel_protocol.clone());
     }
     if req.kcp_config.is_some() {
         active.kcp_config = Set(req.kcp_config);
@@ -243,6 +248,27 @@ pub async fn update_node(
 
     match active.update(db).await {
         Ok(updated) => {
+            // 检查协议是否变更
+            if let Some(ref new_protocol) = new_protocol_opt {
+                if new_protocol != &old_protocol {
+                    info!("节点 #{} 协议变更: {} -> {}", id, old_protocol, new_protocol);
+
+                    // 检查节点是否在线
+                    let connected_ids = app_state.node_manager.get_loaded_node_ids().await;
+                    if connected_ids.contains(&id) {
+                        // 推送协议更新到在线节点
+                        if let Err(e) = app_state.node_manager.send_update_protocol(id, new_protocol).await {
+                            warn!("推送协议更新到节点 #{} 失败: {}", id, e);
+                        } else {
+                            info!("已推送协议更新到节点 #{}", id);
+                        }
+                    }
+
+                    // 通知该节点上的所有客户端刷新配置
+                    app_state.client_stream_manager.notify_clients_for_node(id).await;
+                }
+            }
+
             // gRPC 模式下节点会主动重连，无需手动更新连接
             (StatusCode::OK, ApiResponse::success(updated))
         }

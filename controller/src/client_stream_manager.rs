@@ -73,6 +73,36 @@ impl ClientStreamManager {
         }
     }
 
+    /// 通知某个节点上的所有客户端刷新配置
+    pub async fn notify_clients_for_node(&self, node_id: i64) {
+        let db = get_connection().await;
+
+        // 查询该节点上所有启用的代理
+        let proxies = match Proxy::find()
+            .filter(proxy::Column::NodeId.eq(node_id))
+            .filter(proxy::Column::Enabled.eq(true))
+            .all(db)
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                error!("查询节点 #{} 的代理失败: {}", node_id, e);
+                return;
+            }
+        };
+
+        // 收集所有不重复的 client_id
+        let mut client_ids = std::collections::HashSet::new();
+        for proxy in proxies {
+            client_ids.insert(proxy.client_id);
+        }
+
+        // 逐个通知客户端
+        for client_id_str in client_ids {
+            self.notify_proxy_change(&client_id_str).await;
+        }
+    }
+
     /// 健康检查所有客户端
     pub async fn check_all_clients(&self) -> Vec<(i64, bool)> {
         let db = get_connection().await;

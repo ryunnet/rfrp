@@ -100,12 +100,14 @@ pub enum ControllerResponse {
 
 impl AgentGrpcClient {
     /// 连接 Controller 并认证节点
+    ///
+    /// 返回 (gRPC 客户端, 命令接收器, Controller 下发的权威隧道协议)
     pub async fn connect_and_authenticate(
         controller_url: &str,
         token: &str,
         tunnel_port: u16,
         tunnel_protocol: &str,
-    ) -> Result<(Arc<Self>, mpsc::Receiver<ControllerCommand>)> {
+    ) -> Result<(Arc<Self>, mpsc::Receiver<ControllerCommand>, String)> {
         let channel = Channel::from_shared(controller_url.to_string())?
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
@@ -153,7 +155,12 @@ impl AgentGrpcClient {
         };
 
         let node_id = register_resp.node_id;
-        info!("gRPC 连接认证成功: 节点 #{} ({})", node_id, register_resp.node_name);
+        let authoritative_protocol = if register_resp.tunnel_protocol.is_empty() {
+            tunnel_protocol.to_string()
+        } else {
+            register_resp.tunnel_protocol.clone()
+        };
+        info!("gRPC 连接认证成功: 节点 #{} ({}), 隧道协议: {}", node_id, register_resp.node_name, authoritative_protocol);
 
         let shared_sender = SharedGrpcSender::new(tx.clone());
         let shared_pending = SharedPendingRequests::new(pending.clone());
@@ -178,17 +185,19 @@ impl AgentGrpcClient {
             Self::shared_heartbeat_loop(heartbeat_sender).await;
         });
 
-        Ok((grpc_client, cmd_rx))
+        Ok((grpc_client, cmd_rx, authoritative_protocol))
     }
 
     /// 重连 Controller（复用已有的 SharedGrpcSender 和 SharedPendingRequests）
+    ///
+    /// 返回 (命令接收器, Controller 下发的权威隧道协议)
     pub async fn reconnect(
         self: &Arc<Self>,
         controller_url: &str,
         token: &str,
         tunnel_port: u16,
         tunnel_protocol: &str,
-    ) -> Result<mpsc::Receiver<ControllerCommand>> {
+    ) -> Result<(mpsc::Receiver<ControllerCommand>, String)> {
         let channel = Channel::from_shared(controller_url.to_string())?
             .connect()
             .await
@@ -231,7 +240,12 @@ impl AgentGrpcClient {
         };
 
         let node_id = register_resp.node_id;
-        info!("gRPC 重连认证成功: 节点 #{} ({})", node_id, register_resp.node_name);
+        let authoritative_protocol = if register_resp.tunnel_protocol.is_empty() {
+            tunnel_protocol.to_string()
+        } else {
+            register_resp.tunnel_protocol.clone()
+        };
+        info!("gRPC 重连认证成功: 节点 #{} ({}), 隧道协议: {}", node_id, register_resp.node_name, authoritative_protocol);
 
         // 热替换 sender 和 pending
         self.shared_sender.replace(tx.clone()).await;
@@ -252,7 +266,7 @@ impl AgentGrpcClient {
             Self::shared_heartbeat_loop(heartbeat_sender).await;
         });
 
-        Ok(cmd_rx)
+        Ok((cmd_rx, authoritative_protocol))
     }
 
     /// 消息接收循环
@@ -344,6 +358,13 @@ impl AgentGrpcClient {
                     }).await;
                 }
 
+                ControllerPayload::UpdateProtocol(cmd) => {
+                    let _ = cmd_tx.send(ControllerCommand::UpdateProtocol {
+                        request_id: cmd.request_id,
+                        tunnel_protocol: cmd.tunnel_protocol,
+                    }).await;
+                }
+
                 _ => {
                     warn!("收到未知的 Controller 消息类型");
                 }
@@ -424,6 +445,10 @@ pub enum ControllerCommand {
         request_id: String,
         lines: u32,
     },
+    UpdateProtocol {
+        request_id: String,
+        tunnel_protocol: String,
+    },
 }
 
 /// 命令处理器：处理 Controller 下发的命令并发送响应
@@ -431,10 +456,12 @@ pub async fn handle_controller_commands(
     mut cmd_rx: mpsc::Receiver<ControllerCommand>,
     grpc_client: Arc<AgentGrpcClient>,
     proxy_control: Arc<dyn ProxyControl>,
+    tunnel_manager: Arc<super::tunnel_manager::TunnelManager>,
 ) {
     while let Some(cmd) = cmd_rx.recv().await {
         let grpc = grpc_client.clone();
         let control = proxy_control.clone();
+        let tm = tunnel_manager.clone();
 
         tokio::spawn(async move {
             match cmd {
@@ -552,6 +579,19 @@ pub async fn handle_controller_commands(
                                 error: Some(e.to_string()),
                             })),
                         },
+                    };
+                    let _ = grpc.send_response(resp).await;
+                }
+
+                ControllerCommand::UpdateProtocol { request_id, tunnel_protocol } => {
+                    let result = tm.switch_protocol(&tunnel_protocol).await;
+                    let ack = match result {
+                        Ok(()) => rfrp::CommandAck { success: true, error: None },
+                        Err(e) => rfrp::CommandAck { success: false, error: Some(e.to_string()) },
+                    };
+                    let resp = rfrp::AgentServerResponse {
+                        request_id,
+                        result: Some(AgentResult::CommandAck(ack)),
                     };
                     let _ = grpc.send_response(resp).await;
                 }

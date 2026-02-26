@@ -168,6 +168,27 @@ impl NodeManager {
             _ => Err(anyhow!("收到意外的响应类型")),
         }
     }
+
+    /// 向节点推送协议变更命令
+    pub async fn send_update_protocol(&self, node_id: i64, protocol: &str) -> Result<()> {
+        let cmd = ControllerPayload::UpdateProtocol(rfrp::UpdateProtocolCommand {
+            request_id: String::new(),
+            tunnel_protocol: protocol.to_string(),
+        });
+
+        let resp = self.send_command_and_wait(node_id, cmd).await?;
+
+        match resp.result {
+            Some(AgentResult::CommandAck(ack)) => {
+                if ack.success {
+                    Ok(())
+                } else {
+                    Err(anyhow!("协议更新失败: {}", ack.error.unwrap_or_default()))
+                }
+            }
+            _ => Err(anyhow!("收到意外的响应类型")),
+        }
+    }
 }
 
 /// 替换 payload 中的 request_id
@@ -192,6 +213,10 @@ fn replace_request_id(payload: ControllerPayload, request_id: &str) -> Controlle
         ControllerPayload::GetNodeLogs(mut cmd) => {
             cmd.request_id = request_id.to_string();
             ControllerPayload::GetNodeLogs(cmd)
+        }
+        ControllerPayload::UpdateProtocol(mut cmd) => {
+            cmd.request_id = request_id.to_string();
+            ControllerPayload::UpdateProtocol(cmd)
         }
         other => other,
     }
