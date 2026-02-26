@@ -321,6 +321,9 @@ impl ProxyControl for NodeManager {
                     message: l.message,
                 }).collect())
             }
+            Some(AgentResult::CommandAck(ack)) if !ack.success => {
+                Err(anyhow!("{}", ack.error.unwrap_or_else(|| "未知错误".to_string())))
+            }
             _ => Err(anyhow!("收到意外的响应类型")),
         }
     }

@@ -300,6 +300,9 @@ fn update_binary() -> Result<()> {
 
 /// 运行控制器主逻辑
 async fn run_controller() -> Result<()> {
+    // 安装 rustls CryptoProvider（TLS 需要）
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     // 初始化 tracing 日志系统
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,sqlx::query=warn"));
