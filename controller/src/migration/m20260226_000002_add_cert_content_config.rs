@@ -16,24 +16,18 @@ impl MigrationTrait for Migration {
                         SystemConfig::Value,
                         SystemConfig::Description,
                         SystemConfig::ValueType,
-                        SystemConfig::CreatedAt,
-                        SystemConfig::UpdatedAt,
                     ])
                     .values_panic([
                         "grpc_tls_cert_content".into(),
                         "\"\"".into(),
                         "TLS certificate content (PEM format, base64 encoded)".into(),
                         "string".into(),
-                        "datetime('now')".into(),
-                        "datetime('now')".into(),
                     ])
                     .values_panic([
                         "grpc_tls_key_content".into(),
                         "\"\"".into(),
                         "TLS private key content (PEM format, base64 encoded)".into(),
                         "string".into(),
-                        "datetime('now')".into(),
-                        "datetime('now')".into(),
                     ])
                     .to_owned(),
             )
