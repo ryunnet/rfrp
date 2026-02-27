@@ -4,7 +4,7 @@ import { systemService } from '../lib/services';
 import { useToast } from '../contexts/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import SkeletonBlock from '../components/Skeleton';
-import { Settings as SettingsIcon, Save, RotateCcw, Power, Info, AlertCircle } from 'lucide-react';
+import { Save, RotateCcw, Power, Info, AlertCircle, Server, Shield, Globe } from 'lucide-react';
 
 interface ConfigItem {
   id: number;
@@ -41,9 +41,6 @@ const GRPC_TLS_CERT_ALL_KEYS = [...GRPC_TLS_CERT_PATH_KEYS, ...GRPC_TLS_CERT_CON
 const WEB_TLS_CERT_PATH_KEYS = ['web_tls_cert_path', 'web_tls_key_path'];
 const WEB_TLS_CERT_CONTENT_KEYS = ['web_tls_cert_content', 'web_tls_key_content'];
 const WEB_TLS_CERT_ALL_KEYS = [...WEB_TLS_CERT_PATH_KEYS, ...WEB_TLS_CERT_CONTENT_KEYS];
-
-// 所有 TLS 证书相关的 key
-const ALL_TLS_CERT_KEYS = [...GRPC_TLS_CERT_ALL_KEYS, ...WEB_TLS_CERT_ALL_KEYS];
 
 export default function Settings() {
   const [configs, setConfigs] = useState<ConfigItem[]>([]);
@@ -346,153 +343,217 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* 连接配置 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-            <SettingsIcon className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-gray-900">系统配置</h3>
-            <p className="text-sm text-gray-500">Controller 运行参数（修改后需重启系统生效）</p>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          {configs.filter(c => !ALL_TLS_CERT_KEYS.includes(c.key)).map((config) => (
-            <div key={config.key} className="border-b border-gray-100 pb-6 last:border-b-0 last:pb-0">
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                {config.description}
-              </label>
-              <div className="flex items-center gap-4">
-                {renderConfigInput(config)}
-                <span className="text-sm text-gray-500">
-                  {config.valueType === 'number' && (
-                    (config.key.includes('interval') || config.key.includes('timeout'))
-                      ? '秒'
-                      : ''
-                  )}
-                </span>
-              </div>
-              {configHints[config.key] && (
-                <div className="flex items-center gap-1.5 mt-2">
-                  <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                  <p className="text-sm text-gray-500">{configHints[config.key]}</p>
-                </div>
-              )}
-            </div>
-          ))}
-
-          {/* gRPC TLS 证书配置区域 */}
-          {configs.some(c => GRPC_TLS_CERT_ALL_KEYS.includes(c.key)) && (
-            <div className="border-t border-gray-200 pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-gray-700">gRPC TLS 证书配置方式</span>
-                <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setGrpcCertMode('upload');
-                      GRPC_TLS_CERT_PATH_KEYS.forEach(k => handleValueChange(k, '', 'string'));
-                    }}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${grpcCertMode === 'upload' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    上传文件
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setGrpcCertMode('path');
-                      GRPC_TLS_CERT_CONTENT_KEYS.forEach(k => handleValueChange(k, '', 'string'));
-                    }}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${grpcCertMode === 'path' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    指定路径
-                  </button>
-                </div>
-              </div>
-
-              {configs
-                .filter(c => grpcCertMode === 'upload' ? GRPC_TLS_CERT_CONTENT_KEYS.includes(c.key) : GRPC_TLS_CERT_PATH_KEYS.includes(c.key))
-                .map((config) => (
-                  <div key={config.key} className="border-b border-gray-100 pb-6 mb-6 last:border-b-0 last:pb-0 last:mb-0">
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {config.description}
-                    </label>
-                    <div className="flex items-center gap-4">
-                      {renderConfigInput(config)}
-                    </div>
-                    {configHints[config.key] && (
-                      <div className="flex items-center gap-1.5 mt-2">
-                        <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                        <p className="text-sm text-gray-500">{configHints[config.key]}</p>
-                      </div>
-                    )}
-                  </div>
-                ))
-              }
-            </div>
-          )}
-
-          {/* Web TLS 证书配置区域 */}
-          {configs.some(c => WEB_TLS_CERT_ALL_KEYS.includes(c.key)) && (
-            <div className="border-t border-gray-200 pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-gray-700">Web TLS 证书配置方式</span>
-                <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setWebCertMode('upload');
-                      WEB_TLS_CERT_PATH_KEYS.forEach(k => handleValueChange(k, '', 'string'));
-                    }}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${webCertMode === 'upload' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    上传文件
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setWebCertMode('path');
-                      WEB_TLS_CERT_CONTENT_KEYS.forEach(k => handleValueChange(k, '', 'string'));
-                    }}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${webCertMode === 'path' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    指定路径
-                  </button>
-                </div>
-              </div>
-
-              {configs
-                .filter(c => webCertMode === 'upload' ? WEB_TLS_CERT_CONTENT_KEYS.includes(c.key) : WEB_TLS_CERT_PATH_KEYS.includes(c.key))
-                .map((config) => (
-                  <div key={config.key} className="border-b border-gray-100 pb-6 mb-6 last:border-b-0 last:pb-0 last:mb-0">
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {config.description}
-                    </label>
-                    <div className="flex items-center gap-4">
-                      {renderConfigInput(config)}
-                    </div>
-                    {configHints[config.key] && (
-                      <div className="flex items-center gap-1.5 mt-2">
-                        <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                        <p className="text-sm text-gray-500">{configHints[config.key]}</p>
-                      </div>
-                    )}
-                  </div>
-                ))
-              }
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* 未保存提示 */}
       {hasChanges && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="flex items-center gap-2 text-amber-800">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span className="text-sm font-medium">你有未保存的更改（修改后需要重启服务端生效）</span>
+          </div>
+        </div>
+      )}
+
+      {/* 基础配置 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+            <Server className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">基础配置</h3>
+            <p className="text-sm text-gray-500">端口、认证和数据库配置</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {configs.filter(c => ['web_port', 'internal_port', 'jwt_expiration_hours', 'db_path'].includes(c.key)).map((config) => (
+            <div key={config.key} className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                {config.description}
+              </label>
+              <div className="flex items-center gap-3">
+                {renderConfigInput(config)}
+                {config.valueType === 'number' && config.key.includes('hours') && (
+                  <span className="text-sm text-gray-500">小时</span>
+                )}
+              </div>
+              {configHints[config.key] && (
+                <div className="flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  <p className="text-sm text-gray-500">{configHints[config.key]}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* gRPC TLS 配置 */}
+      {configs.some(c => c.key === 'grpc_tls_enabled' || GRPC_TLS_CERT_ALL_KEYS.includes(c.key) || c.key === 'grpc_domain') && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+              <Shield className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">gRPC TLS 配置</h3>
+              <p className="text-sm text-gray-500">Node 和 Client 连接加密配置</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {/* TLS 开关和域名 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {configs.filter(c => c.key === 'grpc_tls_enabled' || c.key === 'grpc_domain').map((config) => (
+                <div key={config.key} className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {config.description}
+                  </label>
+                  {renderConfigInput(config)}
+                  {configHints[config.key] && (
+                    <div className="flex items-center gap-1.5">
+                      <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <p className="text-sm text-gray-500">{configHints[config.key]}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* 证书配置 */}
+            {configs.some(c => GRPC_TLS_CERT_ALL_KEYS.includes(c.key)) && (
+              <div className="border-t border-gray-200 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-medium text-gray-700">证书配置方式</span>
+                  <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGrpcCertMode('upload');
+                        GRPC_TLS_CERT_PATH_KEYS.forEach(k => handleValueChange(k, '', 'string'));
+                      }}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${grpcCertMode === 'upload' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      上传文件
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGrpcCertMode('path');
+                        GRPC_TLS_CERT_CONTENT_KEYS.forEach(k => handleValueChange(k, '', 'string'));
+                      }}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${grpcCertMode === 'path' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      指定路径
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {configs
+                    .filter(c => grpcCertMode === 'upload' ? GRPC_TLS_CERT_CONTENT_KEYS.includes(c.key) : GRPC_TLS_CERT_PATH_KEYS.includes(c.key))
+                    .map((config) => (
+                      <div key={config.key} className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          {config.description}
+                        </label>
+                        {renderConfigInput(config)}
+                        {configHints[config.key] && (
+                          <div className="flex items-center gap-1.5">
+                            <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            <p className="text-sm text-gray-500">{configHints[config.key]}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Web TLS 配置 */}
+      {configs.some(c => c.key === 'web_tls_enabled' || WEB_TLS_CERT_ALL_KEYS.includes(c.key)) && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center">
+              <Globe className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Web TLS 配置</h3>
+              <p className="text-sm text-gray-500">管理界面 HTTPS 加密配置</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {/* TLS 开关 */}
+            {configs.filter(c => c.key === 'web_tls_enabled').map((config) => (
+              <div key={config.key} className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  {config.description}
+                </label>
+                {renderConfigInput(config)}
+                {configHints[config.key] && (
+                  <div className="flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <p className="text-sm text-gray-500">{configHints[config.key]}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* 证书配置 */}
+            {configs.some(c => WEB_TLS_CERT_ALL_KEYS.includes(c.key)) && (
+              <div className="border-t border-gray-200 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-medium text-gray-700">证书配置方式</span>
+                  <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWebCertMode('upload');
+                        WEB_TLS_CERT_PATH_KEYS.forEach(k => handleValueChange(k, '', 'string'));
+                      }}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${webCertMode === 'upload' ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      上传文件
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWebCertMode('path');
+                        WEB_TLS_CERT_CONTENT_KEYS.forEach(k => handleValueChange(k, '', 'string'));
+                      }}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${webCertMode === 'path' ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      指定路径
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {configs
+                    .filter(c => webCertMode === 'upload' ? WEB_TLS_CERT_CONTENT_KEYS.includes(c.key) : WEB_TLS_CERT_PATH_KEYS.includes(c.key))
+                    .map((config) => (
+                      <div key={config.key} className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          {config.description}
+                        </label>
+                        {renderConfigInput(config)}
+                        {configHints[config.key] && (
+                          <div className="flex items-center gap-1.5">
+                            <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            <p className="text-sm text-gray-500">{configHints[config.key]}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
