@@ -107,6 +107,7 @@ impl AgentGrpcClient {
         token: &str,
         tunnel_port: u16,
         tunnel_protocol: &str,
+        insecure: bool,
     ) -> Result<(Arc<Self>, mpsc::Receiver<ControllerCommand>, String)> {
         let mut endpoint = Channel::from_shared(controller_url.to_string())?
             .timeout(Duration::from_secs(30))
@@ -123,8 +124,13 @@ impl AgentGrpcClient {
                 .next()
                 .ok_or_else(|| anyhow!("无法从 URL 提取域名"))?;
 
-            let tls_config = ClientTlsConfig::new()
+            let mut tls_config = ClientTlsConfig::new()
                 .domain_name(domain);
+
+            if insecure {
+                warn!("⚠️  已启用 --insecure 选项，跳过 TLS 证书验证（不安全，仅用于测试）");
+                tls_config = tls_config.danger_accept_invalid_certs(true);
+            }
 
             endpoint = endpoint.tls_config(tls_config)
                 .map_err(|e| anyhow!("TLS 配置失败: {}", e))?;
@@ -213,6 +219,7 @@ impl AgentGrpcClient {
         token: &str,
         tunnel_port: u16,
         tunnel_protocol: &str,
+        insecure: bool,
     ) -> Result<(mpsc::Receiver<ControllerCommand>, String)> {
         let mut endpoint = Channel::from_shared(controller_url.to_string())?;
 
@@ -224,8 +231,12 @@ impl AgentGrpcClient {
                 .next()
                 .ok_or_else(|| anyhow!("无法从 URL 提取域名"))?;
 
-            let tls_config = ClientTlsConfig::new()
+            let mut tls_config = ClientTlsConfig::new()
                 .domain_name(domain);
+
+            if insecure {
+                tls_config = tls_config.danger_accept_invalid_certs(true);
+            }
 
             endpoint = endpoint.tls_config(tls_config)
                 .map_err(|e| anyhow!("TLS 配置失败: {}", e))?;

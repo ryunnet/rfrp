@@ -34,6 +34,10 @@ enum Command {
         /// 隧道协议：quic 或 kcp（默认 quic）
         #[arg(long, default_value = "quic")]
         protocol: String,
+
+        /// 跳过 TLS 证书验证（不安全，仅用于测试）
+        #[arg(long)]
+        insecure: bool,
     },
 
     /// 停止运行中的守护进程
@@ -67,6 +71,10 @@ enum Command {
         #[arg(long, default_value = "quic")]
         protocol: String,
 
+        /// 跳过 TLS 证书验证（不安全，仅用于测试）
+        #[arg(long)]
+        insecure: bool,
+
         /// PID 文件路径
         #[cfg(unix)]
         #[arg(long, default_value = "/var/run/rfrp-node.pid")]
@@ -92,8 +100,8 @@ enum Command {
     Update,
 }
 
-async fn run_node(controller_url: String, token: String, bind_port: u16, protocol: String) -> anyhow::Result<()> {
-    server::run_server_controller_mode(controller_url, token, bind_port, protocol).await
+async fn run_node(controller_url: String, token: String, bind_port: u16, protocol: String, insecure: bool) -> anyhow::Result<()> {
+    server::run_server_controller_mode(controller_url, token, bind_port, protocol, insecure).await
 }
 
 // ─── Unix 入口 ───────────────────────────────────────────
@@ -113,8 +121,9 @@ async fn main() -> anyhow::Result<()> {
             token,
             bind_port,
             protocol,
+            insecure,
         } => {
-            run_node(controller_url, token, bind_port, protocol).await?;
+            run_node(controller_url, token, bind_port, protocol, insecure).await?;
         }
 
         Command::Stop { pid_file } => {
@@ -126,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
             token,
             bind_port,
             protocol,
+            insecure,
             pid_file,
             log_file,
         } => {
@@ -151,7 +161,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            run_node(controller_url, token, bind_port, protocol).await?;
+            run_node(controller_url, token, bind_port, protocol, insecure).await?;
         }
 
         Command::Update => {

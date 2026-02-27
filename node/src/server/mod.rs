@@ -24,6 +24,7 @@ pub async fn run_server_controller_mode(
     token: String,
     bind_port: u16,
     protocol: String,
+    insecure: bool,
 ) -> Result<()> {
     // 初始化内存日志缓冲区（保存最近 1000 条日志）
     let log_buffer = node_logs::init_global_log_buffer(1000);
@@ -50,6 +51,7 @@ pub async fn run_server_controller_mode(
         &token,
         bind_port,
         &protocol,
+        insecure,
     ).await?;
 
     let node_id = grpc_client.node_id().await;
@@ -131,6 +133,7 @@ pub async fn run_server_controller_mode(
                         &token_clone,
                         bind_port,
                         &protocol_clone,
+                        insecure,
                     ).await {
                         Ok((new_cmd_rx, new_protocol)) => {
                             info!("gRPC 重连成功");
