@@ -107,7 +107,7 @@ impl AgentGrpcClient {
         token: &str,
         tunnel_port: u16,
         tunnel_protocol: &str,
-        insecure: bool,
+        tls_ca_cert: Option<&[u8]>,
     ) -> Result<(Arc<Self>, mpsc::Receiver<ControllerCommand>, String)> {
         let mut endpoint = Channel::from_shared(controller_url.to_string())?
             .timeout(Duration::from_secs(30))
@@ -125,11 +125,14 @@ impl AgentGrpcClient {
                 .ok_or_else(|| anyhow!("无法从 URL 提取域名"))?;
 
             let mut tls_config = ClientTlsConfig::new()
-                .domain_name(domain);
+                .domain_name(domain)
+                .with_webpki_roots();
 
-            if insecure {
-                warn!("⚠️  已启用 --insecure 选项，跳过 TLS 证书验证（不安全，仅用于测试）");
-                tls_config = tls_config.danger_accept_invalid_certs(true);
+            if let Some(ca_pem) = tls_ca_cert {
+                info!("使用自定义 CA 证书进行 TLS 验证");
+                tls_config = tls_config.ca_certificate(
+                    tonic::transport::Certificate::from_pem(ca_pem)
+                );
             }
 
             endpoint = endpoint.tls_config(tls_config)
@@ -219,7 +222,7 @@ impl AgentGrpcClient {
         token: &str,
         tunnel_port: u16,
         tunnel_protocol: &str,
-        insecure: bool,
+        tls_ca_cert: Option<&[u8]>,
     ) -> Result<(mpsc::Receiver<ControllerCommand>, String)> {
         let mut endpoint = Channel::from_shared(controller_url.to_string())?;
 
@@ -232,10 +235,13 @@ impl AgentGrpcClient {
                 .ok_or_else(|| anyhow!("无法从 URL 提取域名"))?;
 
             let mut tls_config = ClientTlsConfig::new()
-                .domain_name(domain);
+                .domain_name(domain)
+                .with_webpki_roots();
 
-            if insecure {
-                tls_config = tls_config.danger_accept_invalid_certs(true);
+            if let Some(ca_pem) = tls_ca_cert {
+                tls_config = tls_config.ca_certificate(
+                    tonic::transport::Certificate::from_pem(ca_pem)
+                );
             }
 
             endpoint = endpoint.tls_config(tls_config)

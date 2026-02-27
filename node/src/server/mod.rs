@@ -24,7 +24,7 @@ pub async fn run_server_controller_mode(
     token: String,
     bind_port: u16,
     protocol: String,
-    insecure: bool,
+    tls_ca_cert: Option<Vec<u8>>,
 ) -> Result<()> {
     // 初始化内存日志缓冲区（保存最近 1000 条日志）
     let log_buffer = node_logs::init_global_log_buffer(1000);
@@ -51,7 +51,7 @@ pub async fn run_server_controller_mode(
         &token,
         bind_port,
         &protocol,
-        insecure,
+        tls_ca_cert.as_deref(),
     ).await?;
 
     let node_id = grpc_client.node_id().await;
@@ -109,6 +109,8 @@ pub async fn run_server_controller_mode(
     let token_clone = token.clone();
     let protocol_clone = protocol.clone();
 
+    let tls_ca_cert_clone = tls_ca_cert.clone();
+
     tokio::spawn(async move {
         // 等待首次连接的心跳/消息循环结束（通过检测 sender 是否可用）
         // 使用简单的轮询检测连接状态
@@ -133,7 +135,7 @@ pub async fn run_server_controller_mode(
                         &token_clone,
                         bind_port,
                         &protocol_clone,
-                        insecure,
+                        tls_ca_cert_clone.as_deref(),
                     ).await {
                         Ok((new_cmd_rx, new_protocol)) => {
                             info!("gRPC 重连成功");

@@ -35,9 +35,9 @@ enum Command {
         #[arg(long, default_value = "quic")]
         protocol: String,
 
-        /// 跳过 TLS 证书验证（不安全，仅用于测试）
+        /// 自定义 CA 证书文件路径（PEM 格式，用于验证 Controller 的 TLS 证书）
         #[arg(long)]
-        insecure: bool,
+        tls_ca_cert: Option<String>,
     },
 
     /// 停止运行中的守护进程
@@ -71,9 +71,9 @@ enum Command {
         #[arg(long, default_value = "quic")]
         protocol: String,
 
-        /// 跳过 TLS 证书验证（不安全，仅用于测试）
+        /// 自定义 CA 证书文件路径（PEM 格式，用于验证 Controller 的 TLS 证书）
         #[arg(long)]
-        insecure: bool,
+        tls_ca_cert: Option<String>,
 
         /// PID 文件路径
         #[cfg(unix)]
@@ -100,8 +100,20 @@ enum Command {
     Update,
 }
 
-async fn run_node(controller_url: String, token: String, bind_port: u16, protocol: String, insecure: bool) -> anyhow::Result<()> {
-    server::run_server_controller_mode(controller_url, token, bind_port, protocol, insecure).await
+/// 加载 CA 证书文件内容
+fn load_tls_ca_cert(path: &Option<String>) -> anyhow::Result<Option<Vec<u8>>> {
+    match path {
+        Some(p) => {
+            let content = fs::read(p)
+                .map_err(|e| anyhow::anyhow!("读取 CA 证书文件 {} 失败: {}", p, e))?;
+            Ok(Some(content))
+        }
+        None => Ok(None),
+    }
+}
+
+async fn run_node(controller_url: String, token: String, bind_port: u16, protocol: String, tls_ca_cert: Option<Vec<u8>>) -> anyhow::Result<()> {
+    server::run_server_controller_mode(controller_url, token, bind_port, protocol, tls_ca_cert).await
 }
 
 // ─── Unix 入口 ───────────────────────────────────────────
@@ -121,9 +133,10 @@ async fn main() -> anyhow::Result<()> {
             token,
             bind_port,
             protocol,
-            insecure,
+            tls_ca_cert,
         } => {
-            run_node(controller_url, token, bind_port, protocol, insecure).await?;
+            let ca_cert = load_tls_ca_cert(&tls_ca_cert)?;
+            run_node(controller_url, token, bind_port, protocol, ca_cert).await?;
         }
 
         Command::Stop { pid_file } => {
@@ -135,7 +148,7 @@ async fn main() -> anyhow::Result<()> {
             token,
             bind_port,
             protocol,
-            insecure,
+            tls_ca_cert,
             pid_file,
             log_file,
         } => {
@@ -161,7 +174,8 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            run_node(controller_url, token, bind_port, protocol, insecure).await?;
+            let ca_cert = load_tls_ca_cert(&tls_ca_cert)?;
+            run_node(controller_url, token, bind_port, protocol, ca_cert).await?;
         }
 
         Command::Update => {
@@ -213,9 +227,11 @@ fn main() -> anyhow::Result<()> {
             token,
             bind_port,
             protocol,
+            tls_ca_cert,
         } => {
+            let ca_cert = load_tls_ca_cert(&tls_ca_cert)?;
             let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(async { run_node(controller_url, token, bind_port, protocol).await })
+            runtime.block_on(async { run_node(controller_url, token, bind_port, protocol, ca_cert).await })
         }
 
         Command::Stop { pid_file } => stop_daemon_windows(&pid_file),
@@ -225,6 +241,7 @@ fn main() -> anyhow::Result<()> {
             token,
             bind_port,
             protocol,
+            tls_ca_cert,
             pid_file,
             log_file,
         } => start_daemon_windows(
@@ -232,6 +249,7 @@ fn main() -> anyhow::Result<()> {
             &token,
             bind_port,
             &protocol,
+            &tls_ca_cert,
             &pid_file,
             &log_file,
         ),
@@ -246,6 +264,7 @@ fn start_daemon_windows(
     token: &str,
     bind_port: u16,
     protocol: &str,
+    tls_ca_cert: &Option<String>,
     pid_file: &str,
     log_file: &str,
 ) -> anyhow::Result<()> {
@@ -260,18 +279,25 @@ fn start_daemon_windows(
         .map_err(|e| anyhow::anyhow!("无法创建错误日志文件: {}", e))?;
 
     let exe = std::env::current_exe()?;
+    let mut args = vec![
+        "start".to_string(),
+        "--controller-url".to_string(),
+        controller_url.to_string(),
+        "--token".to_string(),
+        token.to_string(),
+        "--bind-port".to_string(),
+        bind_port.to_string(),
+        "--protocol".to_string(),
+        protocol.to_string(),
+    ];
+
+    if let Some(ca_path) = tls_ca_cert {
+        args.push("--tls-ca-cert".to_string());
+        args.push(ca_path.to_string());
+    }
+
     let child = std::process::Command::new(&exe)
-        .args([
-            "start",
-            "--controller-url",
-            controller_url,
-            "--token",
-            token,
-            "--bind-port",
-            &bind_port.to_string(),
-            "--protocol",
-            protocol,
-        ])
+        .args(&args)
         .stdout(stdout)
         .stderr(stderr)
         .creation_flags(DETACHED_PROCESS | CREATE_NO_WINDOW)
