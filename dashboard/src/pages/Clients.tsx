@@ -836,7 +836,7 @@ export default function Clients() {
                 <div className="ml-9 space-y-2">
                   <p className="text-sm text-gray-600">从 GitHub Releases 下载对应平台的客户端程序：</p>
                   <a
-                    href="https://github.com/your-repo/rfrp/releases/latest"
+                    href="https://github.com/ryunnet/rfrp/releases/latest"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
@@ -875,7 +875,7 @@ export default function Clients() {
                 <div className="ml-9 space-y-2">
                   <p className="text-sm text-gray-600">在终端中运行以下命令启动客户端：</p>
                   <div className="relative">
-                    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm font-mono overflow-x-auto">
+                    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm font-mono overflow-x-auto select-text cursor-text">
                       {getClientStartupCommand(commandClient, selectedPlatform)}
                     </pre>
                     <button

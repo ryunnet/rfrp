@@ -761,7 +761,7 @@ export default function Nodes() {
                 <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                   <p className="text-sm text-gray-700 mb-3">从 GitHub Releases 下载对应平台的节点程序：</p>
                   <a
-                    href="https://github.com/your-repo/rfrp/releases/latest"
+                    href="https://github.com/ryunnet/rfrp/releases/latest"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -798,7 +798,7 @@ export default function Nodes() {
                     </svg>
                     复制
                   </button>
-                  <pre className="bg-gray-900 text-green-400 rounded-xl px-4 py-3 pr-24 text-sm font-mono overflow-x-auto">{getStartupCommand(createdNodeInfo || commandNode!, selectedPlatform)}</pre>
+                  <pre className="bg-gray-900 text-green-400 rounded-xl px-4 py-3 pr-24 text-sm font-mono overflow-x-auto select-text cursor-text">{getStartupCommand(createdNodeInfo || commandNode!, selectedPlatform)}</pre>
                 </div>
               </div>
 
