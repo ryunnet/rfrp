@@ -152,25 +152,25 @@ export default function UserSubscriptions() {
 
   const getStatusBadge = (userSubscription: UserSubscription) => {
     if (userSubscription.isExpired) {
-      return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">已过期</span>;
+      return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full" style={{ background: 'hsl(0 84.2% 60.2% / 0.15)', color: 'hsl(0 84.2% 60.2%)' }}>已过期</span>;
     }
     if (!userSubscription.isActive) {
-      return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">已停用</span>;
+      return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-muted text-foreground">已停用</span>;
     }
-    return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">激活中</span>;
+    return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full" style={{ background: 'hsl(142 71% 45% / 0.15)', color: 'hsl(142 71% 45%)' }}>激活中</span>;
   };
 
   const getTrafficProgress = (used: number, total: number) => {
     const percentage = (used / total) * 100;
-    let colorClass = 'bg-green-500';
+    let bgColor = 'hsl(142 71% 45%)';
     if (percentage >= 90) {
-      colorClass = 'bg-red-500';
+      bgColor = 'hsl(0 84.2% 60.2%)';
     } else if (percentage >= 70) {
-      colorClass = 'bg-yellow-500';
+      bgColor = 'hsl(38 92% 50%)';
     }
     return (
-      <div className="w-full bg-gray-200 rounded-full h-2">
-        <div className={`${colorClass} h-2 rounded-full`} style={{ width: `${Math.min(percentage, 100)}%` }}></div>
+      <div className="w-full bg-muted rounded-full h-2">
+        <div className="h-2 rounded-full" style={{ width: `${Math.min(percentage, 100)}%`, background: bgColor }}></div>
       </div>
     );
   };
@@ -178,13 +178,14 @@ export default function UserSubscriptions() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">用户订阅管理</h1>
+        <h1 className="text-2xl font-bold text-foreground">用户订阅管理</h1>
         <button
           onClick={() => {
             resetForm();
             setShowCreateModal(true);
           }}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl shadow-sm hover:from-blue-700 hover:to-indigo-700 transition-all"
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-primary-foreground text-sm font-medium rounded-xl shadow-sm transition-all hover:opacity-90"
+          style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}
         >
           分配订阅
         </button>
@@ -209,22 +210,22 @@ export default function UserSubscriptions() {
               {userSubscriptions.map((userSub) => (
                 <TableRow key={userSub.id}>
                   <TableCell className="whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{getUserName(userSub.userId)}</div>
-                    <div className="text-sm text-gray-500">ID: {userSub.userId}</div>
+                    <div className="text-sm font-medium text-foreground">{getUserName(userSub.userId)}</div>
+                    <div className="text-sm text-muted-foreground">ID: {userSub.userId}</div>
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm text-gray-900">
+                  <TableCell className="whitespace-nowrap text-sm text-foreground">
                     {userSub.subscriptionName}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{formatDate(userSub.startDate)}</div>
-                    <div className="text-sm text-gray-500">至 {formatDate(userSub.endDate)}</div>
+                    <div className="text-sm text-foreground">{formatDate(userSub.startDate)}</div>
+                    <div className="text-sm text-muted-foreground">至 {formatDate(userSub.endDate)}</div>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm text-gray-900 mb-1">
+                    <div className="text-sm text-foreground mb-1">
                       {userSub.trafficUsedGb.toFixed(2)} / {userSub.trafficQuotaGb.toFixed(2)} GB
                     </div>
                     {getTrafficProgress(userSub.trafficUsedGb, userSub.trafficQuotaGb)}
-                    <div className="text-xs text-gray-500 mt-1">
+                    <div className="text-xs text-muted-foreground mt-1">
                       剩余: {userSub.trafficRemainingGb.toFixed(2)} GB
                     </div>
                   </TableCell>
@@ -259,29 +260,29 @@ export default function UserSubscriptions() {
       {/* 分配订阅模态框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
             <div className="p-6">
               {/* 头部 */}
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <svg className="w-5 h-5 text-primary-foreground" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">分配订阅</h3>
-                  <p className="text-sm text-gray-500">为用户分配订阅套餐</p>
+                  <h3 className="text-lg font-bold text-foreground">分配订阅</h3>
+                  <p className="text-sm text-muted-foreground">为用户分配订阅套餐</p>
                 </div>
               </div>
 
               {/* 表单 */}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">选择用户 *</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">选择用户 *</label>
                   <select
                     value={formData.userId}
                     onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   >
                     <option value="">请选择用户</option>
                     {users.map((user) => (
@@ -292,11 +293,11 @@ export default function UserSubscriptions() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">选择订阅套餐 *</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">选择订阅套餐 *</label>
                   <select
                     value={formData.subscriptionId}
                     onChange={(e) => setFormData({ ...formData, subscriptionId: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   >
                     <option value="">请选择订阅套餐</option>
                     {subscriptions.map((sub) => (
@@ -312,14 +313,14 @@ export default function UserSubscriptions() {
                   if (!selected) return null;
                   const typeMap: Record<string, string> = { daily: '天', weekly: '周', monthly: '月', yearly: '年' };
                   return (
-                    <div className="px-4 py-3 bg-blue-50/80 rounded-xl border border-blue-100">
+                    <div className="px-4 py-3 bg-muted/80 rounded-xl border border-border">
                       <div className="flex items-center gap-2 mb-1">
-                        <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
                         </svg>
-                        <span className="text-sm font-medium text-blue-700">套餐详情</span>
+                        <span className="text-sm font-medium text-primary">套餐详情</span>
                       </div>
-                      <div className="text-sm text-blue-600 space-y-0.5">
+                      <div className="text-sm text-primary space-y-0.5">
                         <p>周期：{selected.durationValue} {typeMap[selected.durationType] || selected.durationType}</p>
                         <p>流量：{selected.trafficQuotaGb} GB</p>
                         {selected.price && <p>价格：¥{selected.price}</p>}
@@ -328,11 +329,11 @@ export default function UserSubscriptions() {
                     </div>
                   );
                 })()}
-                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50/80 rounded-xl border border-gray-200">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <div className="flex items-center gap-2 px-4 py-3 bg-muted/80 rounded-xl border border-border">
+                  <svg className="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                   </svg>
-                  <span className="text-sm text-gray-500">订阅将从当前时间开始生效</span>
+                  <span className="text-sm text-muted-foreground">订阅将从当前时间开始生效</span>
                 </div>
               </div>
 
@@ -343,13 +344,13 @@ export default function UserSubscriptions() {
                     setShowCreateModal(false);
                     resetForm();
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleCreateUserSubscription}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium rounded-xl hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-500/25 transition-all"
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-primary-foreground font-medium rounded-xl hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-500/25 transition-all"
                 >
                   分配
                 </button>

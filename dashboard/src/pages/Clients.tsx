@@ -236,11 +236,11 @@ export default function Clients() {
       case 'WARN':
         return 'bg-amber-100 text-amber-700';
       case 'INFO':
-        return 'bg-blue-100 text-blue-700';
+        return 'bg-muted text-primary';
       case 'DEBUG':
-        return 'bg-gray-100 text-gray-700';
+        return 'bg-muted text-foreground';
       default:
-        return 'bg-gray-100 text-gray-700';
+        return 'bg-muted text-foreground';
     }
   };
 
@@ -280,12 +280,13 @@ export default function Clients() {
       {/* 页面标题 */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">客户端管理</h2>
-          <p className="mt-1 text-sm text-gray-500">管理所有客户端连接</p>
+          <h2 className="text-2xl font-bold text-foreground">客户端管理</h2>
+          <p className="mt-1 text-sm text-muted-foreground">管理所有客户端连接</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-lg shadow-blue-500/25 transition-all duration-200"
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-primary-foreground text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-sm transition-all duration-200 hover:opacity-90"
+          style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -315,15 +316,15 @@ export default function Clients() {
                 <TableRow>
                   <TableCell colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
+                      <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-muted-foreground">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
                         </svg>
                       </div>
-                      <p className="text-gray-500">暂无客户端数据</p>
+                      <p className="text-muted-foreground">暂无客户端数据</p>
                       <button
                         onClick={() => setShowCreateModal(true)}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                        className="text-sm text-primary hover:text-primary/80 font-medium"
                       >
                         创建第一个客户端
                       </button>
@@ -339,29 +340,29 @@ export default function Clients() {
                           {client.is_online && (
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                           )}
-                          <span className={`relative inline-flex rounded-full h-3 w-3 ${client.is_online ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                          <span className={`relative inline-flex rounded-full h-3 w-3 ${client.is_online ? '' : ''}`} style={{ background: client.is_online ? 'hsl(142 71% 45%)' : 'hsl(0 84.2% 60.2%)' }}></span>
                         </span>
-                        <span className={`text-sm font-medium ${client.is_online ? 'text-green-600' : 'text-gray-500'}`}>
+                        <span className={`text-sm font-medium`} style={{ color: client.is_online ? 'hsl(142 71% 45%)' : 'hsl(0 84.2% 60.2%)' }}>
                           {client.is_online ? '在线' : '离线'}
                         </span>
                       </div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white text-sm font-semibold shadow-sm">
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center text-primary-foreground text-sm font-semibold shadow-sm" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
                           {client.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-sm font-semibold text-gray-900">{client.name}</span>
+                        <span className="text-sm font-semibold text-foreground">{client.name}</span>
                       </div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <code className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1.5 rounded-lg font-mono">
+                        <code className="text-xs bg-muted text-muted-foreground px-2.5 py-1.5 rounded-lg font-mono">
                           {client.token.slice(0, 16)}...
                         </code>
                         <button
                           onClick={() => handleCopyToken(client.token)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-1.5 text-muted-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors"
                           title="复制 Token"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
@@ -373,16 +374,16 @@ export default function Clients() {
                     <TableCell className="whitespace-nowrap">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1.5 text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-blue-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(217 91% 60%)' }}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
                           </svg>
-                          <span className="text-gray-600">{formatBytes(client.totalBytesSent)}</span>
+                          <span className="text-muted-foreground">{formatBytes(client.totalBytesSent)}</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-green-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(142 71% 45%)' }}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
                           </svg>
-                          <span className="text-gray-600">{formatBytes(client.totalBytesReceived)}</span>
+                          <span className="text-muted-foreground">{formatBytes(client.totalBytesReceived)}</span>
                         </div>
                       </div>
                     </TableCell>
@@ -398,13 +399,13 @@ export default function Clients() {
                         )}
                         {client.trafficQuotaGb ? (
                           <>
-                            <div className="text-xs font-medium text-gray-900">
+                            <div className="text-xs font-medium text-foreground">
                               配额: {client.trafficQuotaGb} GB
                             </div>
                             <div className="text-xs text-green-600">
                               剩余: {(client.trafficQuotaGb - (client.totalBytesSent + client.totalBytesReceived) / (1024 * 1024 * 1024)).toFixed(2)} GB
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                            <div className="w-full bg-muted rounded-full h-1.5 mt-1">
                               <div
                                 className={`h-1.5 rounded-full ${
                                   ((client.trafficQuotaGb - (client.totalBytesSent + client.totalBytesReceived) / (1024 * 1024 * 1024)) / client.trafficQuotaGb) < 0.2
@@ -420,13 +421,13 @@ export default function Clients() {
                             </div>
                           </>
                         ) : (
-                          <div className="text-xs text-gray-400">
+                          <div className="text-xs text-muted-foreground">
                             无配额限制
                           </div>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-gray-500">
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                       {formatDate(client.created_at)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-right">
@@ -443,7 +444,7 @@ export default function Clients() {
                         </button>
                         <button
                           onClick={() => handleAllocateQuota(client)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent rounded-lg transition-colors"
                           title="分配流量配额"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
@@ -468,8 +469,8 @@ export default function Clients() {
                           disabled={!client.is_online}
                           className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                             client.is_online
-                              ? 'text-blue-600 hover:bg-blue-50'
-                              : 'text-gray-400 cursor-not-allowed'
+                              ? 'text-primary hover:bg-accent'
+                              : 'text-muted-foreground cursor-not-allowed'
                           }`}
                           title={client.is_online ? '查看日志' : '客户端离线'}
                         >
@@ -500,28 +501,28 @@ export default function Clients() {
       {/* 创建节点模态框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">创建新客户端</h3>
-                  <p className="text-sm text-gray-500">添加一个新的客户端</p>
+                  <h3 className="text-lg font-bold text-foreground">创建新客户端</h3>
+                  <p className="text-sm text-muted-foreground">添加一个新的客户端</p>
                 </div>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">客户端名称</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">客户端名称</label>
                   <input
                     type="text"
                     value={newClientName}
                     onChange={(e) => setNewClientName(e.target.value)}
                     placeholder="请输入客户端名称"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && handleCreateClient()}
                   />
@@ -533,13 +534,13 @@ export default function Clients() {
                     setShowCreateModal(false);
                     setNewClientName('');
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleCreateClient}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 transition-all"
+                  className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-xl hover:bg-primary/90 shadow-sm transition-all"
                 >
                   创建
                 </button>
@@ -552,17 +553,17 @@ export default function Clients() {
       {/* 日志查看模态框 */}
       {showLogsModal && selectedClient && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[85vh] flex flex-col transform transition-all">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[85vh] flex flex-col transform transition-all">
+            <div className="flex items-center justify-between p-6 border-b border-border">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">客户端日志</h3>
-                  <p className="text-sm text-gray-500">{selectedClient.name}</p>
+                  <h3 className="text-lg font-bold text-foreground">客户端日志</h3>
+                  <p className="text-sm text-muted-foreground">{selectedClient.name}</p>
                 </div>
               </div>
               <button
@@ -571,7 +572,7 @@ export default function Clients() {
                   setSelectedClient(null);
                   setLogs([]);
                 }}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-muted-foreground hover:text-muted-foreground hover:bg-accent rounded-lg transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -583,13 +584,13 @@ export default function Clients() {
               {logsLoading ? (
                 <div className="flex items-center justify-center h-64">
                   <div className="flex flex-col items-center gap-3">
-                    <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                    <span className="text-sm text-gray-500">加载日志中...</span>
+                    <div className="w-10 h-10 border-4 border-border border-t-primary rounded-full animate-spin"></div>
+                    <span className="text-sm text-muted-foreground">加载日志中...</span>
                   </div>
                 </div>
               ) : logs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 text-gray-300 mb-3">
+                <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 text-muted-foreground mb-3">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                   </svg>
                   暂无日志数据
@@ -602,17 +603,17 @@ export default function Clients() {
                       className={`p-3 rounded-lg border-l-4 ${
                         log.level === 'ERROR' ? 'bg-red-50 border-red-500' :
                         log.level === 'WARN' ? 'bg-amber-50 border-amber-500' :
-                        log.level === 'INFO' ? 'bg-blue-50 border-blue-500' : 'bg-gray-50 border-gray-400'
+                        log.level === 'INFO' ? 'bg-muted border-border' : 'bg-muted border-muted-foreground'
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <span className="text-gray-400 text-xs whitespace-nowrap">
+                        <span className="text-muted-foreground text-xs whitespace-nowrap">
                           {new Date(log.timestamp).toLocaleString('zh-CN')}
                         </span>
                         <span className={`font-semibold text-xs whitespace-nowrap px-1.5 py-0.5 rounded ${getLevelColor(log.level)}`}>
                           {log.level}
                         </span>
-                        <span className="text-gray-700 flex-1 break-all">
+                        <span className="text-foreground flex-1 break-all">
                           {log.message.replace(/^"|"$/g, '')}
                         </span>
                       </div>
@@ -622,14 +623,14 @@ export default function Clients() {
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-100 flex justify-end">
+            <div className="p-4 border-t border-border flex justify-end">
               <button
                 onClick={() => {
                   setShowLogsModal(false);
                   setSelectedClient(null);
                   setLogs([]);
                 }}
-                className="px-5 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                className="px-5 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
               >
                 关闭
               </button>
@@ -641,30 +642,30 @@ export default function Clients() {
       {/* 配额分配模态框 */}
       {showQuotaModal && selectedClient && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">分配流量配额</h3>
-                  <p className="text-sm text-gray-500">{selectedClient.name}</p>
+                  <h3 className="text-lg font-bold text-foreground">分配流量配额</h3>
+                  <p className="text-sm text-muted-foreground">{selectedClient.name}</p>
                 </div>
               </div>
 
               {/* 用户配额信息 */}
               {userQuotaInfo && userQuotaInfo.total_quota_gb !== null && (
-                <div className="mb-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
+                <div className="mb-4 p-4 bg-muted rounded-xl border border-border">
                   <div className="flex items-start gap-2 mb-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-primary flex-shrink-0 mt-0.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                     </svg>
                     <div className="flex-1">
-                      <p className="text-sm font-bold text-indigo-900">您的配额信息</p>
-                      <div className="mt-2 space-y-1 text-xs text-indigo-700">
+                      <p className="text-sm font-bold text-primary">您的配额信息</p>
+                      <div className="mt-2 space-y-1 text-xs text-primary">
                         <div className="flex justify-between">
                           <span>总配额:</span>
                           <span className="font-semibold">{userQuotaInfo.total_quota_gb.toFixed(2)} GB</span>
@@ -677,16 +678,16 @@ export default function Clients() {
                           <span>已分配给客户端:</span>
                           <span className="font-semibold">{userQuotaInfo.allocated_to_clients_gb.toFixed(2)} GB</span>
                         </div>
-                        <div className="flex justify-between pt-1 border-t border-indigo-200">
+                        <div className="flex justify-between pt-1 border-t border-border">
                           <span className="font-bold">可用配额:</span>
                           <span className="font-bold text-green-600">{userQuotaInfo.available_gb.toFixed(2)} GB</span>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div className="w-full bg-indigo-200 rounded-full h-2">
+                  <div className="w-full bg-muted rounded-full h-2">
                     <div
-                      className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all"
+                      className="h-2 rounded-full bg-primary transition-all"
                       style={{
                         width: `${Math.min(100, (userQuotaInfo.quota_usage_percent || 0))}%`,
                       }}
@@ -697,7 +698,7 @@ export default function Clients() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">流量配额 (GB)</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">流量配额 (GB)</label>
                   <input
                     type="number"
                     step="0.1"
@@ -707,27 +708,27 @@ export default function Clients() {
                     value={quotaFormData.quotaGb}
                     onChange={(e) => setQuotaFormData({ quotaGb: e.target.value })}
                     placeholder="请输入配额大小"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     autoFocus
                   />
-                  <p className="mt-2 text-xs text-gray-500">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     设置此客户端的总流量配额（上传+下载）
                     {userQuotaInfo && userQuotaInfo.total_quota_gb !== null && (
-                      <span className="block mt-1 text-indigo-600 font-medium">
+                      <span className="block mt-1 text-primary font-medium">
                         最多可分配: {(userQuotaInfo.available_gb + (selectedClient.trafficQuotaGb || 0)).toFixed(2)} GB
                       </span>
                     )}
                   </p>
                 </div>
                 {selectedClient.trafficQuotaGb && (
-                  <div className="p-4 bg-blue-50 rounded-xl">
+                  <div className="p-4 bg-muted rounded-xl">
                     <div className="flex items-start gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-primary flex-shrink-0 mt-0.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                       </svg>
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-blue-900">当前客户端配额</p>
-                        <p className="text-xs text-blue-700 mt-1">
+                        <p className="text-sm font-medium text-primary">当前客户端配额</p>
+                        <p className="text-xs text-primary mt-1">
                           当前配额: {selectedClient.trafficQuotaGb} GB<br />
                           已使用: {((selectedClient.totalBytesSent + selectedClient.totalBytesReceived) / (1024 * 1024 * 1024)).toFixed(2)} GB<br />
                           剩余: {(selectedClient.trafficQuotaGb - (selectedClient.totalBytesSent + selectedClient.totalBytesReceived) / (1024 * 1024 * 1024)).toFixed(2)} GB
@@ -743,7 +744,7 @@ export default function Clients() {
                     setShowQuotaModal(false);
                     setSelectedClient(null);
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
                   disabled={quotaSaving}
                 >
                   取消
@@ -751,7 +752,7 @@ export default function Clients() {
                 <button
                   onClick={handleSaveQuota}
                   disabled={quotaSaving}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 transition-all disabled:opacity-50"
+                  className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-xl hover:bg-primary/90 shadow-sm transition-all disabled:opacity-50"
                 >
                   {quotaSaving ? '分配中...' : '确认分配'}
                 </button>
@@ -764,18 +765,18 @@ export default function Clients() {
       {/* 启动命令教程模态框 */}
       {showCommandModal && commandClient && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
-            <div className="sticky top-0 bg-white border-b border-gray-100 p-6 z-10">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
+            <div className="sticky top-0 bg-card border-b border-border p-6 z-10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">客户端启动教程</h3>
-                    <p className="text-sm text-gray-500">{commandClient.name}</p>
+                    <h3 className="text-lg font-bold text-foreground">客户端启动教程</h3>
+                    <p className="text-sm text-muted-foreground">{commandClient.name}</p>
                   </div>
                 </div>
                 <button
@@ -783,7 +784,7 @@ export default function Clients() {
                     setShowCommandModal(false);
                     setCommandClient(null);
                   }}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 text-muted-foreground hover:text-muted-foreground hover:bg-accent rounded-lg transition-colors"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -797,8 +798,8 @@ export default function Clients() {
                   onClick={() => setSelectedPlatform('windows')}
                   className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
                     selectedPlatform === 'windows'
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-muted text-foreground hover:bg-accent'
                   }`}
                 >
                   🪟 Windows
@@ -807,8 +808,8 @@ export default function Clients() {
                   onClick={() => setSelectedPlatform('linux')}
                   className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
                     selectedPlatform === 'linux'
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-muted text-foreground hover:bg-accent'
                   }`}
                 >
                   🐧 Linux
@@ -817,8 +818,8 @@ export default function Clients() {
                   onClick={() => setSelectedPlatform('macos')}
                   className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
                     selectedPlatform === 'macos'
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-muted text-foreground hover:bg-accent'
                   }`}
                 >
                   🍎 macOS
@@ -830,24 +831,24 @@ export default function Clients() {
               {/* 步骤 1: 下载 */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-bold">1</div>
-                  <h4 className="text-base font-bold text-gray-900">下载客户端程序</h4>
+                  <div className="w-7 h-7 bg-muted text-primary rounded-full flex items-center justify-center text-sm font-bold">1</div>
+                  <h4 className="text-base font-bold text-foreground">下载客户端程序</h4>
                 </div>
                 <div className="ml-9 space-y-2">
-                  <p className="text-sm text-gray-600">从 GitHub Releases 下载对应平台的客户端程序：</p>
+                  <p className="text-sm text-muted-foreground">从 GitHub Releases 下载对应平台的客户端程序：</p>
                   <a
                     href="https://github.com/ryunnet/rfrp/releases/latest"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                     </svg>
                     前往 GitHub Releases
                   </a>
-                  <div className="mt-2 p-3 bg-blue-50 rounded-lg">
-                    <p className="text-xs text-blue-900 font-medium">
+                  <div className="mt-2 p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-primary font-medium">
                       {selectedPlatform === 'windows' && '下载文件: rfrp-client-windows-amd64.exe'}
                       {selectedPlatform === 'linux' && '下载文件: rfrp-client-linux-amd64'}
                       {selectedPlatform === 'macos' && '下载文件: rfrp-client-darwin-amd64 或 rfrp-client-darwin-arm64 (M系列芯片)'}
@@ -870,12 +871,12 @@ export default function Clients() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm font-bold">2</div>
-                  <h4 className="text-base font-bold text-gray-900">前台启动（测试用）</h4>
+                  <h4 className="text-base font-bold text-foreground">前台启动（测试用）</h4>
                 </div>
                 <div className="ml-9 space-y-2">
-                  <p className="text-sm text-gray-600">在终端中运行以下命令启动客户端：</p>
+                  <p className="text-sm text-muted-foreground">在终端中运行以下命令启动客户端：</p>
                   <div className="relative">
-                    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm font-mono overflow-x-auto select-text cursor-text">
+                    <pre className="bg-primary text-muted p-4 rounded-lg text-sm font-mono overflow-x-auto select-text cursor-text">
                       {getClientStartupCommand(commandClient, selectedPlatform)}
                     </pre>
                     <button
@@ -883,7 +884,7 @@ export default function Clients() {
                         copyToClipboard(getClientStartupCommand(commandClient, selectedPlatform));
                         showToast('命令已复制', 'success');
                       }}
-                      className="absolute top-2 right-2 p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
+                      className="absolute top-2 right-2 p-2 bg-primary/90 hover:bg-primary/80 text-muted-foreground rounded-lg transition-colors"
                       title="复制命令"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
@@ -891,7 +892,7 @@ export default function Clients() {
                       </svg>
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500">前台运行可以直接看到日志输出，适合测试和调试。按 Ctrl+C 可停止运行。</p>
+                  <p className="text-xs text-muted-foreground">前台运行可以直接看到日志输出，适合测试和调试。按 Ctrl+C 可停止运行。</p>
                 </div>
               </div>
 
@@ -899,17 +900,17 @@ export default function Clients() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-bold">3</div>
-                  <h4 className="text-base font-bold text-gray-900">后台运行（生产环境）</h4>
+                  <h4 className="text-base font-bold text-foreground">后台运行（生产环境）</h4>
                 </div>
                 <div className="ml-9 space-y-2">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-muted-foreground">
                     {selectedPlatform === 'windows'
                       ? '在 Windows 上，可以将客户端安装为系统服务：'
                       : '在 Linux/macOS 上，使用 --daemon 参数后台运行：'
                     }
                   </p>
                   <div className="relative">
-                    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm font-mono overflow-x-auto">
+                    <pre className="bg-primary text-muted p-4 rounded-lg text-sm font-mono overflow-x-auto">
                       {getClientDaemonCommand(commandClient, selectedPlatform)}
                     </pre>
                     <button
@@ -917,7 +918,7 @@ export default function Clients() {
                         copyToClipboard(getClientDaemonCommand(commandClient, selectedPlatform));
                         showToast('命令已复制', 'success');
                       }}
-                      className="absolute top-2 right-2 p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
+                      className="absolute top-2 right-2 p-2 bg-primary/90 hover:bg-primary/80 text-muted-foreground rounded-lg transition-colors"
                       title="复制命令"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
@@ -927,29 +928,29 @@ export default function Clients() {
                   </div>
                   {selectedPlatform === 'windows' ? (
                     <div className="space-y-2">
-                      <p className="text-xs text-gray-500">安装为服务后，客户端会在系统启动时自动运行。</p>
-                      <div className="p-3 bg-blue-50 rounded-lg">
-                        <p className="text-xs text-blue-900 font-medium mb-1">服务管理命令：</p>
-                        <code className="block text-xs bg-blue-100 text-blue-900 px-2 py-1 rounded font-mono mb-1">
+                      <p className="text-xs text-muted-foreground">安装为服务后，客户端会在系统启动时自动运行。</p>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <p className="text-xs text-primary font-medium mb-1">服务管理命令：</p>
+                        <code className="block text-xs bg-muted text-primary px-2 py-1 rounded font-mono mb-1">
                           client.exe uninstall-service  # 卸载服务
                         </code>
-                        <code className="block text-xs bg-blue-100 text-blue-900 px-2 py-1 rounded font-mono">
+                        <code className="block text-xs bg-muted text-primary px-2 py-1 rounded font-mono">
                           sc query RfrpClient  # 查看服务状态
                         </code>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <p className="text-xs text-gray-500">后台运行后，日志会写入指定的日志文件。</p>
-                      <div className="p-3 bg-blue-50 rounded-lg">
-                        <p className="text-xs text-blue-900 font-medium mb-1">管理后台进程：</p>
-                        <code className="block text-xs bg-blue-100 text-blue-900 px-2 py-1 rounded font-mono mb-1">
+                      <p className="text-xs text-muted-foreground">后台运行后，日志会写入指定的日志文件。</p>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <p className="text-xs text-primary font-medium mb-1">管理后台进程：</p>
+                        <code className="block text-xs bg-muted text-primary px-2 py-1 rounded font-mono mb-1">
                           cat /var/run/rfrp-client.pid  # 查看进程 ID
                         </code>
-                        <code className="block text-xs bg-blue-100 text-blue-900 px-2 py-1 rounded font-mono mb-1">
+                        <code className="block text-xs bg-muted text-primary px-2 py-1 rounded font-mono mb-1">
                           kill $(cat /var/run/rfrp-client.pid)  # 停止客户端
                         </code>
-                        <code className="block text-xs bg-blue-100 text-blue-900 px-2 py-1 rounded font-mono">
+                        <code className="block text-xs bg-muted text-primary px-2 py-1 rounded font-mono">
                           tail -f /var/log/rfrp-client.log  # 查看日志
                         </code>
                       </div>
@@ -962,10 +963,10 @@ export default function Clients() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-sm font-bold">4</div>
-                  <h4 className="text-base font-bold text-gray-900">验证客户端状态</h4>
+                  <h4 className="text-base font-bold text-foreground">验证客户端状态</h4>
                 </div>
                 <div className="ml-9 space-y-2">
-                  <p className="text-sm text-gray-600">启动后，在本页面查看客户端状态：</p>
+                  <p className="text-sm text-muted-foreground">启动后，在本页面查看客户端状态：</p>
                   <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
                     <div className="flex items-start gap-3">
                       <div className="flex-shrink-0 mt-0.5">
@@ -991,24 +992,24 @@ export default function Clients() {
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-amber-600">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
                   </svg>
-                  <h4 className="text-base font-bold text-gray-900">常见问题</h4>
+                  <h4 className="text-base font-bold text-foreground">常见问题</h4>
                 </div>
                 <div className="ml-7 space-y-3">
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm font-medium text-gray-900 mb-1">❓ 客户端显示离线？</p>
-                    <p className="text-xs text-gray-600">
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-sm font-medium text-foreground mb-1">❓ 客户端显示离线？</p>
+                    <p className="text-xs text-muted-foreground">
                       检查 Controller URL 是否正确，确保网络连接正常，查看客户端日志排查错误。
                     </p>
                   </div>
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm font-medium text-gray-900 mb-1">❓ Token 无效？</p>
-                    <p className="text-xs text-gray-600">
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-sm font-medium text-foreground mb-1">❓ Token 无效？</p>
+                    <p className="text-xs text-muted-foreground">
                       确认复制的 Token 完整无误，没有多余的空格或换行符。
                     </p>
                   </div>
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm font-medium text-gray-900 mb-1">❓ 如何查看客户端日志？</p>
-                    <p className="text-xs text-gray-600">
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-sm font-medium text-foreground mb-1">❓ 如何查看客户端日志？</p>
+                    <p className="text-xs text-muted-foreground">
                       前台运行时日志直接输出到终端；后台运行时查看日志文件；或在本页面点击"日志"按钮查看在线日志。
                     </p>
                   </div>
@@ -1016,13 +1017,13 @@ export default function Clients() {
               </div>
             </div>
 
-            <div className="sticky bottom-0 bg-white border-t border-gray-100 p-4 flex justify-end">
+            <div className="sticky bottom-0 bg-card border-t border-border p-4 flex justify-end">
               <button
                 onClick={() => {
                   setShowCommandModal(false);
                   setCommandClient(null);
                 }}
-                className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 transition-all"
+                className="px-5 py-2.5 bg-primary text-primary-foreground font-medium rounded-xl hover:bg-primary/90 shadow-sm transition-all"
               >
                 关闭
               </button>

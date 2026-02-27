@@ -200,36 +200,36 @@ export default function Nodes() {
 
   const tunnelFields = (
     <>
-      <div className="border-t border-gray-100 pt-4 mt-4">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">隧道连接配置</h3>
+      <div className="border-t border-border pt-4 mt-4">
+        <h3 className="text-sm font-semibold text-foreground mb-3">隧道连接配置</h3>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">隧道地址 *</label>
+        <label className="block text-sm font-medium text-foreground mb-1.5">隧道地址 *</label>
         <input
           type="text"
           value={formData.tunnelAddr}
           onChange={(e) => setFormData({ ...formData, tunnelAddr: e.target.value })}
-          className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+          className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
           placeholder="客户端连接的公网地址，例如：1.2.3.4"
         />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">隧道端口</label>
+          <label className="block text-sm font-medium text-foreground mb-1.5">隧道端口</label>
           <input
             type="number"
             value={formData.tunnelPort}
             onChange={(e) => setFormData({ ...formData, tunnelPort: e.target.value })}
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+            className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
             placeholder="7000"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">隧道协议</label>
+          <label className="block text-sm font-medium text-foreground mb-1.5">隧道协议</label>
           <select
             value={formData.tunnelProtocol}
             onChange={(e) => setFormData({ ...formData, tunnelProtocol: e.target.value })}
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+            className="w-full px-4 py-3 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
           >
             <option value="quic">QUIC</option>
             <option value="kcp">KCP</option>
@@ -305,15 +305,16 @@ export default function Nodes() {
       {/* 页面标题 */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">节点管理</h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <h2 className="text-2xl font-bold text-foreground">节点管理</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             {isAdmin ? '管理和监控所有代理节点' : '查看可用的代理节点（共享节点 + 您的独享节点）'}
           </p>
         </div>
         {isAdmin && (
           <button
             onClick={() => { resetForm(); setShowCreateModal(true); }}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-lg shadow-blue-500/25 transition-all duration-200"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-primary-foreground text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-sm transition-all duration-200 hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -346,13 +347,13 @@ export default function Nodes() {
                 <TableRow>
                   <TableCell colSpan={9} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
+                      <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-muted-foreground">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
                         </svg>
                       </div>
-                      <p className="text-gray-500">暂无节点</p>
-                      <p className="text-sm text-gray-400">点击"添加节点"来添加第一个节点</p>
+                      <p className="text-muted-foreground">暂无节点</p>
+                      <p className="text-sm text-muted-foreground">点击"添加节点"来添加第一个节点</p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -361,13 +362,13 @@ export default function Nodes() {
                   <TableRow key={node.id}>
                     <TableCell className="whitespace-nowrap">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white text-sm font-semibold shadow-sm">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-primary-foreground text-sm font-semibold shadow-sm" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
                           {node.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-gray-900">{node.name}</div>
+                          <div className="text-sm font-semibold text-foreground">{node.name}</div>
                           {node.description && (
-                            <div className="text-xs text-gray-500">{node.description}</div>
+                            <div className="text-xs text-muted-foreground">{node.description}</div>
                           )}
                         </div>
                       </div>
@@ -376,7 +377,7 @@ export default function Nodes() {
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg ${
                         node.nodeType === 'dedicated'
                           ? 'bg-purple-50 text-purple-700'
-                          : 'bg-blue-50 text-blue-700'
+                          : 'bg-muted text-primary'
                       }`}>
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                           {node.nodeType === 'dedicated' ? (
@@ -390,7 +391,7 @@ export default function Nodes() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {node.region ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-50 text-blue-700">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-muted text-primary">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
@@ -398,7 +399,7 @@ export default function Nodes() {
                           {node.region}
                         </span>
                       ) : (
-                        <span className="text-xs text-gray-400">-</span>
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
@@ -410,30 +411,31 @@ export default function Nodes() {
                           {node.publicIp}
                         </span>
                       ) : (
-                        <span className="text-xs text-gray-400">-</span>
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <span className="text-sm text-gray-600 font-mono">
+                      <span className="text-sm text-muted-foreground font-mono">
                         {node.tunnelAddr ? `${node.tunnelAddr}:${node.tunnelPort}` : node.url}
                       </span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 uppercase">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-muted text-foreground uppercase">
                         {node.tunnelProtocol || 'quic'}
                       </span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                        node.isOnline
-                          ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700'
-                          : 'bg-red-50 text-red-700'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${node.isOnline ? 'bg-green-500' : 'bg-red-400'}`}></span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                        style={node.isOnline
+                          ? { background: 'hsl(142 71% 45% / 0.12)', color: 'hsl(142 71% 45%)' }
+                          : { background: 'hsl(0 84.2% 60.2% / 0.12)', color: 'hsl(0 84.2% 60.2%)' }
+                        }
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: node.isOnline ? 'hsl(142 71% 45%)' : 'hsl(0 84.2% 60.2%)' }}></span>
                         {node.isOnline ? '在线' : '离线'}
                       </span>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-gray-500">
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                       {formatDate(node.created_at)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-right">
@@ -442,7 +444,7 @@ export default function Nodes() {
                           <>
                             <button
                               onClick={() => handleShowCommand(node)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent rounded-lg transition-colors"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
@@ -471,7 +473,7 @@ export default function Nodes() {
                             </button>
                             <button
                               onClick={() => openEditModal(node)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent rounded-lg transition-colors"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
@@ -490,7 +492,7 @@ export default function Nodes() {
                           </>
                         )}
                         {!isAdmin && (
-                          <span className="text-xs text-gray-400 px-3 py-1.5">
+                          <span className="text-xs text-muted-foreground px-3 py-1.5">
                             {node.nodeType === 'shared' ? '所有用户可用' : '已分配给您'}
                           </span>
                         )}
@@ -507,85 +509,85 @@ export default function Nodes() {
       {/* 创建节点弹窗 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">添加节点</h3>
-                  <p className="text-sm text-gray-500">配置新的代理节点</p>
+                  <h3 className="text-lg font-bold text-foreground">添加节点</h3>
+                  <p className="text-sm text-muted-foreground">配置新的代理节点</p>
                 </div>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">名称 *</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">名称 *</label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     placeholder="例如：US-East-1"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">节点密钥 (Token)</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">节点密钥 (Token)</label>
                   <input
                     type="text"
                     value={formData.secret}
                     onChange={(e) => setFormData({ ...formData, secret: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     placeholder="留空则系统自动生成"
                   />
-                  <p className="text-xs text-gray-500 mt-1.5">节点启动时通过此密钥向 Controller 注册，留空将自动生成</p>
+                  <p className="text-xs text-muted-foreground mt-1.5">节点启动时通过此密钥向 Controller 注册，留空将自动生成</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">地区</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">地区</label>
                   <input
                     type="text"
                     value={formData.region}
                     onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     placeholder="例如：华东"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">描述</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">描述</label>
                   <input
                     type="text"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     placeholder="可选描述"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">节点类型</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">节点类型</label>
                   <select
                     value={formData.nodeType}
                     onChange={(e) => setFormData({ ...formData, nodeType: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   >
                     <option value="shared">共享节点</option>
                     <option value="dedicated">独享节点</option>
                   </select>
-                  <p className="text-xs text-gray-500 mt-1.5">共享节点可被多个用户使用，独享节点仅分配给特定用户</p>
+                  <p className="text-xs text-muted-foreground mt-1.5">共享节点可被多个用户使用，独享节点仅分配给特定用户</p>
                 </div>
                 {tunnelFields}
               </div>
               <div className="mt-6 flex gap-3">
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleCreateNode}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 transition-all"
+                  className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-xl hover:bg-primary/90 shadow-sm transition-all"
                 >
                   创建
                 </button>
@@ -598,90 +600,90 @@ export default function Nodes() {
       {/* 编辑节点弹窗 */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">编辑节点</h3>
-                  <p className="text-sm text-gray-500">修改节点配置信息</p>
+                  <h3 className="text-lg font-bold text-foreground">编辑节点</h3>
+                  <p className="text-sm text-muted-foreground">修改节点配置信息</p>
                 </div>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">名称</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">名称</label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">内部 API 地址</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">内部 API 地址</label>
                   <input
                     type="text"
                     value={formData.url}
                     onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">共享密钥</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">共享密钥</label>
                   <input
                     type="password"
                     value={formData.secret}
                     onChange={(e) => setFormData({ ...formData, secret: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     placeholder="留空则不修改"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">地区</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">地区</label>
                   <input
                     type="text"
                     value={formData.region}
                     onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">描述</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">描述</label>
                   <input
                     type="text"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">节点类型</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">节点类型</label>
                   <select
                     value={formData.nodeType}
                     onChange={(e) => setFormData({ ...formData, nodeType: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   >
                     <option value="shared">共享节点</option>
                     <option value="dedicated">独享节点</option>
                   </select>
-                  <p className="text-xs text-gray-500 mt-1.5">共享节点可被多个用户使用，独享节点仅分配给特定用户</p>
+                  <p className="text-xs text-muted-foreground mt-1.5">共享节点可被多个用户使用，独享节点仅分配给特定用户</p>
                 </div>
                 {tunnelFields}
               </div>
               <div className="mt-6 flex gap-3">
                 <button
                   onClick={() => { setShowEditModal(false); setEditingNode(null); }}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleEditNode}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 transition-all"
+                  className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-xl hover:bg-primary/90 shadow-sm transition-all"
                 >
                   保存
                 </button>
@@ -694,19 +696,19 @@ export default function Nodes() {
       {/* 启动命令弹窗 */}
       {showCommandModal && (createdNodeInfo || commandNode) && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50 p-4">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">
+                  <h3 className="text-lg font-bold text-foreground">
                     {createdNodeInfo ? '节点创建成功 - 启动教程' : '节点启动教程'}
                   </h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     按照以下步骤在目标服务器上启动节点
                   </p>
                 </div>
@@ -714,7 +716,7 @@ export default function Nodes() {
 
               {/* 平台选择 */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">选择操作系统</label>
+                <label className="block text-sm font-medium text-foreground mb-3">选择操作系统</label>
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { value: 'linux', label: 'Linux', icon: '🐧' },
@@ -726,8 +728,8 @@ export default function Nodes() {
                       onClick={() => setSelectedPlatform(platform.value as any)}
                       className={`px-4 py-3 rounded-xl border-2 transition-all ${
                         selectedPlatform === platform.value
-                          ? 'border-blue-500 bg-blue-50 text-blue-700'
-                          : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                          ? 'border-primary bg-muted text-primary'
+                          : 'border-border hover:border-border text-foreground'
                       }`}
                     >
                       <div className="text-2xl mb-1">{platform.icon}</div>
@@ -739,15 +741,15 @@ export default function Nodes() {
 
               {/* Controller 地址 */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Controller 地址</label>
+                <label className="block text-sm font-medium text-foreground mb-2">Controller 地址</label>
                 <input
                   type="text"
                   value={controllerUrl}
                   onChange={(e) => setControllerUrl(e.target.value)}
                   placeholder="例如: 192.168.1.100:3100"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white font-mono text-sm"
+                  className="w-full px-4 py-2.5 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card font-mono text-sm"
                 />
-                <p className="mt-1.5 text-xs text-gray-500">
+                <p className="mt-1.5 text-xs text-muted-foreground">
                   修改为节点服务器可以访问的 Controller 地址（IP:端口）
                 </p>
               </div>
@@ -755,23 +757,23 @@ export default function Nodes() {
               {/* 步骤 1: 下载 */}
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</div>
-                  <h4 className="text-sm font-semibold text-gray-900">下载节点程序</h4>
+                  <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">1</div>
+                  <h4 className="text-sm font-semibold text-foreground">下载节点程序</h4>
                 </div>
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                  <p className="text-sm text-gray-700 mb-3">从 GitHub Releases 下载对应平台的节点程序：</p>
+                <div className="bg-muted rounded-xl p-4 border border-border">
+                  <p className="text-sm text-foreground mb-3">从 GitHub Releases 下载对应平台的节点程序：</p>
                   <a
                     href="https://github.com/ryunnet/rfrp/releases/latest"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                    className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 font-medium"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                     </svg>
                     下载最新版本
                   </a>
-                  <div className="mt-3 text-xs text-gray-600">
+                  <div className="mt-3 text-xs text-muted-foreground">
                     <p className="font-medium mb-1">文件名参考：</p>
                     <ul className="space-y-1 ml-4">
                       {selectedPlatform === 'linux' && <li>• node-x86_64-unknown-linux-musl.tar.gz</li>}
@@ -785,42 +787,42 @@ export default function Nodes() {
               {/* 步骤 2: 启动命令 */}
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</div>
-                  <h4 className="text-sm font-semibold text-gray-900">启动节点（前台运行）</h4>
+                  <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">2</div>
+                  <h4 className="text-sm font-semibold text-foreground">启动节点（前台运行）</h4>
                 </div>
                 <div className="relative">
                   <button
                     onClick={() => copyToClipboard(getStartupCommand(createdNodeInfo || commandNode!, selectedPlatform), '启动命令')}
-                    className="absolute top-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 bg-white/90 hover:bg-white rounded-lg transition-colors shadow-sm"
+                    className="absolute top-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary hover:text-primary/80 bg-card/90 hover:bg-card rounded-lg transition-colors shadow-sm"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
                     </svg>
                     复制
                   </button>
-                  <pre className="bg-gray-900 text-green-400 rounded-xl px-4 py-3 pr-24 text-sm font-mono overflow-x-auto select-text cursor-text">{getStartupCommand(createdNodeInfo || commandNode!, selectedPlatform)}</pre>
+                  <pre className="bg-primary text-green-400 rounded-xl px-4 py-3 pr-24 text-sm font-mono overflow-x-auto select-text cursor-text">{getStartupCommand(createdNodeInfo || commandNode!, selectedPlatform)}</pre>
                 </div>
               </div>
 
               {/* 步骤 3: 后台运行 */}
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</div>
-                  <h4 className="text-sm font-semibold text-gray-900">后台运行（可选）</h4>
+                  <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">3</div>
+                  <h4 className="text-sm font-semibold text-foreground">后台运行（可选）</h4>
                 </div>
                 <div className="relative">
                   <button
                     onClick={() => copyToClipboard(getDaemonCommand(createdNodeInfo || commandNode!, selectedPlatform), '后台运行命令')}
-                    className="absolute top-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 bg-white/90 hover:bg-white rounded-lg transition-colors shadow-sm"
+                    className="absolute top-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary hover:text-primary/80 bg-card/90 hover:bg-card rounded-lg transition-colors shadow-sm"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
                     </svg>
                     复制
                   </button>
-                  <pre className="bg-gray-900 text-green-400 rounded-xl px-4 py-3 pr-24 text-sm font-mono overflow-x-auto">{getDaemonCommand(createdNodeInfo || commandNode!, selectedPlatform)}</pre>
+                  <pre className="bg-primary text-green-400 rounded-xl px-4 py-3 pr-24 text-sm font-mono overflow-x-auto">{getDaemonCommand(createdNodeInfo || commandNode!, selectedPlatform)}</pre>
                 </div>
-                <p className="mt-2 text-xs text-gray-600">
+                <p className="mt-2 text-xs text-muted-foreground">
                   {selectedPlatform === 'windows'
                     ? '使用 --install-service 将节点安装为 Windows 服务，开机自动启动'
                     : '使用 --daemon 参数在后台运行节点，进程会持续运行'}
@@ -830,8 +832,8 @@ export default function Nodes() {
               {/* 步骤 4: 验证 */}
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">4</div>
-                  <h4 className="text-sm font-semibold text-gray-900">验证节点状态</h4>
+                  <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">4</div>
+                  <h4 className="text-sm font-semibold text-foreground">验证节点状态</h4>
                 </div>
                 <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
                   <p className="text-sm text-green-800">
@@ -870,7 +872,7 @@ export default function Nodes() {
                     setCreatedNodeInfo(null);
                     setCommandNode(null);
                   }}
-                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 transition-all"
+                  className="px-5 py-2.5 bg-primary text-primary-foreground font-medium rounded-xl hover:bg-primary/90 shadow-sm transition-all"
                 >
                   知道了
                 </button>
@@ -883,18 +885,18 @@ export default function Nodes() {
       {/* 日志查看弹窗 */}
       {showLogsModal && logsNode && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden transform transition-all">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">节点日志</h3>
-                    <p className="text-sm text-gray-500">{logsNode.name} - 最近 100 行</p>
+                    <h3 className="text-lg font-bold text-foreground">节点日志</h3>
+                    <p className="text-sm text-muted-foreground">{logsNode.name} - 最近 100 行</p>
                   </div>
                 </div>
                 <button
@@ -903,7 +905,7 @@ export default function Nodes() {
                     setLogsNode(null);
                     setNodeLogs([]);
                   }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className="text-muted-foreground hover:text-muted-foreground transition-colors"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -916,23 +918,23 @@ export default function Nodes() {
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
                 </div>
               ) : (
-                <div className="bg-gray-900 rounded-xl p-4 max-h-[60vh] overflow-y-auto">
+                <div className="bg-primary rounded-xl p-4 max-h-[60vh] overflow-y-auto">
                   {nodeLogs.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400">
+                    <div className="text-center py-8 text-muted-foreground">
                       暂无日志数据
                     </div>
                   ) : (
                     <div className="space-y-1 font-mono text-sm">
                       {nodeLogs.map((log, index) => (
-                        <div key={index} className="flex gap-3 text-gray-300 hover:bg-gray-800/50 px-2 py-1 rounded">
-                          <span className="text-gray-500 flex-shrink-0">{log.timestamp}</span>
+                        <div key={index} className="flex gap-3 text-muted-foreground hover:bg-primary/50 px-2 py-1 rounded">
+                          <span className="text-muted-foreground flex-shrink-0">{log.timestamp}</span>
                           <span className={`flex-shrink-0 font-semibold ${
                             log.level === 'ERROR' ? 'text-red-400' :
                             log.level === 'WARN' ? 'text-yellow-400' :
-                            log.level === 'INFO' ? 'text-blue-400' :
-                            'text-gray-400'
+                            log.level === 'INFO' ? 'text-muted-foreground' :
+                            'text-muted-foreground'
                           }`}>{log.level}</span>
-                          <span className="text-gray-200 break-all">{log.message}</span>
+                          <span className="text-muted break-all">{log.message}</span>
                         </div>
                       ))}
                     </div>
@@ -947,7 +949,7 @@ export default function Nodes() {
                     setLogsNode(null);
                     setNodeLogs([]);
                   }}
-                  className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-500/25 transition-all"
+                  className="px-5 py-2.5 bg-primary text-primary-foreground font-medium rounded-xl hover:bg-primary/90 shadow-sm transition-all"
                 >
                   关闭
                 </button>

@@ -96,12 +96,12 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, hsl(222.2 47.4% 11.2%), hsl(217 91% 30%), hsl(263 70% 35%))' }}>
       {/* 背景装饰 */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-blue-500/15 rounded-full blur-3xl login-float" />
-        <div className="absolute -bottom-40 -left-40 w-[400px] h-[400px] bg-indigo-500/15 rounded-full blur-3xl login-float-delayed" />
-        <div className="absolute top-1/3 right-1/4 w-[300px] h-[300px] bg-purple-500/10 rounded-full blur-3xl login-float-slow" />
+        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full blur-3xl login-float" style={{ background: 'hsl(217 91% 60% / 0.2)' }} />
+        <div className="absolute -bottom-40 -left-40 w-[400px] h-[400px] rounded-full blur-3xl login-float-delayed" style={{ background: 'hsl(263 70% 58% / 0.2)' }} />
+        <div className="absolute top-1/3 right-1/4 w-[300px] h-[300px] rounded-full blur-3xl login-float-slow" style={{ background: 'hsl(172 66% 50% / 0.15)' }} />
         {/* 网格纹理 */}
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxIiBjeT0iMSIgcj0iMC41IiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMDMpIi8+PC9zdmc+')] opacity-60" />
       </div>
@@ -109,26 +109,26 @@ export default function Login() {
       <div className={`relative max-w-md w-full space-y-6 transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
         {/* Logo 和标题 */}
         <div className="text-center space-y-4">
-          <div className="mx-auto w-20 h-20 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/30 animate-gradient login-logo-glow">
-            <Server className="w-10 h-10 text-white drop-shadow-lg" strokeWidth={2.5} />
+          <div className="mx-auto w-20 h-20 rounded-3xl flex items-center justify-center shadow-2xl animate-gradient login-logo-glow" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+            <Server className="w-10 h-10 text-primary-foreground drop-shadow-lg" strokeWidth={2.5} />
           </div>
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">
+            <h1 className="text-4xl font-bold text-primary-foreground mb-2 tracking-tight">
               RFRP
             </h1>
-            <p className="text-blue-300/80 text-sm font-medium tracking-wide">
+            <p className="text-primary-foreground/80 text-sm font-medium tracking-wide">
               高性能内网穿透服务
             </p>
           </div>
         </div>
 
         {/* 登录卡片 */}
-        <Card className={`p-2 border-white/10 bg-white/[0.07] backdrop-blur-xl shadow-2xl shadow-black/20 ${shakeError ? 'login-shake' : ''}`}>
+        <Card className={`p-2 border-border/10 bg-card/[0.07] backdrop-blur-xl shadow-2xl shadow-black/20 ${shakeError ? 'login-shake' : ''}`}>
           <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-2xl text-center text-white/95">
+            <CardTitle className="text-2xl text-center text-primary-foreground/95">
               欢迎回来
             </CardTitle>
-            <CardDescription className="text-center text-blue-200/50">
+            <CardDescription className="text-center text-primary-foreground/50">
               请登录您的账户以继续
             </CardDescription>
           </CardHeader>
@@ -146,12 +146,12 @@ export default function Login() {
             <form className="space-y-4" onSubmit={handleSubmit}>
               {/* 用户名输入框 */}
               <div className="space-y-2">
-                <Label htmlFor="username" className="text-blue-100/70 text-xs font-medium uppercase tracking-wider">
+                <Label htmlFor="username" className="text-primary-foreground/70 text-xs font-medium uppercase tracking-wider">
                   用户名
                 </Label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <User className="w-4 h-4 text-blue-300/40 group-focus-within:text-blue-400 transition-colors" />
+                    <User className="w-4 h-4 text-primary-foreground/40 group-focus-within:text-primary-foreground/60 transition-colors" />
                   </div>
                   <Input
                     ref={usernameRef}
@@ -161,7 +161,7 @@ export default function Login() {
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="pl-10 bg-white/[0.06] border-white/10 text-white placeholder:text-white/25 hover:bg-white/[0.09] focus-visible:bg-white/[0.09] focus-visible:ring-blue-500/30 focus-visible:border-blue-500/50 transition-all"
+                    className="pl-10 bg-card/[0.06] border-border/10 text-primary-foreground placeholder:text-primary-foreground/25 hover:bg-card/[0.09] focus-visible:bg-card/[0.09] focus-visible:ring-primary/30 focus-visible:border-primary/50 transition-all"
                     placeholder="请输入用户名"
                     disabled={loading}
                     autoComplete="username"
@@ -171,12 +171,12 @@ export default function Login() {
 
               {/* 密码输入框 */}
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-blue-100/70 text-xs font-medium uppercase tracking-wider">
+                <Label htmlFor="password" className="text-primary-foreground/70 text-xs font-medium uppercase tracking-wider">
                   密码
                 </Label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Lock className="w-4 h-4 text-blue-300/40 group-focus-within:text-blue-400 transition-colors" />
+                    <Lock className="w-4 h-4 text-primary-foreground/40 group-focus-within:text-primary-foreground/60 transition-colors" />
                   </div>
                   <Input
                     ref={passwordRef}
@@ -186,7 +186,7 @@ export default function Login() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-12 bg-white/[0.06] border-white/10 text-white placeholder:text-white/25 hover:bg-white/[0.09] focus-visible:bg-white/[0.09] focus-visible:ring-blue-500/30 focus-visible:border-blue-500/50 transition-all"
+                    className="pl-10 pr-12 bg-card/[0.06] border-border/10 text-primary-foreground placeholder:text-primary-foreground/25 hover:bg-card/[0.09] focus-visible:bg-card/[0.09] focus-visible:ring-primary/30 focus-visible:border-primary/50 transition-all"
                     placeholder="请输入密码"
                     disabled={loading}
                     autoComplete="current-password"
@@ -194,7 +194,7 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-white/30 hover:text-white/60 transition-colors"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-primary-foreground/30 hover:text-primary-foreground/60 transition-colors"
                     disabled={loading}
                     tabIndex={-1}
                   >
@@ -210,10 +210,10 @@ export default function Login() {
                   id="remember"
                   checked={rememberUsername}
                   onChange={(e) => setRememberUsername(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-white/20 bg-white/[0.06] text-blue-500 focus:ring-blue-500/30 focus:ring-offset-0 cursor-pointer"
+                  className="w-3.5 h-3.5 rounded border-border/20 bg-card/[0.06] text-primary focus:ring-primary/30 focus:ring-offset-0 cursor-pointer"
                   disabled={loading}
                 />
-                <label htmlFor="remember" className="text-xs text-white/40 cursor-pointer select-none">
+                <label htmlFor="remember" className="text-xs text-primary-foreground/40 cursor-pointer select-none">
                   记住用户名
                 </label>
               </div>
@@ -222,7 +222,8 @@ export default function Login() {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all duration-300"
+                className="w-full text-white hover:opacity-90 shadow-sm transition-all duration-300"
+                style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}
                 size="lg"
               >
                 {loading ? (
@@ -241,8 +242,8 @@ export default function Login() {
           </CardContent>
 
           <CardFooter className="flex flex-col space-y-2">
-            <div className="w-full border-t border-white/[0.06] pt-4">
-              <p className="text-center text-xs text-white/25 flex items-center justify-center gap-1.5">
+            <div className="w-full border-t border-border/[0.06] pt-4">
+              <p className="text-center text-xs text-primary-foreground/25 flex items-center justify-center gap-1.5">
                 <Shield className="w-3 h-3" />
                 安全登录 · 数据加密传输
               </p>
@@ -251,7 +252,7 @@ export default function Login() {
         </Card>
 
         {/* 版权信息 */}
-        <p className="text-center text-sm text-white/30">
+        <p className="text-center text-sm text-primary-foreground/30">
           &copy; {new Date().getFullYear()} RFRP. All rights reserved.
         </p>
       </div>

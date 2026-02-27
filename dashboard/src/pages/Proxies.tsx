@@ -467,15 +467,16 @@ export default function Proxies() {
       {/* 页面标题 */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">代理管理</h2>
-          <p className="mt-1 text-sm text-gray-500">管理所有代理映射规则</p>
+          <h2 className="text-2xl font-bold text-foreground">代理管理</h2>
+          <p className="mt-1 text-sm text-muted-foreground">管理所有代理映射规则</p>
         </div>
         <button
           onClick={() => {
             resetForm();
             setShowCreateModal(true);
           }}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-lg shadow-blue-500/25 transition-all duration-200"
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-primary-foreground text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-sm transition-all duration-200 hover:opacity-90"
+          style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -506,18 +507,18 @@ export default function Proxies() {
                 <TableRow>
                   <TableCell colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
+                      <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-muted-foreground">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
                         </svg>
                       </div>
-                      <p className="text-gray-500">暂无代理数据</p>
+                      <p className="text-muted-foreground">暂无代理数据</p>
                       <button
                         onClick={() => {
                           resetForm();
                           setShowCreateModal(true);
                         }}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                        className="text-sm text-primary hover:text-primary/80 font-medium"
                       >
                         创建第一个代理
                       </button>
@@ -529,59 +530,63 @@ export default function Proxies() {
                   <TableRow key={proxy.id}>
                     <TableCell className="whitespace-nowrap">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center text-white text-sm font-semibold shadow-sm">
+                        <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center text-primary-foreground text-sm font-semibold shadow-sm">
                           {proxy.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-sm font-semibold text-gray-900">{proxy.name}</span>
+                        <span className="text-sm font-semibold text-foreground">{proxy.name}</span>
                       </div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <span className="text-sm text-gray-600">{getClientName(proxy.client_id)}</span>
+                      <span className="text-sm text-muted-foreground">{getClientName(proxy.client_id)}</span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <span className="text-sm text-gray-600">{getNodeName(proxy.nodeId)}</span>
+                      <span className="text-sm text-muted-foreground">{getNodeName(proxy.nodeId)}</span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-100 text-blue-700">
+                      <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg" style={{
+                        background: (proxy.type || 'tcp').toLowerCase() === 'tcp' ? 'hsl(217 91% 60% / 0.15)' : 'hsl(263 70% 58% / 0.15)',
+                        color: (proxy.type || 'tcp').toLowerCase() === 'tcp' ? 'hsl(217 91% 60%)' : 'hsl(263 70% 58%)'
+                      }}>
                         {(proxy.type || 'tcp').toUpperCase()}
                       </span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <div className="flex items-center gap-2 text-sm">
-                        <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-lg font-mono text-xs">
+                        <span className="px-2 py-1 bg-muted text-primary rounded-lg font-mono text-xs">
                           :{proxy.remotePort}
                         </span>
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-muted-foreground">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                         </svg>
-                        <span className="text-gray-500 font-mono text-xs">
+                        <span className="text-muted-foreground font-mono text-xs">
                           {proxy.localIP}:{proxy.localPort}
                         </span>
                       </div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg ${
-                        proxy.enabled
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${proxy.enabled ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg`}
+                        style={proxy.enabled
+                          ? { background: 'hsl(142 71% 45% / 0.15)', color: 'hsl(142 71% 45%)' }
+                          : { background: 'hsl(0 0% 50% / 0.1)', color: 'hsl(0 0% 45%)' }
+                        }
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: proxy.enabled ? 'hsl(142 71% 45%)' : 'hsl(0 0% 60%)' }}></span>
                         {proxy.enabled ? '启用' : '禁用'}
                       </span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1.5 text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-blue-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(217 91% 60%)' }}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
                           </svg>
-                          <span className="text-gray-600">{formatBytes(proxy.totalBytesSent)}</span>
+                          <span className="text-muted-foreground">{formatBytes(proxy.totalBytesSent)}</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-green-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(142 71% 45%)' }}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
                           </svg>
-                          <span className="text-gray-600">{formatBytes(proxy.totalBytesReceived)}</span>
+                          <span className="text-muted-foreground">{formatBytes(proxy.totalBytesReceived)}</span>
                         </div>
                       </div>
                     </TableCell>
@@ -599,7 +604,7 @@ export default function Proxies() {
                         </button>
                         <button
                           onClick={() => handleEdit(proxy)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent rounded-lg transition-colors"
                         >
                           编辑
                         </button>
@@ -622,21 +627,21 @@ export default function Proxies() {
       {/* 创建/编辑代理模态框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-start justify-center z-50 p-4">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8 transform transition-all flex flex-col max-h-[calc(100vh-4rem)]">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-2xl my-8 transform transition-all flex flex-col max-h-[calc(100vh-4rem)]">
             {/* 固定头部 */}
-            <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-gray-100">
+            <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-border">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">
+                    <h3 className="text-lg font-bold text-foreground">
                       {editingProxy ? '编辑代理' : '创建新代理'}
                     </h3>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       {editingProxy ? '修改代理配置信息' : '添加一个新的端口映射规则'}
                     </p>
                   </div>
@@ -647,7 +652,7 @@ export default function Proxies() {
                     setEditingProxy(null);
                     resetForm();
                   }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className="text-muted-foreground hover:text-muted-foreground transition-colors"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -661,9 +666,9 @@ export default function Proxies() {
               <div className="space-y-4">
                 {/* 客户端选择 */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">选择客户端 *</label>
+                  <label className="block text-sm font-semibold text-foreground mb-3">选择客户端 *</label>
                   {editingProxy ? (
-                    <div className="px-4 py-3 bg-gray-100 rounded-xl text-gray-600 text-sm">
+                    <div className="px-4 py-3 bg-muted rounded-xl text-muted-foreground text-sm">
                       {getClientName(formData.client_id)} (编辑时不可更改)
                     </div>
                   ) : (
@@ -678,9 +683,9 @@ export default function Proxies() {
                               value={clientSearchQuery}
                               onChange={(e) => setClientSearchQuery(e.target.value)}
                               placeholder="搜索客户端名称或ID..."
-                              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                              className="w-full pl-10 pr-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                             />
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 absolute left-3 top-2.5 text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                             </svg>
                           </div>
@@ -689,7 +694,7 @@ export default function Proxies() {
                           <select
                             value={clientStatusFilter}
                             onChange={(e) => setClientStatusFilter(e.target.value as 'all' | 'online' | 'offline')}
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-3 py-1.5 border border-border rounded-lg text-xs focus:ring-2 focus:ring-primary focus:border-transparent"
                           >
                             <option value="all">全部状态</option>
                             <option value="online">仅在线</option>
@@ -700,11 +705,11 @@ export default function Proxies() {
 
                       <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
                         {clients.length === 0 ? (
-                          <div className="text-center py-8 text-gray-500 text-sm">
+                          <div className="text-center py-8 text-muted-foreground text-sm">
                             暂无可用客户端，请先创建客户端
                           </div>
                         ) : getFilteredClients().length === 0 ? (
-                          <div className="text-center py-8 text-gray-500 text-sm">
+                          <div className="text-center py-8 text-muted-foreground text-sm">
                             没有符合条件的客户端
                           </div>
                         ) : (
@@ -715,20 +720,20 @@ export default function Proxies() {
                             onClick={() => setFormData({ ...formData, client_id: client.id.toString() })}
                             className={`relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
                               formData.client_id === client.id.toString()
-                                ? 'border-blue-500 bg-blue-50 shadow-sm'
-                                : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                                ? 'border-primary bg-muted shadow-sm'
+                                : 'border-border hover:border-primary/50 hover:bg-accent'
                             }`}
                           >
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-semibold text-sm shadow-sm ${
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-primary-foreground font-semibold text-sm shadow-sm ${
                               formData.client_id === client.id.toString()
-                                ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
-                                : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted-foreground'
                             }`}>
                               {client.name.charAt(0).toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-900 text-sm truncate">{client.name}</span>
+                                <span className="font-semibold text-foreground text-sm truncate">{client.name}</span>
                                 {client.is_online && (
                                   <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
                                     <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
@@ -736,11 +741,11 @@ export default function Proxies() {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-gray-500 mt-0.5">ID: {client.id}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">ID: {client.id}</p>
                             </div>
                             {formData.client_id === client.id.toString() && (
                               <div className="flex-shrink-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 text-blue-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 text-primary">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                               </div>
@@ -755,9 +760,9 @@ export default function Proxies() {
 
                 {/* 节点选择 */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">选择节点 *</label>
+                  <label className="block text-sm font-semibold text-foreground mb-3">选择节点 *</label>
                   {editingProxy ? (
-                    <div className="px-4 py-3 bg-gray-100 rounded-xl text-gray-600 text-sm">
+                    <div className="px-4 py-3 bg-muted rounded-xl text-muted-foreground text-sm">
                       {getNodeName(formData.node_id ? parseInt(formData.node_id) : null)} (编辑时不可更改)
                     </div>
                   ) : (
@@ -772,9 +777,9 @@ export default function Proxies() {
                               value={nodeSearchQuery}
                               onChange={(e) => setNodeSearchQuery(e.target.value)}
                               placeholder="搜索节点名称或地区..."
-                              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                              className="w-full pl-10 pr-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                             />
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 absolute left-3 top-2.5 text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                             </svg>
                           </div>
@@ -784,7 +789,7 @@ export default function Proxies() {
                             <select
                               value={nodeTypeFilter}
                               onChange={(e) => setNodeTypeFilter(e.target.value as 'all' | 'shared' | 'dedicated')}
-                              className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                              className="flex-1 px-3 py-1.5 border border-border rounded-lg text-xs focus:ring-2 focus:ring-primary focus:border-transparent"
                             >
                               <option value="all">全部类型</option>
                               <option value="shared">共享节点</option>
@@ -793,7 +798,7 @@ export default function Proxies() {
                             <select
                               value={nodeStatusFilter}
                               onChange={(e) => setNodeStatusFilter(e.target.value as 'all' | 'online' | 'offline')}
-                              className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                              className="flex-1 px-3 py-1.5 border border-border rounded-lg text-xs focus:ring-2 focus:ring-primary focus:border-transparent"
                             >
                               <option value="all">全部状态</option>
                               <option value="online">仅在线</option>
@@ -805,11 +810,11 @@ export default function Proxies() {
 
                       <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
                         {availableNodes.length === 0 ? (
-                          <div className="text-center py-8 text-gray-500 text-sm">
+                          <div className="text-center py-8 text-muted-foreground text-sm">
                             暂无可用节点
                           </div>
                         ) : getFilteredNodes().length === 0 ? (
-                          <div className="text-center py-8 text-gray-500 text-sm">
+                          <div className="text-center py-8 text-muted-foreground text-sm">
                             没有符合条件的节点
                           </div>
                         ) : (
@@ -820,14 +825,14 @@ export default function Proxies() {
                               onClick={() => setFormData({ ...formData, node_id: node.id.toString() })}
                               className={`relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
                                 formData.node_id === node.id.toString()
-                                  ? 'border-indigo-500 bg-indigo-50 shadow-sm'
-                                  : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50'
+                                  ? 'border-primary bg-muted shadow-sm'
+                                  : 'border-border hover:border-primary/50 hover:bg-accent'
                               }`}
                             >
-                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-semibold text-sm shadow-sm ${
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-primary-foreground font-semibold text-sm shadow-sm ${
                                 formData.node_id === node.id.toString()
-                                  ? 'bg-gradient-to-br from-indigo-500 to-purple-600'
-                                  : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted-foreground'
                               }`}>
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
@@ -835,7 +840,7 @@ export default function Proxies() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-semibold text-gray-900 text-sm truncate">{node.name}</span>
+                                  <span className="font-semibold text-foreground text-sm truncate">{node.name}</span>
                                   {node.isOnline && (
                                     <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
                                       <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
@@ -844,7 +849,7 @@ export default function Proxies() {
                                   )}
                                   <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${
                                     node.nodeType === 'shared'
-                                      ? 'bg-blue-100 text-blue-700'
+                                      ? 'bg-muted text-primary'
                                       : 'bg-purple-100 text-purple-700'
                                   }`}>
                                     {node.nodeType === 'shared' ? '共享' : '独享'}
@@ -852,7 +857,7 @@ export default function Proxies() {
                                 </div>
                                 <div className="flex items-center gap-2 mt-0.5">
                                   {node.region && (
-                                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
                                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
@@ -864,7 +869,7 @@ export default function Proxies() {
                               </div>
                               {formData.node_id === node.id.toString() && (
                                 <div className="flex-shrink-0">
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 text-indigo-600">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 text-primary">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                   </svg>
                                 </div>
@@ -873,7 +878,7 @@ export default function Proxies() {
                           ))
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-2 flex items-start gap-1.5">
+                      <p className="text-xs text-muted-foreground mt-2 flex items-start gap-1.5">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 mt-0.5 flex-shrink-0">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                         </svg>
@@ -883,56 +888,56 @@ export default function Proxies() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">代理名称 *</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">代理名称 *</label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="请输入代理名称"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">代理类型 *</label>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">代理类型 *</label>
                     <select
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                      className="w-full px-4 py-3 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     >
                       <option value="tcp">TCP</option>
                       <option value="udp">UDP</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">客户端本地 IP *</label>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">客户端本地 IP *</label>
                     <input
                       type="text"
                       value={formData.localIP}
                       onChange={(e) => setFormData({ ...formData, localIP: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                      className="w-full px-4 py-3 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">客户端本地端口 *</label>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">客户端本地端口 *</label>
                     <input
                       type="number"
                       value={formData.localPort}
                       onChange={(e) => setFormData({ ...formData, localPort: e.target.value })}
                       placeholder="如: 80"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                      className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">节点端口 *</label>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">节点端口 *</label>
                     <input
                       type="text"
                       value={formData.remotePort}
                       onChange={(e) => setFormData({ ...formData, remotePort: e.target.value })}
                       placeholder="如: 8080 或 8000-8010 或 8000,8001,8002"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                      className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     />
 
                     {/* 端口解析结果显示 */}
@@ -952,21 +957,21 @@ export default function Proxies() {
                         ) : parsedPorts.length > 0 && (
                           <div className="space-y-2">
                             {/* 端口数量显示 */}
-                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="p-3 bg-muted border border-border rounded-lg">
                               <div className="flex items-start gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-primary mt-0.5 flex-shrink-0">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                <div className="text-xs text-blue-700 flex-1">
+                                <div className="text-xs text-primary flex-1">
                                   <p className="font-medium mb-1">
                                     将创建 {parsedPorts.length} 个代理
                                   </p>
                                   {parsedPorts.length <= 10 ? (
-                                    <p className="text-blue-600">
+                                    <p className="text-primary">
                                       端口: {parsedPorts.join(', ')}
                                     </p>
                                   ) : (
-                                    <p className="text-blue-600">
+                                    <p className="text-primary">
                                       端口: {parsedPorts.slice(0, 10).join(', ')} ... (共 {parsedPorts.length} 个)
                                     </p>
                                   )}
@@ -1021,7 +1026,7 @@ export default function Proxies() {
                     )}
 
                     {/* 端口格式说明 */}
-                    <p className="mt-2 text-xs text-gray-500 flex items-start gap-1.5">
+                    <p className="mt-2 text-xs text-muted-foreground flex items-start gap-1.5">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 mt-0.5 flex-shrink-0">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                       </svg>
@@ -1030,15 +1035,15 @@ export default function Proxies() {
                   </div>
                 </div>
                 {editingProxy && (
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-3 p-3 bg-muted rounded-xl">
                     <input
                       type="checkbox"
                       id="enabled"
                       checked={formData.enabled}
                       onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-primary focus:ring-primary border-border rounded"
                     />
-                    <label htmlFor="enabled" className="text-sm text-gray-700 font-medium">
+                    <label htmlFor="enabled" className="text-sm text-foreground font-medium">
                       启用代理
                     </label>
                   </div>
@@ -1047,7 +1052,7 @@ export default function Proxies() {
             </div>
 
             {/* 固定底部按钮 */}
-            <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+            <div className="flex-shrink-0 px-6 py-4 border-t border-border bg-muted/50">
               <div className="flex gap-3">
                 <button
                   onClick={() => {
@@ -1055,13 +1060,13 @@ export default function Proxies() {
                     setEditingProxy(null);
                     resetForm();
                   }}
-                  className="flex-1 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-card border border-border text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
                 >
                   取消
                 </button>
                 <button
                   onClick={editingProxy ? handleUpdateProxy : handleCreateProxy}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 transition-all"
+                  className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-xl hover:bg-primary/90 shadow-sm transition-all"
                 >
                   {editingProxy ? '更新' : '创建'}
                 </button>

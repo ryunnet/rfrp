@@ -111,27 +111,27 @@ export default function Layout({ children }: LayoutProps) {
   const allNavigation = isAdmin ? [...navigation, ...adminNavigation] : navigation;
 
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex overflow-hidden">
+    <div className="h-screen bg-background flex overflow-hidden">
       {/* 左侧导航栏 - 现代化设计 */}
-      <aside className={`${sidebarCollapsed ? 'w-20' : 'w-72'} bg-white/80 backdrop-blur-xl border-r border-gray-200/50 shadow-xl flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out`}>
+      <aside className={`${sidebarCollapsed ? 'w-20' : 'w-72'} bg-card border-r border-border shadow-sm flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out`}>
         {/* Logo */}
-        <div className="h-20 flex items-center justify-between px-5 border-b border-gray-100">
+        <div className="h-20 flex items-center justify-between px-5 border-b border-border">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30 animate-gradient">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-white">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-primary-foreground">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
                 </svg>
               </div>
               <div>
-                <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">RFRP</span>
-                <p className="text-xs text-gray-500 font-medium">内网穿透</p>
+                <span className="font-bold text-xl text-foreground">RFRP</span>
+                <p className="text-xs text-muted-foreground font-medium">内网穿透</p>
               </div>
             </div>
           )}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-2.5 rounded-xl hover:bg-gray-100 transition-all duration-200 text-gray-600 hover:text-gray-900"
+            className="p-2.5 rounded-lg hover:bg-accent transition-all duration-200 text-muted-foreground hover:text-accent-foreground"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
               {sidebarCollapsed ? (
@@ -144,32 +144,30 @@ export default function Layout({ children }: LayoutProps) {
         </div>
 
         {/* 导航菜单 */}
-        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto scrollbar-hidden">
+        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto scrollbar-hidden">
           {allNavigation.map((item) => {
             const isActive = location.pathname === item.href;
             return (
               <Link
                 key={item.name}
                 to={item.href}
-                className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-200 group relative overflow-hidden ${
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 group relative ${
                   isActive
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30'
-                    : 'text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:text-blue-600'
+                    ? 'text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 }`}
+                style={isActive ? { background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' } : undefined}
                 title={sidebarCollapsed ? item.name : undefined}
               >
-                {isActive && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-500 opacity-20 animate-pulse"></div>
-                )}
-                <span className={`relative z-10 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-blue-600'} transition-colors`}>
+                <span className="relative z-10 transition-colors">
                   {item.icon}
                 </span>
                 {!sidebarCollapsed && (
-                  <span className="relative z-10 font-semibold text-sm">{item.name}</span>
+                  <span className="relative z-10 font-medium text-sm">{item.name}</span>
                 )}
                 {isActive && !sidebarCollapsed && (
                   <div className="ml-auto">
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                    <div className="w-1.5 h-1.5 bg-primary-foreground rounded-full"></div>
                   </div>
                 )}
               </Link>
@@ -178,23 +176,23 @@ export default function Layout({ children }: LayoutProps) {
         </nav>
 
         {/* 用户信息 */}
-        <div className="p-4 border-t border-gray-100">
-          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-100`}>
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30 text-sm">
+        <div className="p-4 border-t border-border">
+          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-lg bg-muted border border-border`}>
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center text-primary-foreground font-bold shadow-sm text-sm" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
               {user?.username?.charAt(0).toUpperCase()}
             </div>
             {!sidebarCollapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-900 truncate">{user?.username}</p>
-                <p className="text-xs text-gray-500 font-medium">
-                  {isAdmin ? '🔐 管理员' : '👤 用户'}
+                <p className="text-sm font-semibold text-foreground truncate">{user?.username}</p>
+                <p className="text-xs text-muted-foreground font-medium">
+                  {isAdmin ? '管理员' : '用户'}
                 </p>
               </div>
             )}
           </div>
           <button
             onClick={logout}
-            className={`mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-red-600 hover:text-white hover:bg-gradient-to-r hover:from-red-500 hover:to-rose-600 rounded-2xl transition-all duration-200 border border-red-200 hover:border-transparent hover:shadow-lg hover:shadow-red-500/30 ${sidebarCollapsed ? 'px-2' : ''}`}
+            className={`mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-destructive hover:text-destructive-foreground hover:bg-destructive rounded-lg transition-all duration-200 border border-input hover:border-transparent ${sidebarCollapsed ? 'px-2' : ''}`}
             title={sidebarCollapsed ? '退出登录' : undefined}
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
@@ -208,31 +206,31 @@ export default function Layout({ children }: LayoutProps) {
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
         {/* 顶部栏 - 现代化设计 */}
-        <header className="h-20 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 flex items-center justify-between px-8 shadow-sm">
+        <header className="h-16 bg-card border-b border-border flex items-center justify-between px-8">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <span className="text-white text-lg">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                <span className="text-primary-foreground">
                   {allNavigation.find(item => item.href === location.pathname)?.icon}
                 </span>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">
+                <h1 className="text-lg font-semibold text-foreground">
                   {allNavigation.find(item => item.href === location.pathname)?.name || '页面'}
                 </h1>
-                <p className="text-xs text-gray-500 font-medium">管理和监控您的服务</p>
+                <p className="text-xs text-muted-foreground">管理和监控您的服务</p>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-gray-50 to-blue-50 rounded-2xl border border-gray-200/50">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-md">
+            <div className="flex items-center gap-3 px-4 py-2 bg-muted rounded-lg border border-border">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-primary-foreground font-semibold text-xs shadow-sm" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
                 {user?.username?.charAt(0).toUpperCase()}
               </div>
               <div className="text-sm">
-                <p className="font-bold text-gray-900">{user?.username}</p>
+                <p className="font-semibold text-foreground">{user?.username}</p>
                 {isAdmin && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-bold bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-full shadow-sm">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-primary-foreground rounded-md" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
                     </svg>
@@ -245,7 +243,7 @@ export default function Layout({ children }: LayoutProps) {
         </header>
 
         {/* 页面内容 */}
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-8 bg-background">
           {children}
         </main>
       </div>

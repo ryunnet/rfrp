@@ -302,15 +302,16 @@ export default function Users() {
       {/* 页面标题 */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">用户管理</h2>
-          <p className="mt-1 text-sm text-gray-500">管理系统用户和权限分配</p>
+          <h2 className="text-2xl font-bold text-foreground">用户管理</h2>
+          <p className="mt-1 text-sm text-muted-foreground">管理系统用户和权限分配</p>
         </div>
         <button
           onClick={() => {
             resetForm();
             setShowCreateModal(true);
           }}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-lg shadow-blue-500/25 transition-all duration-200"
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-primary-foreground text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-sm transition-all duration-200 hover:opacity-90"
+          style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -340,12 +341,12 @@ export default function Users() {
                 <TableRow>
                   <TableCell colSpan={7} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
+                      <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-muted-foreground">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
                         </svg>
                       </div>
-                      <p className="text-gray-500">暂无用户数据</p>
+                      <p className="text-muted-foreground">暂无用户数据</p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -354,14 +355,16 @@ export default function Users() {
                   <TableRow key={user.id}>
                     <TableCell className="whitespace-nowrap">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold shadow-sm ${
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-primary-foreground text-sm font-semibold shadow-sm ${
                           user.is_admin
                             ? 'bg-gradient-to-br from-amber-500 to-orange-600'
-                            : 'bg-gradient-to-br from-blue-500 to-indigo-600'
-                        }`}>
+                            : ''
+                        }`}
+                        style={!user.is_admin ? { background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' } : undefined}
+                        >
                           {user.username.charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-sm font-semibold text-gray-900">{user.username}</span>
+                        <span className="text-sm font-semibold text-foreground">{user.username}</span>
                       </div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
@@ -373,7 +376,7 @@ export default function Users() {
                           管理员
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-600">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-muted text-muted-foreground">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                           </svg>
@@ -382,7 +385,7 @@ export default function Users() {
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-50 text-blue-700">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-muted text-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
                         </svg>
@@ -392,16 +395,16 @@ export default function Users() {
                     <TableCell className="whitespace-nowrap">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1.5 text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-blue-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(217 91% 60%)' }}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
                           </svg>
-                          <span className="text-gray-600">{formatBytes(user.totalBytesSent)}</span>
+                          <span className="text-muted-foreground">{formatBytes(user.totalBytesSent)}</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-green-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(142 71% 45%)' }}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
                           </svg>
-                          <span className="text-gray-600">{formatBytes(user.totalBytesReceived)}</span>
+                          <span className="text-muted-foreground">{formatBytes(user.totalBytesReceived)}</span>
                         </div>
                       </div>
                     </TableCell>
@@ -409,13 +412,13 @@ export default function Users() {
                       <div className="flex flex-col gap-1">
                         {user.trafficQuotaGb ? (
                           <>
-                            <div className="text-xs font-medium text-gray-900">
+                            <div className="text-xs font-medium text-foreground">
                               配额: {user.trafficQuotaGb} GB
                             </div>
                             <div className="text-xs text-green-600">
                               剩余: {user.remainingQuotaGb?.toFixed(2) || '0.00'} GB
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                            <div className="w-full bg-muted rounded-full h-1.5 mt-1">
                               <div
                                 className={`h-1.5 rounded-full ${
                                   (user.remainingQuotaGb || 0) / user.trafficQuotaGb < 0.2
@@ -439,11 +442,11 @@ export default function Users() {
                             )}
                           </>
                         ) : (
-                          <span className="text-xs text-gray-400">未设置</span>
+                          <span className="text-xs text-muted-foreground">未设置</span>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-gray-500">
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                       {formatDate(user.created_at)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-right">
@@ -459,7 +462,7 @@ export default function Users() {
                         </button>
                         <button
                           onClick={() => handleManagePortLimit(user)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent rounded-lg transition-colors"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
@@ -468,7 +471,7 @@ export default function Users() {
                         </button>
                         <button
                           onClick={() => handleManageNodes(user)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent rounded-lg transition-colors"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
@@ -517,49 +520,49 @@ export default function Users() {
       {/* 创建用户模态框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">创建新用户</h3>
-                  <p className="text-sm text-gray-500">添加一个新的系统用户</p>
+                  <h3 className="text-lg font-bold text-foreground">创建新用户</h3>
+                  <p className="text-sm text-muted-foreground">添加一个新的系统用户</p>
                 </div>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">用户名 *</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">用户名 *</label>
                   <input
                     type="text"
                     value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                     placeholder="请输入用户名"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">密码</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">密码</label>
                   <input
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     placeholder="留空自动生成"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   />
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className="flex items-center gap-3 p-3 bg-muted rounded-xl">
                   <input
                     type="checkbox"
                     id="is_admin"
                     checked={formData.is_admin}
                     onChange={(e) => setFormData({ ...formData, is_admin: e.target.checked })}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-primary focus:ring-primary border-border rounded"
                   />
-                  <label htmlFor="is_admin" className="text-sm text-gray-700 font-medium">
+                  <label htmlFor="is_admin" className="text-sm text-foreground font-medium">
                     设为管理员
                   </label>
                 </div>
@@ -570,13 +573,13 @@ export default function Users() {
                     setShowCreateModal(false);
                     resetForm();
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleCreateUser}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 transition-all"
+                  className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-xl hover:bg-primary/90 shadow-sm transition-all"
                 >
                   创建
                 </button>
@@ -589,17 +592,17 @@ export default function Users() {
       {/* 管理节点绑定模态框 */}
       {showBindModal && selectedUser && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[85vh] flex flex-col transform transition-all">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[85vh] flex flex-col transform transition-all">
+            <div className="flex items-center justify-between p-6 border-b border-border">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">管理用户节点</h3>
-                  <p className="text-sm text-gray-500">{selectedUser.username}</p>
+                  <h3 className="text-lg font-bold text-foreground">管理用户节点</h3>
+                  <p className="text-sm text-muted-foreground">{selectedUser.username}</p>
                 </div>
               </div>
               <button
@@ -608,7 +611,7 @@ export default function Users() {
                   setSelectedUser(null);
                   setUserNodes([]);
                 }}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-muted-foreground hover:text-muted-foreground hover:bg-accent rounded-lg transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -618,34 +621,34 @@ export default function Users() {
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
                   已绑定的节点
                 </h4>
                 {userNodes.length === 0 ? (
-                  <div className="text-center py-8 bg-gray-50 rounded-xl">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-gray-300 mx-auto mb-2">
+                  <div className="text-center py-8 bg-muted rounded-xl">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-muted-foreground mx-auto mb-2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
                     </svg>
-                    <p className="text-sm text-gray-500">暂无绑定节点</p>
+                    <p className="text-sm text-muted-foreground">暂无绑定节点</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {userNodes.map((node) => (
                       <div
                         key={node.id}
-                        className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100"
+                        className="flex items-center justify-between p-4 bg-gradient-to-r from-muted to-card rounded-xl border border-border"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-semibold">
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-primary-foreground text-xs font-semibold" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
                             {node.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <span className="text-sm font-medium text-gray-900">{node.name}</span>
+                            <span className="text-sm font-medium text-foreground">{node.name}</span>
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className={`w-1.5 h-1.5 rounded-full ${node.isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                              <span className="text-xs text-gray-500">{node.isOnline ? '在线' : '离线'}</span>
-                              {node.region && <span className="text-xs text-gray-400 ml-1">({node.region})</span>}
+                              <span className={`w-1.5 h-1.5 rounded-full ${node.isOnline ? 'bg-green-500' : 'bg-muted'}`}></span>
+                              <span className="text-xs text-muted-foreground">{node.isOnline ? '在线' : '离线'}</span>
+                              {node.region && <span className="text-xs text-muted-foreground ml-1">({node.region})</span>}
                             </div>
                           </div>
                         </div>
@@ -662,8 +665,8 @@ export default function Users() {
               </div>
 
               <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'hsl(217 91% 60%)' }}></span>
                   可绑定的独享节点
                 </h4>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -672,24 +675,24 @@ export default function Users() {
                     .map((node) => (
                       <div
                         key={node.id}
-                        className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                        className="flex items-center justify-between p-4 bg-muted rounded-xl hover:bg-accent transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center text-gray-600 text-xs font-semibold">
+                          <div className="w-8 h-8 bg-muted rounded-lg flex items-center justify-center text-muted-foreground text-xs font-semibold">
                             {node.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <span className="text-sm font-medium text-gray-900">{node.name}</span>
+                            <span className="text-sm font-medium text-foreground">{node.name}</span>
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className={`w-1.5 h-1.5 rounded-full ${node.isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                              <span className="text-xs text-gray-500">{node.isOnline ? '在线' : '离线'}</span>
-                              {node.region && <span className="text-xs text-gray-400 ml-1">({node.region})</span>}
+                              <span className={`w-1.5 h-1.5 rounded-full ${node.isOnline ? 'bg-green-500' : 'bg-muted'}`}></span>
+                              <span className="text-xs text-muted-foreground">{node.isOnline ? '在线' : '离线'}</span>
+                              {node.region && <span className="text-xs text-muted-foreground ml-1">({node.region})</span>}
                             </div>
                           </div>
                         </div>
                         <button
                           onClick={() => handleAssignNode(node.id)}
-                          className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent rounded-lg transition-colors"
                         >
                           绑定
                         </button>
@@ -699,14 +702,14 @@ export default function Users() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-100 flex justify-end">
+            <div className="p-4 border-t border-border flex justify-end">
               <button
                 onClick={() => {
                   setShowBindModal(false);
                   setSelectedUser(null);
                   setUserNodes([]);
                 }}
-                className="px-5 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                className="px-5 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
               >
                 关闭
               </button>
@@ -718,38 +721,38 @@ export default function Users() {
       {/* 配额管理模态框 */}
       {showQuotaModal && selectedUser && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">配额管理</h3>
-                  <p className="text-sm text-gray-500">{selectedUser.username}</p>
+                  <h3 className="text-lg font-bold text-foreground">配额管理</h3>
+                  <p className="text-sm text-muted-foreground">{selectedUser.username}</p>
                 </div>
               </div>
 
               {/* 当前配额信息 */}
-              <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+              <div className="mb-6 p-4 bg-muted rounded-xl border border-border">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">当前配额</span>
-                    <span className="text-sm font-semibold text-gray-900">
+                    <span className="text-sm text-muted-foreground">当前配额</span>
+                    <span className="text-sm font-semibold text-foreground">
                       {selectedUser.trafficQuotaGb ? `${selectedUser.trafficQuotaGb} GB` : '未设置'}
                     </span>
                   </div>
                   {selectedUser.trafficQuotaGb && (
                     <>
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">剩余配额</span>
+                        <span className="text-sm text-muted-foreground">剩余配额</span>
                         <span className="text-sm font-semibold text-green-600">
                           {selectedUser.remainingQuotaGb?.toFixed(2) || '0.00'} GB
                         </span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                      <div className="w-full bg-muted rounded-full h-2 mt-2">
                         <div
                           className={`h-2 rounded-full transition-all ${
                             (selectedUser.remainingQuotaGb || 0) / selectedUser.trafficQuotaGb < 0.2
@@ -771,7 +774,7 @@ export default function Users() {
               {/* 配额调整输入 */}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">调整配额 (GB)</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">调整配额 (GB)</label>
                   <input
                     type="number"
                     step="0.1"
@@ -779,9 +782,9 @@ export default function Users() {
                     value={quotaChangeGb}
                     onChange={(e) => setQuotaChangeGb(e.target.value)}
                     placeholder="输入要增加或减少的配额"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-muted/50 hover:bg-card"
                   />
-                  <p className="mt-1 text-xs text-gray-500">输入正数增加配额，负数减少配额</p>
+                  <p className="mt-1 text-xs text-muted-foreground">输入正数增加配额，负数减少配额</p>
                 </div>
               </div>
 
@@ -793,7 +796,7 @@ export default function Users() {
                     setSelectedUser(null);
                     setQuotaChangeGb('');
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
                   disabled={quotaSaving}
                 >
                   取消
@@ -801,14 +804,14 @@ export default function Users() {
                 <button
                   onClick={() => handleAdjustQuota(false)}
                   disabled={quotaSaving || !quotaChangeGb}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white font-medium rounded-xl hover:from-red-600 hover:to-rose-700 shadow-lg shadow-red-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-primary-foreground font-medium rounded-xl hover:from-red-600 hover:to-rose-700 shadow-lg shadow-red-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {quotaSaving ? '处理中...' : '减少配额'}
                 </button>
                 <button
                   onClick={() => handleAdjustQuota(true)}
                   disabled={quotaSaving || !quotaChangeGb}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium rounded-xl hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-primary-foreground font-medium rounded-xl hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {quotaSaving ? '处理中...' : '增加配额'}
                 </button>
@@ -821,41 +824,41 @@ export default function Users() {
       {/* 端口限制管理模态框 */}
       {showPortLimitModal && selectedUser && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(263 70% 58%), hsl(239 84% 67%))' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary-foreground">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">端口限制管理</h3>
-                  <p className="text-sm text-gray-500">{selectedUser.username}</p>
+                  <h3 className="text-lg font-bold text-foreground">端口限制管理</h3>
+                  <p className="text-sm text-muted-foreground">{selectedUser.username}</p>
                 </div>
               </div>
 
               {/* 当前端口使用情况 */}
-              <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+              <div className="mb-6 p-4 bg-muted rounded-xl border border-border">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">当前端口数量</span>
-                    <span className="text-sm font-semibold text-gray-900">
+                    <span className="text-sm text-muted-foreground">当前端口数量</span>
+                    <span className="text-sm font-semibold text-foreground">
                       {selectedUser.currentPortCount || 0} 个
                     </span>
                   </div>
                   {selectedUser.maxPortCount && (
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">端口数量限制</span>
-                      <span className="text-sm font-semibold text-indigo-600">
+                      <span className="text-sm text-muted-foreground">端口数量限制</span>
+                      <span className="text-sm font-semibold text-primary">
                         {selectedUser.maxPortCount} 个
                       </span>
                     </div>
                   )}
                   {selectedUser.allowedPortRange && (
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">允许的端口范围</span>
-                      <span className="text-sm font-mono text-indigo-600">
+                      <span className="text-sm text-muted-foreground">允许的端口范围</span>
+                      <span className="text-sm font-mono text-primary">
                         {selectedUser.allowedPortRange}
                       </span>
                     </div>
@@ -866,7 +869,7 @@ export default function Users() {
               {/* 端口限制配置 */}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
                     最大端口数量
                   </label>
                   <input
@@ -875,13 +878,13 @@ export default function Users() {
                     value={portLimitData.maxPortCount}
                     onChange={(e) => setPortLimitData({ ...portLimitData, maxPortCount: e.target.value })}
                     placeholder="留空表示无限制"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   />
-                  <p className="mt-1 text-xs text-gray-500">限制用户可以创建的代理（端口）数量</p>
+                  <p className="mt-1 text-xs text-muted-foreground">限制用户可以创建的代理（端口）数量</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
                     允许的端口范围
                   </label>
                   <input
@@ -889,9 +892,9 @@ export default function Users() {
                     value={portLimitData.allowedPortRange}
                     onChange={(e) => setPortLimitData({ ...portLimitData, allowedPortRange: e.target.value })}
                     placeholder="例如: 1000-9999,20000-30000"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-gray-50/50 hover:bg-white font-mono text-sm"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card font-mono text-sm"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     格式: 单个端口 (8080) 或范围 (1000-9999)，多个用逗号分隔
                   </p>
                 </div>
@@ -905,7 +908,7 @@ export default function Users() {
                     setSelectedUser(null);
                     setPortLimitData({ maxPortCount: '', allowedPortRange: '' });
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
                   disabled={portLimitSaving}
                 >
                   取消
@@ -913,7 +916,7 @@ export default function Users() {
                 <button
                   onClick={handleSavePortLimit}
                   disabled={portLimitSaving}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium rounded-xl hover:from-indigo-600 hover:to-purple-700 shadow-lg shadow-indigo-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-xl hover:bg-primary/90 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {portLimitSaving ? '保存中...' : '保存'}
                 </button>

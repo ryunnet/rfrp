@@ -4,7 +4,12 @@ import { systemService } from '../lib/services';
 import { useToast } from '../contexts/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import SkeletonBlock from '../components/Skeleton';
-import { Save, RotateCcw, Power, Info, AlertCircle, Server, Shield, Globe } from 'lucide-react';
+import { Save, RotateCcw, Power, Info, AlertCircle, Server, Shield, Globe, Upload, X } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Alert, AlertDescription } from '../components/ui/alert';
 
 interface ConfigItem {
   id: number;
@@ -185,7 +190,6 @@ export default function Settings() {
 
   const renderConfigInput = (config: ConfigItem) => {
     const value = editedValues[config.key];
-    const inputClassName = "w-full max-w-xs px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white";
 
     // 文件上传组件（用于证书内容）
     if (config.key === 'grpc_tls_cert_content' || config.key === 'grpc_tls_key_content' ||
@@ -211,29 +215,35 @@ export default function Settings() {
       return (
         <div className="space-y-2">
           <div className="flex items-center gap-3">
-            <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-lg shadow-blue-500/25 transition-all duration-200 cursor-pointer">
-              <input
-                type="file"
-                accept=".pem,.crt,.key"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-              </svg>
-              上传文件
-            </label>
+            <Button variant="outline" size="sm" asChild>
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept=".pem,.crt,.key"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <Upload className="w-4 h-4 mr-2" />
+                上传文件
+              </label>
+            </Button>
             {hasContent && (
-              <span className="text-sm text-green-600 font-medium">✓ 已上传</span>
+              <span className="text-sm text-primary font-medium flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
+                已上传
+              </span>
             )}
           </div>
           {hasContent && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => handleValueChange(config.key, '', config.valueType)}
-              className="text-sm text-red-600 hover:text-red-700 font-medium"
+              className="h-8 text-destructive hover:text-destructive-foreground hover:bg-destructive"
             >
+              <X className="w-3 h-3 mr-1" />
               清除内容
-            </button>
+            </Button>
           )}
         </div>
       );
@@ -242,11 +252,11 @@ export default function Settings() {
     switch (config.valueType) {
       case 'number':
         return (
-          <input
+          <Input
             type="number"
             value={value ?? 0}
             onChange={(e) => handleValueChange(config.key, e.target.value, config.valueType)}
-            className={inputClassName}
+            className="max-w-xs"
           />
         );
 
@@ -255,7 +265,7 @@ export default function Settings() {
           <select
             value={value === true || value === 'true' ? 'true' : 'false'}
             onChange={(e) => handleValueChange(config.key, e.target.value, config.valueType)}
-            className={inputClassName}
+            className="flex h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <option value="true">启用</option>
             <option value="false">禁用</option>
@@ -265,11 +275,11 @@ export default function Settings() {
       case 'string':
       default:
         return (
-          <input
+          <Input
             type="text"
             value={value || ''}
             onChange={(e) => handleValueChange(config.key, e.target.value, config.valueType)}
-            className={inputClassName}
+            className="max-w-xs"
           />
         );
     }
@@ -289,18 +299,20 @@ export default function Settings() {
             <SkeletonBlock className="h-10 w-28 rounded-xl" />
           </div>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <SkeletonBlock className="h-6 w-24 mb-6" />
-          <div className="space-y-6">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="space-y-2">
-                <SkeletonBlock className="h-4 w-40" />
-                <SkeletonBlock className="h-12 w-80 rounded-xl" />
-                <SkeletonBlock className="h-3 w-56" />
-              </div>
-            ))}
-          </div>
-        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <SkeletonBlock className="h-6 w-24 mb-6" />
+            <div className="space-y-6">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <SkeletonBlock className="h-4 w-40" />
+                  <SkeletonBlock className="h-12 w-80 rounded-xl" />
+                  <SkeletonBlock className="h-3 w-56" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -310,110 +322,115 @@ export default function Settings() {
       {/* 页面标题和操作按钮 */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">系统配置</h2>
-          <p className="mt-1 text-sm text-gray-500">管理 RFRP Controller 的运行参数</p>
+          <h2 className="text-2xl font-bold text-foreground">系统配置</h2>
+          <p className="mt-1 text-sm text-muted-foreground">管理 RFRP Controller 的运行参数</p>
         </div>
         <div className="flex gap-3">
           {isAdmin && (
-            <button
+            <Button
               onClick={restartSystem}
               disabled={restarting || saving}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white text-sm font-medium rounded-xl hover:from-red-600 hover:to-rose-700 focus:outline-none focus:ring-2 focus:ring-red-500/40 shadow-lg shadow-red-500/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="destructive"
             >
               <Power className="w-4 h-4" />
               {restarting ? '重启中...' : '重启系统'}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             onClick={handleReset}
             disabled={!hasChanges || saving}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="outline"
           >
             <RotateCcw className="w-4 h-4" />
             重置
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleSave}
             disabled={!hasChanges || saving}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-lg shadow-blue-500/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-primary-foreground border-0"
+            style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}
           >
             <Save className="w-4 h-4" />
             {saving ? '保存中...' : '保存更改'}
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* 未保存提示 */}
       {hasChanges && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 text-amber-800">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span className="text-sm font-medium">你有未保存的更改（修改后需要重启服务端生效）</span>
-          </div>
-        </div>
+        <Alert className="border" style={{ background: 'hsl(38 92% 50% / 0.08)', borderColor: 'hsl(38 92% 50% / 0.3)' }}>
+          <AlertCircle className="w-4 h-4" style={{ color: 'hsl(38 92% 50%)' }} />
+          <AlertDescription className="ml-2" style={{ color: 'hsl(38 92% 50%)' }}>
+            你有未保存的更改（修改后需要重启服务端生效）
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* 基础配置 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-            <Server className="w-5 h-5 text-white" />
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'hsl(217 91% 60% / 0.15)' }}>
+              <Server className="w-5 h-5" style={{ color: 'hsl(217 91% 60%)' }} />
+            </div>
+            <div>
+              <CardTitle className="text-lg">基础配置</CardTitle>
+              <CardDescription>端口、认证和数据库配置</CardDescription>
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-bold text-gray-900">基础配置</h3>
-            <p className="text-sm text-gray-500">端口、认证和数据库配置</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {configs.filter(c => ['web_port', 'internal_port', 'jwt_expiration_hours'].includes(c.key)).map((config) => (
-            <div key={config.key} className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                {config.description}
-              </label>
-              <div className="flex items-center gap-3">
-                {renderConfigInput(config)}
-                {config.valueType === 'number' && config.key.includes('hours') && (
-                  <span className="text-sm text-gray-500">小时</span>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {configs.filter(c => ['web_port', 'internal_port'].includes(c.key)).map((config) => (
+              <div key={config.key} className="space-y-2">
+                <Label className="text-foreground">
+                  {config.description}
+                </Label>
+                <div className="flex items-center gap-3">
+                  {renderConfigInput(config)}
+                  {config.valueType === 'number' && config.key.includes('hours') && (
+                    <span className="text-sm text-muted-foreground">小时</span>
+                  )}
+                </div>
+                {configHints[config.key] && (
+                  <div className="flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-sm text-muted-foreground">{configHints[config.key]}</p>
+                  </div>
                 )}
               </div>
-              {configHints[config.key] && (
-                <div className="flex items-center gap-1.5">
-                  <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                  <p className="text-sm text-gray-500">{configHints[config.key]}</p>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* gRPC TLS 配置 */}
       {configs.some(c => c.key === 'grpc_tls_enabled' || GRPC_TLS_CERT_ALL_KEYS.includes(c.key) || c.key === 'grpc_domain') && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'hsl(142 71% 45% / 0.15)' }}>
+                <Shield className="w-5 h-5" style={{ color: 'hsl(142 71% 45%)' }} />
+              </div>
+              <div>
+                <CardTitle className="text-lg">gRPC TLS 配置</CardTitle>
+                <CardDescription>Node 和 Client 连接加密配置</CardDescription>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">gRPC TLS 配置</h3>
-              <p className="text-sm text-gray-500">Node 和 Client 连接加密配置</p>
-            </div>
-          </div>
-
-          <div className="space-y-6">
+          </CardHeader>
+          <CardContent className="space-y-6">
             {/* TLS 开关和域名 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {configs.filter(c => c.key === 'grpc_tls_enabled' || c.key === 'grpc_domain').map((config) => (
                 <div key={config.key} className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <Label className="text-foreground">
                     {config.description}
-                  </label>
+                  </Label>
                   {renderConfigInput(config)}
                   {configHints[config.key] && (
                     <div className="flex items-center gap-1.5">
-                      <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                      <p className="text-sm text-gray-500">{configHints[config.key]}</p>
+                      <Info className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <p className="text-sm text-muted-foreground">{configHints[config.key]}</p>
                     </div>
                   )}
                 </div>
@@ -422,17 +439,17 @@ export default function Settings() {
 
             {/* 证书配置 */}
             {configs.some(c => GRPC_TLS_CERT_ALL_KEYS.includes(c.key)) && (
-              <div className="border-t border-gray-200 pt-6">
+              <div className="border-t border-border pt-6">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm font-medium text-gray-700">证书配置方式</span>
-                  <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+                  <Label className="text-foreground">证书配置方式</Label>
+                  <div className="inline-flex rounded-lg border border-border p-1 bg-muted">
                     <button
                       type="button"
                       onClick={() => {
                         setGrpcCertMode('upload');
                         GRPC_TLS_CERT_PATH_KEYS.forEach(k => handleValueChange(k, '', 'string'));
                       }}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${grpcCertMode === 'upload' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${grpcCertMode === 'upload' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                       上传文件
                     </button>
@@ -442,7 +459,7 @@ export default function Settings() {
                         setGrpcCertMode('path');
                         GRPC_TLS_CERT_CONTENT_KEYS.forEach(k => handleValueChange(k, '', 'string'));
                       }}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${grpcCertMode === 'path' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${grpcCertMode === 'path' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                       指定路径
                     </button>
@@ -454,14 +471,14 @@ export default function Settings() {
                     .filter(c => grpcCertMode === 'upload' ? GRPC_TLS_CERT_CONTENT_KEYS.includes(c.key) : GRPC_TLS_CERT_PATH_KEYS.includes(c.key))
                     .map((config) => (
                       <div key={config.key} className="space-y-2">
-                        <label className="block text-sm font-medium text-gray-700">
+                        <Label className="text-foreground">
                           {config.description}
-                        </label>
+                        </Label>
                         {renderConfigInput(config)}
                         {configHints[config.key] && (
                           <div className="flex items-center gap-1.5">
-                            <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                            <p className="text-sm text-gray-500">{configHints[config.key]}</p>
+                            <Info className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                            <p className="text-sm text-muted-foreground">{configHints[config.key]}</p>
                           </div>
                         )}
                       </div>
@@ -470,35 +487,36 @@ export default function Settings() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Web TLS 配置 */}
       {configs.some(c => c.key === 'web_tls_enabled' || WEB_TLS_CERT_ALL_KEYS.includes(c.key)) && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <Globe className="w-5 h-5 text-white" />
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'hsl(263 70% 58% / 0.15)' }}>
+                <Globe className="w-5 h-5" style={{ color: 'hsl(263 70% 58%)' }} />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Web TLS 配置</CardTitle>
+                <CardDescription>管理界面 HTTPS 加密配置</CardDescription>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">Web TLS 配置</h3>
-              <p className="text-sm text-gray-500">管理界面 HTTPS 加密配置</p>
-            </div>
-          </div>
-
-          <div className="space-y-6">
+          </CardHeader>
+          <CardContent className="space-y-6">
             {/* TLS 开关 */}
             {configs.filter(c => c.key === 'web_tls_enabled').map((config) => (
               <div key={config.key} className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <Label className="text-foreground">
                   {config.description}
-                </label>
+                </Label>
                 {renderConfigInput(config)}
                 {configHints[config.key] && (
                   <div className="flex items-center gap-1.5">
-                    <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                    <p className="text-sm text-gray-500">{configHints[config.key]}</p>
+                    <Info className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-sm text-muted-foreground">{configHints[config.key]}</p>
                   </div>
                 )}
               </div>
@@ -506,17 +524,17 @@ export default function Settings() {
 
             {/* 证书配置 */}
             {configs.some(c => WEB_TLS_CERT_ALL_KEYS.includes(c.key)) && (
-              <div className="border-t border-gray-200 pt-6">
+              <div className="border-t border-border pt-6">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm font-medium text-gray-700">证书配置方式</span>
-                  <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+                  <Label className="text-foreground">证书配置方式</Label>
+                  <div className="inline-flex rounded-lg border border-border p-1 bg-muted">
                     <button
                       type="button"
                       onClick={() => {
                         setWebCertMode('upload');
                         WEB_TLS_CERT_PATH_KEYS.forEach(k => handleValueChange(k, '', 'string'));
                       }}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${webCertMode === 'upload' ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${webCertMode === 'upload' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                       上传文件
                     </button>
@@ -526,7 +544,7 @@ export default function Settings() {
                         setWebCertMode('path');
                         WEB_TLS_CERT_CONTENT_KEYS.forEach(k => handleValueChange(k, '', 'string'));
                       }}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${webCertMode === 'path' ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${webCertMode === 'path' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                       指定路径
                     </button>
@@ -538,14 +556,14 @@ export default function Settings() {
                     .filter(c => webCertMode === 'upload' ? WEB_TLS_CERT_CONTENT_KEYS.includes(c.key) : WEB_TLS_CERT_PATH_KEYS.includes(c.key))
                     .map((config) => (
                       <div key={config.key} className="space-y-2">
-                        <label className="block text-sm font-medium text-gray-700">
+                        <Label className="text-foreground">
                           {config.description}
-                        </label>
+                        </Label>
                         {renderConfigInput(config)}
                         {configHints[config.key] && (
                           <div className="flex items-center gap-1.5">
-                            <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                            <p className="text-sm text-gray-500">{configHints[config.key]}</p>
+                            <Info className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                            <p className="text-sm text-muted-foreground">{configHints[config.key]}</p>
                           </div>
                         )}
                       </div>
@@ -554,8 +572,8 @@ export default function Settings() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       <ConfirmDialog

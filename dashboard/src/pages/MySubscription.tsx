@@ -54,25 +54,25 @@ export default function MySubscription() {
 
   const getStatusBadge = (subscription: UserSubscription) => {
     if (subscription.isExpired) {
-      return <span className="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">已过期</span>;
+      return <span className="px-3 py-1 text-sm font-semibold rounded-full" style={{ background: 'hsl(0 84.2% 60.2% / 0.15)', color: 'hsl(0 84.2% 60.2%)' }}>已过期</span>;
     }
     if (!subscription.isActive) {
-      return <span className="px-3 py-1 text-sm font-semibold rounded-full bg-gray-100 text-gray-800">已停用</span>;
+      return <span className="px-3 py-1 text-sm font-semibold rounded-full bg-muted text-foreground">已停用</span>;
     }
-    return <span className="px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">激活中</span>;
+    return <span className="px-3 py-1 text-sm font-semibold rounded-full" style={{ background: 'hsl(142 71% 45% / 0.15)', color: 'hsl(142 71% 45%)' }}>激活中</span>;
   };
 
   const getTrafficProgress = (used: number, total: number) => {
     const percentage = (used / total) * 100;
-    let colorClass = 'bg-green-500';
+    let bgColor = 'hsl(142 71% 45%)';
     if (percentage >= 90) {
-      colorClass = 'bg-red-500';
+      bgColor = 'hsl(0 84.2% 60.2%)';
     } else if (percentage >= 70) {
-      colorClass = 'bg-yellow-500';
+      bgColor = 'hsl(38 92% 50%)';
     }
     return (
-      <div className="w-full bg-gray-200 rounded-full h-3">
-        <div className={`${colorClass} h-3 rounded-full transition-all duration-300`} style={{ width: `${Math.min(percentage, 100)}%` }}></div>
+      <div className="w-full bg-muted rounded-full h-3">
+        <div className="h-3 rounded-full transition-all duration-300" style={{ width: `${Math.min(percentage, 100)}%`, background: bgColor }}></div>
       </div>
     );
   };
@@ -95,7 +95,7 @@ export default function MySubscription() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">我的订阅</h1>
+        <h1 className="text-2xl font-bold text-foreground">我的订阅</h1>
       </div>
 
       {loading ? (
@@ -104,25 +104,25 @@ export default function MySubscription() {
         <>
           {/* 当前激活的订阅 */}
           {activeSubscription && (
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-sm p-6 border border-blue-200">
+            <div className="bg-muted rounded-2xl shadow-sm p-6 border border-border">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">当前订阅</h2>
+                <h2 className="text-xl font-bold text-foreground">当前订阅</h2>
                 {getStatusBadge(activeSubscription)}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">套餐名称</p>
-                    <p className="text-lg font-semibold text-gray-900">{activeSubscription.subscriptionName}</p>
+                    <p className="text-sm text-muted-foreground mb-1">套餐名称</p>
+                    <p className="text-lg font-semibold text-foreground">{activeSubscription.subscriptionName}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">有效期</p>
-                    <p className="text-base text-gray-900">
+                    <p className="text-sm text-muted-foreground mb-1">有效期</p>
+                    <p className="text-base text-foreground">
                       {formatDate(activeSubscription.startDate)} 至 {formatDate(activeSubscription.endDate)}
                     </p>
-                    <p className="text-sm text-blue-600 font-medium mt-1">
+                    <p className="text-sm font-medium mt-1" style={{ color: 'hsl(217 91% 60%)' }}>
                       剩余 {getDaysRemaining(activeSubscription.endDate)} 天
                     </p>
                   </div>
@@ -130,18 +130,18 @@ export default function MySubscription() {
 
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm text-gray-600 mb-2">流量使用情况</p>
+                    <p className="text-sm text-muted-foreground mb-2">流量使用情况</p>
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-700">已使用</span>
-                        <span className="font-semibold text-gray-900">
+                        <span className="text-foreground">已使用</span>
+                        <span className="font-semibold text-foreground">
                           {formatTraffic(activeSubscription.trafficUsedGb)} / {formatTraffic(activeSubscription.trafficQuotaGb)}
                         </span>
                       </div>
                       {getTrafficProgress(activeSubscription.trafficUsedGb, activeSubscription.trafficQuotaGb)}
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-700">剩余流量</span>
-                        <span className="font-semibold text-green-600">
+                        <span className="text-foreground">剩余流量</span>
+                        <span className="font-semibold" style={{ color: 'hsl(142 71% 45%)' }}>
                           {formatTraffic(activeSubscription.trafficRemainingGb)}
                         </span>
                       </div>
@@ -154,13 +154,13 @@ export default function MySubscription() {
 
           {/* 订阅历史 */}
           <TableContainer>
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">订阅历史</h2>
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">订阅历史</h2>
             </div>
 
             {subscriptions.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 mx-auto mb-4 text-gray-400">
+              <div className="p-8 text-center text-muted-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 mx-auto mb-4 text-muted-foreground">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
                 </svg>
                 <p className="text-lg font-medium">暂无订阅记录</p>
@@ -181,18 +181,18 @@ export default function MySubscription() {
                 {subscriptions.map((sub) => (
                   <TableRow key={sub.id}>
                     <TableCell className="whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{sub.subscriptionName}</div>
+                      <div className="text-sm font-medium text-foreground">{sub.subscriptionName}</div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{formatDate(sub.startDate)}</div>
-                      <div className="text-sm text-gray-500">至 {formatDate(sub.endDate)}</div>
+                      <div className="text-sm text-foreground">{formatDate(sub.startDate)}</div>
+                      <div className="text-sm text-muted-foreground">至 {formatDate(sub.endDate)}</div>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-gray-900">
+                    <TableCell className="whitespace-nowrap text-sm text-foreground">
                       {formatTraffic(sub.trafficQuotaGb)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{formatTraffic(sub.trafficUsedGb)}</div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-sm text-foreground">{formatTraffic(sub.trafficUsedGb)}</div>
+                      <div className="text-xs text-muted-foreground">
                         {((sub.trafficUsedGb / sub.trafficQuotaGb) * 100).toFixed(1)}%
                       </div>
                     </TableCell>
