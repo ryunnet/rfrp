@@ -116,7 +116,17 @@ impl AgentGrpcClient {
             .keep_alive_timeout(Duration::from_secs(10));
 
         if controller_url.starts_with("https://") {
-            endpoint = endpoint.tls_config(ClientTlsConfig::new())
+            // 从 URL 中提取域名用于 SNI
+            let domain = controller_url
+                .trim_start_matches("https://")
+                .split(':')
+                .next()
+                .ok_or_else(|| anyhow!("无法从 URL 提取域名"))?;
+
+            let tls_config = ClientTlsConfig::new()
+                .domain_name(domain);
+
+            endpoint = endpoint.tls_config(tls_config)
                 .map_err(|e| anyhow!("TLS 配置失败: {}", e))?;
         }
 
@@ -207,7 +217,17 @@ impl AgentGrpcClient {
         let mut endpoint = Channel::from_shared(controller_url.to_string())?;
 
         if controller_url.starts_with("https://") {
-            endpoint = endpoint.tls_config(ClientTlsConfig::new())
+            // 从 URL 中提取域名用于 SNI
+            let domain = controller_url
+                .trim_start_matches("https://")
+                .split(':')
+                .next()
+                .ok_or_else(|| anyhow!("无法从 URL 提取域名"))?;
+
+            let tls_config = ClientTlsConfig::new()
+                .domain_name(domain);
+
+            endpoint = endpoint.tls_config(tls_config)
                 .map_err(|e| anyhow!("TLS 配置失败: {}", e))?;
         }
 
