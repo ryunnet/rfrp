@@ -3,15 +3,72 @@ use axum::{Extension, Router};
 use axum::routing::{get, post, put};
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
-use tracing::info;
+use tracing::{info, error, warn};
 use crate::AppState;
 use crate::middleware::auth_middleware;
+use std::sync::Arc;
+use axum_server::tls_rustls::RustlsConfig;
+use base64::Engine;
 
 pub mod handlers;
+
+/// 从 ConfigManager 加载 Web TLS 证书和私钥
+async fn load_web_tls_config(config_manager: &crate::config_manager::ConfigManager) -> Option<RustlsConfig> {
+    let tls_enabled = config_manager.get_bool("web_tls_enabled", false).await;
+    if !tls_enabled {
+        return None;
+    }
+
+    // 优先从数据库内容读取（base64 编码的 PEM）
+    let cert_content = config_manager.get_string("web_tls_cert_content", "").await;
+    let key_content = config_manager.get_string("web_tls_key_content", "").await;
+
+    if !cert_content.is_empty() && !key_content.is_empty() {
+        match (
+            base64::engine::general_purpose::STANDARD.decode(&cert_content),
+            base64::engine::general_purpose::STANDARD.decode(&key_content),
+        ) {
+            (Ok(cert_pem), Ok(key_pem)) => {
+                match RustlsConfig::from_pem(cert_pem, key_pem).await {
+                    Ok(config) => {
+                        info!("从数据库加载 Web TLS 证书");
+                        return Some(config);
+                    }
+                    Err(e) => {
+                        error!("Web TLS 证书加载失败: {}", e);
+                    }
+                }
+            }
+            _ => {
+                error!("Web TLS 证书 base64 解码失败");
+            }
+        }
+    }
+
+    // 回退到文件路径
+    let cert_path = config_manager.get_string("web_tls_cert_path", "").await;
+    let key_path = config_manager.get_string("web_tls_key_path", "").await;
+
+    if !cert_path.is_empty() && !key_path.is_empty() {
+        match RustlsConfig::from_pem_file(&cert_path, &key_path).await {
+            Ok(config) => {
+                info!("从文件加载 Web TLS 证书: {}", cert_path);
+                return Some(config);
+            }
+            Err(e) => {
+                error!("从文件加载 Web TLS 证书失败: {}", e);
+            }
+        }
+    }
+
+    warn!("Web TLS 已启用但未配置有效证书，回退到 HTTP 模式");
+    None
+}
 
 /// 启动 Web API 服务
 pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
     let web_port = app_state.config.web_port;
+    let config_manager = app_state.config_manager.clone();
 
     tokio::spawn(async move {
         // 构建 Web 应用
@@ -77,15 +134,32 @@ pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
             .layer(CorsLayer::permissive());
 
         let web_addr = format!("0.0.0.0:{}", web_port);
-        match tokio::net::TcpListener::bind(web_addr.clone()).await {
-            Ok(listener) => {
-                info!("🌐 Web管理界面: http://{}", web_addr);
-                if let Err(err) = axum::serve(listener, app).await {
-                    tracing::error!("Web服务错误：{}", err);
+
+        // 尝试加载 TLS 配置
+        if let Some(tls_config) = load_web_tls_config(&config_manager).await {
+            // 使用 HTTPS
+            info!("🌐 Web管理界面: https://{}", web_addr);
+            match axum_server::bind_rustls(web_addr.parse().unwrap(), tls_config)
+                .serve(app.into_make_service())
+                .await
+            {
+                Ok(_) => {}
+                Err(err) => {
+                    error!("Web服务错误：{}", err);
                 }
             }
-            Err(err) => {
-                tracing::error!("Web服务启动失败：{}", err);
+        } else {
+            // 使用 HTTP
+            match tokio::net::TcpListener::bind(web_addr.clone()).await {
+                Ok(listener) => {
+                    info!("🌐 Web管理界面: http://{}", web_addr);
+                    if let Err(err) = axum::serve(listener, app).await {
+                        error!("Web服务错误：{}", err);
+                    }
+                }
+                Err(err) => {
+                    error!("Web服务启动失败：{}", err);
+                }
             }
         }
     })

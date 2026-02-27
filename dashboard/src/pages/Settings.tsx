@@ -25,12 +25,25 @@ const configHints: Record<string, string> = {
   grpc_tls_cert_content: 'TLS 证书内容（PEM 格式，可直接上传证书文件）',
   grpc_tls_key_content: 'TLS 私钥内容（PEM 格式，可直接上传私钥文件）',
   grpc_domain: 'gRPC 服务器域名（可选，用于 SNI）',
+  web_tls_enabled: '启用后 Web 管理界面将使用 HTTPS 加密访问',
+  web_tls_cert_path: 'Web TLS 证书文件的绝对路径（PEM 格式）',
+  web_tls_key_path: 'Web TLS 私钥文件的绝对路径（PEM 格式）',
+  web_tls_cert_content: 'Web TLS 证书内容（PEM 格式，可直接上传证书文件）',
+  web_tls_key_content: 'Web TLS 私钥内容（PEM 格式，可直接上传私钥文件）',
 };
 
-// TLS 证书相关的 key
-const TLS_CERT_PATH_KEYS = ['grpc_tls_cert_path', 'grpc_tls_key_path'];
-const TLS_CERT_CONTENT_KEYS = ['grpc_tls_cert_content', 'grpc_tls_key_content'];
-const TLS_CERT_ALL_KEYS = [...TLS_CERT_PATH_KEYS, ...TLS_CERT_CONTENT_KEYS];
+// gRPC TLS 证书相关的 key
+const GRPC_TLS_CERT_PATH_KEYS = ['grpc_tls_cert_path', 'grpc_tls_key_path'];
+const GRPC_TLS_CERT_CONTENT_KEYS = ['grpc_tls_cert_content', 'grpc_tls_key_content'];
+const GRPC_TLS_CERT_ALL_KEYS = [...GRPC_TLS_CERT_PATH_KEYS, ...GRPC_TLS_CERT_CONTENT_KEYS];
+
+// Web TLS 证书相关的 key
+const WEB_TLS_CERT_PATH_KEYS = ['web_tls_cert_path', 'web_tls_key_path'];
+const WEB_TLS_CERT_CONTENT_KEYS = ['web_tls_cert_content', 'web_tls_key_content'];
+const WEB_TLS_CERT_ALL_KEYS = [...WEB_TLS_CERT_PATH_KEYS, ...WEB_TLS_CERT_CONTENT_KEYS];
+
+// 所有 TLS 证书相关的 key
+const ALL_TLS_CERT_KEYS = [...GRPC_TLS_CERT_ALL_KEYS, ...WEB_TLS_CERT_ALL_KEYS];
 
 export default function Settings() {
   const [configs, setConfigs] = useState<ConfigItem[]>([]);
@@ -38,7 +51,8 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [editedValues, setEditedValues] = useState<Record<string, any>>({});
-  const [certMode, setCertMode] = useState<'upload' | 'path'>('upload');
+  const [grpcCertMode, setGrpcCertMode] = useState<'upload' | 'path'>('upload');
+  const [webCertMode, setWebCertMode] = useState<'upload' | 'path'>('upload');
   const { showToast } = useToast();
   const { isAdmin } = useAuth();
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'info'; confirmText: string; onConfirm: () => void }>({ open: false, title: '', message: '', variant: 'warning', confirmText: '确定', onConfirm: () => {} });
@@ -85,10 +99,14 @@ export default function Settings() {
           initialValues[config.key] = config.value;
         });
         setEditedValues(initialValues);
-        // 根据已有数据自动判断证书配置模式
-        const hasPath = initialValues['grpc_tls_cert_path'] && initialValues['grpc_tls_cert_path'] !== '';
-        const hasContent = initialValues['grpc_tls_cert_content'] && initialValues['grpc_tls_cert_content'] !== '';
-        setCertMode(hasPath && !hasContent ? 'path' : 'upload');
+        // 根据已有数据自动判断 gRPC 证书配置模式
+        const hasGrpcPath = initialValues['grpc_tls_cert_path'] && initialValues['grpc_tls_cert_path'] !== '';
+        const hasGrpcContent = initialValues['grpc_tls_cert_content'] && initialValues['grpc_tls_cert_content'] !== '';
+        setGrpcCertMode(hasGrpcPath && !hasGrpcContent ? 'path' : 'upload');
+        // 根据已有数据自动判断 Web 证书配置模式
+        const hasWebPath = initialValues['web_tls_cert_path'] && initialValues['web_tls_cert_path'] !== '';
+        const hasWebContent = initialValues['web_tls_cert_content'] && initialValues['web_tls_cert_content'] !== '';
+        setWebCertMode(hasWebPath && !hasWebContent ? 'path' : 'upload');
       } else {
         showToast(response.message || '无法加载系统配置', 'error');
       }
@@ -173,7 +191,8 @@ export default function Settings() {
     const inputClassName = "w-full max-w-xs px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 hover:bg-white";
 
     // 文件上传组件（用于证书内容）
-    if (config.key === 'grpc_tls_cert_content' || config.key === 'grpc_tls_key_content') {
+    if (config.key === 'grpc_tls_cert_content' || config.key === 'grpc_tls_key_content' ||
+        config.key === 'web_tls_cert_content' || config.key === 'web_tls_key_content') {
       const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -183,7 +202,8 @@ export default function Settings() {
           // 将文件内容转换为 base64
           const base64 = btoa(text);
           handleValueChange(config.key, base64, config.valueType);
-          showToast(`${config.key === 'grpc_tls_cert_content' ? '证书' : '私钥'}文件已加载`, 'success');
+          const certType = config.key.includes('cert_content') ? '证书' : '私钥';
+          showToast(`${certType}文件已加载`, 'success');
         } catch (error) {
           showToast('文件读取失败', 'error');
         }
@@ -339,7 +359,7 @@ export default function Settings() {
         </div>
 
         <div className="space-y-6">
-          {configs.filter(c => !TLS_CERT_ALL_KEYS.includes(c.key)).map((config) => (
+          {configs.filter(c => !ALL_TLS_CERT_KEYS.includes(c.key)).map((config) => (
             <div key={config.key} className="border-b border-gray-100 pb-6 last:border-b-0 last:pb-0">
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 {config.description}
@@ -363,29 +383,29 @@ export default function Settings() {
             </div>
           ))}
 
-          {/* TLS 证书配置区域 */}
-          {configs.some(c => TLS_CERT_ALL_KEYS.includes(c.key)) && (
+          {/* gRPC TLS 证书配置区域 */}
+          {configs.some(c => GRPC_TLS_CERT_ALL_KEYS.includes(c.key)) && (
             <div className="border-t border-gray-200 pt-6">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-gray-700">TLS 证书配置方式</span>
+                <span className="text-sm font-medium text-gray-700">gRPC TLS 证书配置方式</span>
                 <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
                   <button
                     type="button"
                     onClick={() => {
-                      setCertMode('upload');
-                      TLS_CERT_PATH_KEYS.forEach(k => handleValueChange(k, '', 'string'));
+                      setGrpcCertMode('upload');
+                      GRPC_TLS_CERT_PATH_KEYS.forEach(k => handleValueChange(k, '', 'string'));
                     }}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${certMode === 'upload' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${grpcCertMode === 'upload' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                   >
                     上传文件
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      setCertMode('path');
-                      TLS_CERT_CONTENT_KEYS.forEach(k => handleValueChange(k, '', 'string'));
+                      setGrpcCertMode('path');
+                      GRPC_TLS_CERT_CONTENT_KEYS.forEach(k => handleValueChange(k, '', 'string'));
                     }}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${certMode === 'path' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${grpcCertMode === 'path' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                   >
                     指定路径
                   </button>
@@ -393,7 +413,58 @@ export default function Settings() {
               </div>
 
               {configs
-                .filter(c => certMode === 'upload' ? TLS_CERT_CONTENT_KEYS.includes(c.key) : TLS_CERT_PATH_KEYS.includes(c.key))
+                .filter(c => grpcCertMode === 'upload' ? GRPC_TLS_CERT_CONTENT_KEYS.includes(c.key) : GRPC_TLS_CERT_PATH_KEYS.includes(c.key))
+                .map((config) => (
+                  <div key={config.key} className="border-b border-gray-100 pb-6 mb-6 last:border-b-0 last:pb-0 last:mb-0">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      {config.description}
+                    </label>
+                    <div className="flex items-center gap-4">
+                      {renderConfigInput(config)}
+                    </div>
+                    {configHints[config.key] && (
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        <p className="text-sm text-gray-500">{configHints[config.key]}</p>
+                      </div>
+                    )}
+                  </div>
+                ))
+              }
+            </div>
+          )}
+
+          {/* Web TLS 证书配置区域 */}
+          {configs.some(c => WEB_TLS_CERT_ALL_KEYS.includes(c.key)) && (
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-sm font-medium text-gray-700">Web TLS 证书配置方式</span>
+                <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWebCertMode('upload');
+                      WEB_TLS_CERT_PATH_KEYS.forEach(k => handleValueChange(k, '', 'string'));
+                    }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${webCertMode === 'upload' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    上传文件
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWebCertMode('path');
+                      WEB_TLS_CERT_CONTENT_KEYS.forEach(k => handleValueChange(k, '', 'string'));
+                    }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${webCertMode === 'path' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    指定路径
+                  </button>
+                </div>
+              </div>
+
+              {configs
+                .filter(c => webCertMode === 'upload' ? WEB_TLS_CERT_CONTENT_KEYS.includes(c.key) : WEB_TLS_CERT_PATH_KEYS.includes(c.key))
                 .map((config) => (
                   <div key={config.key} className="border-b border-gray-100 pb-6 mb-6 last:border-b-0 last:pb-0 last:mb-0">
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
