@@ -23,6 +23,7 @@ use common::TunnelProtocol;
 pub async fn connect_and_run(
     controller_url: &str,
     token: &str,
+    tls_ca_cert: Option<&[u8]>,
 ) -> Result<(i64, String, mpsc::Receiver<Vec<ClientServerProxyGroup>>)> {
     let mut endpoint = Channel::from_shared(controller_url.to_string())?
         .timeout(Duration::from_secs(30))
@@ -32,7 +33,25 @@ pub async fn connect_and_run(
         .keep_alive_timeout(Duration::from_secs(10));
 
     if controller_url.starts_with("https://") {
-        endpoint = endpoint.tls_config(ClientTlsConfig::new())
+        // 从 URL 中提取域名用于 SNI
+        let domain = controller_url
+            .trim_start_matches("https://")
+            .split(':')
+            .next()
+            .ok_or_else(|| anyhow!("无法从 URL 提取域名"))?;
+
+        let mut tls_config = ClientTlsConfig::new()
+            .domain_name(domain)
+            .with_webpki_roots();
+
+        if let Some(ca_pem) = tls_ca_cert {
+            info!("使用自定义 CA 证书进行 TLS 验证");
+            tls_config = tls_config.ca_certificate(
+                tonic::transport::Certificate::from_pem(ca_pem)
+            );
+        }
+
+        endpoint = endpoint.tls_config(tls_config)
             .map_err(|e| anyhow!("TLS 配置失败: {}", e))?;
     }
 

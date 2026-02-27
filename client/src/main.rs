@@ -29,6 +29,10 @@ enum Command {
         /// 客户端 Token
         #[arg(long)]
         token: String,
+
+        /// 自定义 CA 证书文件路径（PEM 格式，用于验证 Controller 的 TLS 证书）
+        #[arg(long)]
+        tls_ca_cert: Option<String>,
     },
 
     /// 停止运行中的守护进程
@@ -53,6 +57,10 @@ enum Command {
         /// 客户端 Token
         #[arg(long)]
         token: String,
+
+        /// 自定义 CA 证书文件路径（PEM 格式，用于验证 Controller 的 TLS 证书）
+        #[arg(long)]
+        tls_ca_cert: Option<String>,
 
         /// PID 文件路径
         #[cfg(unix)]
@@ -85,6 +93,10 @@ enum Command {
         /// 客户端 Token
         #[arg(long)]
         token: String,
+
+        /// 自定义 CA 证书文件路径（PEM 格式，用于验证 Controller 的 TLS 证书）
+        #[arg(long)]
+        tls_ca_cert: Option<String>,
     },
 
     /// 卸载 Windows 服务（仅 Windows 系统）
@@ -108,6 +120,18 @@ enum Command {
     Update,
 }
 
+/// 加载 CA 证书文件内容
+fn load_tls_ca_cert(path: &Option<String>) -> anyhow::Result<Option<Vec<u8>>> {
+    match path {
+        Some(p) => {
+            let content = fs::read(p)
+                .map_err(|e| anyhow::anyhow!("读取 CA 证书文件 {} 失败: {}", p, e))?;
+            Ok(Some(content))
+        }
+        None => Ok(None),
+    }
+}
+
 // ─── Unix 入口 ───────────────────────────────────────────
 
 #[cfg(not(windows))]
@@ -123,8 +147,10 @@ async fn main() -> anyhow::Result<()> {
         Command::Start {
             controller_url,
             token,
+            tls_ca_cert,
         } => {
-            client::run_client(controller_url, token).await?;
+            let ca_cert = load_tls_ca_cert(&tls_ca_cert)?;
+            client::run_client(controller_url, token, ca_cert).await?;
         }
 
         Command::Stop { pid_file } => {
@@ -134,6 +160,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Daemon {
             controller_url,
             token,
+            tls_ca_cert,
             pid_file,
             log_file,
         } => {
@@ -160,7 +187,8 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            client::run_client(controller_url, token).await?;
+            let ca_cert = load_tls_ca_cert(&tls_ca_cert)?;
+            client::run_client(controller_url, token, ca_cert).await?;
         }
 
         Command::Update => {
@@ -211,9 +239,11 @@ fn main() -> anyhow::Result<()> {
         Command::Start {
             controller_url,
             token,
+            tls_ca_cert,
         } => {
+            let ca_cert = load_tls_ca_cert(&tls_ca_cert)?;
             let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(async { client::run_client(controller_url, token).await })
+            runtime.block_on(async { client::run_client(controller_url, token, ca_cert).await })
         }
 
         Command::Stop { pid_file } => stop_daemon_windows(&pid_file),
@@ -221,14 +251,16 @@ fn main() -> anyhow::Result<()> {
         Command::Daemon {
             controller_url,
             token,
+            tls_ca_cert,
             pid_file,
             log_file,
-        } => start_daemon_windows(&controller_url, &token, &pid_file, &log_file),
+        } => start_daemon_windows(&controller_url, &token, &tls_ca_cert, &pid_file, &log_file),
 
         Command::InstallService {
             controller_url,
             token,
-        } => windows_service::install_service(&controller_url, &token),
+            tls_ca_cert,
+        } => windows_service::install_service(&controller_url, &token, tls_ca_cert.as_deref()),
 
         Command::UninstallService => windows_service::uninstall_service(),
 
@@ -242,6 +274,7 @@ fn main() -> anyhow::Result<()> {
 fn start_daemon_windows(
     controller_url: &str,
     token: &str,
+    tls_ca_cert: &Option<String>,
     pid_file: &str,
     log_file: &str,
 ) -> anyhow::Result<()> {
@@ -256,14 +289,21 @@ fn start_daemon_windows(
         .map_err(|e| anyhow::anyhow!("无法创建错误日志文件: {}", e))?;
 
     let exe = std::env::current_exe()?;
+    let mut args = vec![
+        "start".to_string(),
+        "--controller-url".to_string(),
+        controller_url.to_string(),
+        "--token".to_string(),
+        token.to_string(),
+    ];
+
+    if let Some(ca_path) = tls_ca_cert {
+        args.push("--tls-ca-cert".to_string());
+        args.push(ca_path.to_string());
+    }
+
     let child = std::process::Command::new(&exe)
-        .args([
-            "start",
-            "--controller-url",
-            controller_url,
-            "--token",
-            token,
-        ])
+        .args(&args)
         .stdout(stdout)
         .stderr(stderr)
         .creation_flags(DETACHED_PROCESS | CREATE_NO_WINDOW)

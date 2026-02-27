@@ -22,7 +22,7 @@ const SERVICE_DESCRIPTION: &str = "RFRP 反向代理客户端服务";
 define_windows_service!(ffi_service_main, service_main);
 
 /// 安装 Windows 服务
-pub fn install_service(controller_url: &str, token: &str) -> Result<()> {
+pub fn install_service(controller_url: &str, token: &str, tls_ca_cert: Option<&str>) -> Result<()> {
     use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
     use windows_service::service::{ServiceAccess, ServiceErrorControl, ServiceInfo, ServiceStartType};
 
@@ -31,6 +31,19 @@ pub fn install_service(controller_url: &str, token: &str) -> Result<()> {
     // 获取当前可执行文件路径
     let exe_path = std::env::current_exe()?;
 
+    let mut launch_arguments = vec![
+        OsString::from("service"),
+        OsString::from("--controller-url"),
+        OsString::from(controller_url),
+        OsString::from("--token"),
+        OsString::from(token),
+    ];
+
+    if let Some(ca_path) = tls_ca_cert {
+        launch_arguments.push(OsString::from("--tls-ca-cert"));
+        launch_arguments.push(OsString::from(ca_path));
+    }
+
     let service_info = ServiceInfo {
         name: OsString::from(SERVICE_NAME),
         display_name: OsString::from(SERVICE_DISPLAY_NAME),
@@ -38,13 +51,7 @@ pub fn install_service(controller_url: &str, token: &str) -> Result<()> {
         start_type: ServiceStartType::AutoStart,
         error_control: ServiceErrorControl::Normal,
         executable_path: exe_path.clone(),
-        launch_arguments: vec![
-            OsString::from("service"),
-            OsString::from("--controller-url"),
-            OsString::from(controller_url),
-            OsString::from("--token"),
-            OsString::from(token),
-        ],
+        launch_arguments,
         dependencies: vec![],
         account_name: None,
         account_password: None,
@@ -109,6 +116,7 @@ fn run_service_impl(arguments: Vec<OsString>) -> Result<()> {
     // 解析服务参数
     let mut controller_url = String::new();
     let mut token = String::new();
+    let mut tls_ca_cert_path: Option<String> = None;
 
     let mut i = 0;
     while i < arguments.len() {
@@ -126,6 +134,12 @@ fn run_service_impl(arguments: Vec<OsString>) -> Result<()> {
                     i += 1;
                 }
             }
+            "--tls-ca-cert" => {
+                if i + 1 < arguments.len() {
+                    tls_ca_cert_path = Some(arguments[i + 1].to_string_lossy().to_string());
+                    i += 1;
+                }
+            }
             _ => {}
         }
         i += 1;
@@ -134,6 +148,16 @@ fn run_service_impl(arguments: Vec<OsString>) -> Result<()> {
     if controller_url.is_empty() || token.is_empty() {
         return Err(anyhow!("缺少必需参数: --controller-url 或 --token"));
     }
+
+    // 加载 CA 证书（如果提供）
+    let tls_ca_cert = match tls_ca_cert_path {
+        Some(path) => {
+            let content = std::fs::read(&path)
+                .map_err(|e| anyhow!("读取 CA 证书文件 {} 失败: {}", path, e))?;
+            Some(content)
+        }
+        None => None,
+    };
 
     // 创建事件处理器
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
@@ -180,7 +204,7 @@ fn run_service_impl(arguments: Vec<OsString>) -> Result<()> {
     // 运行客户端
     runtime.block_on(async {
         tokio::select! {
-            result = crate::client::run_client(controller_url, token) => {
+            result = crate::client::run_client(controller_url, token, tls_ca_cert) => {
                 if let Err(e) = result {
                     eprintln!("客户端运行错误: {}", e);
                 }

@@ -12,6 +12,7 @@ use log_collector::{LogCollector, LogCollectorLayer};
 pub async fn run_client(
     controller_url: String,
     token: String,
+    tls_ca_cert: Option<Vec<u8>>,
 ) -> Result<()> {
     // 初始化日志收集器（保留最近 1000 条日志）
     let log_collector = LogCollector::new(1000);
@@ -37,7 +38,7 @@ pub async fn run_client(
 
     // 断线重连循环
     loop {
-        match grpc_client::connect_and_run(&controller_url, &token).await {
+        match grpc_client::connect_and_run(&controller_url, &token, tls_ca_cert.as_deref()).await {
             Ok((_client_id, client_name, mut update_rx)) => {
                 info!("已连接控制器: {}", client_name);
 
