@@ -366,7 +366,7 @@ export default function Settings() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {configs.filter(c => ['web_port', 'internal_port', 'jwt_expiration_hours', 'db_path'].includes(c.key)).map((config) => (
+          {configs.filter(c => ['web_port', 'internal_port', 'jwt_expiration_hours'].includes(c.key)).map((config) => (
             <div key={config.key} className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
                 {config.description}
