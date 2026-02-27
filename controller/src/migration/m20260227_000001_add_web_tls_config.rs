@@ -15,11 +15,11 @@ impl MigrationTrait for Migration {
                         SystemConfig::Key,
                         SystemConfig::Value,
                         SystemConfig::Description,
-                        SystemConfig::Type,
+                        SystemConfig::ValueType,
                     ])
                     .values_panic([
                         "web_tls_enabled".into(),
-                        "false".into(),
+                        "\"false\"".into(),
                         "是否启用 Web 管理界面 TLS".into(),
                         "boolean".into(),
                     ])
@@ -35,11 +35,11 @@ impl MigrationTrait for Migration {
                         SystemConfig::Key,
                         SystemConfig::Value,
                         SystemConfig::Description,
-                        SystemConfig::Type,
+                        SystemConfig::ValueType,
                     ])
                     .values_panic([
                         "web_tls_cert_path".into(),
-                        "".into(),
+                        "\"\"".into(),
                         "Web TLS 证书文件路径".into(),
                         "string".into(),
                     ])
@@ -55,11 +55,11 @@ impl MigrationTrait for Migration {
                         SystemConfig::Key,
                         SystemConfig::Value,
                         SystemConfig::Description,
-                        SystemConfig::Type,
+                        SystemConfig::ValueType,
                     ])
                     .values_panic([
                         "web_tls_key_path".into(),
-                        "".into(),
+                        "\"\"".into(),
                         "Web TLS 私钥文件路径".into(),
                         "string".into(),
                     ])
@@ -75,13 +75,13 @@ impl MigrationTrait for Migration {
                         SystemConfig::Key,
                         SystemConfig::Value,
                         SystemConfig::Description,
-                        SystemConfig::Type,
+                        SystemConfig::ValueType,
                     ])
                     .values_panic([
                         "web_tls_cert_content".into(),
-                        "".into(),
+                        "\"\"".into(),
                         "Web TLS 证书内容（Base64）".into(),
-                        "text".into(),
+                        "string".into(),
                     ])
                     .to_owned(),
             )
@@ -95,13 +95,13 @@ impl MigrationTrait for Migration {
                         SystemConfig::Key,
                         SystemConfig::Value,
                         SystemConfig::Description,
-                        SystemConfig::Type,
+                        SystemConfig::ValueType,
                     ])
                     .values_panic([
                         "web_tls_key_content".into(),
-                        "".into(),
+                        "\"\"".into(),
                         "Web TLS 私钥内容（Base64）".into(),
-                        "text".into(),
+                        "string".into(),
                     ])
                     .to_owned(),
             )
@@ -134,5 +134,5 @@ enum SystemConfig {
     Key,
     Value,
     Description,
-    Type,
+    ValueType,
 }
