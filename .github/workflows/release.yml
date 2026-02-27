@@ -136,6 +136,29 @@ jobs:
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
 
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # 获取上一个 tag
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "^${{ github.ref_name }}$" | head -n 1)
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "这是第一个版本"
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            echo "从 $PREVIOUS_TAG 到 ${{ github.ref_name }} 的变更"
+            CHANGELOG=$(git log ${PREVIOUS_TAG}..${{ github.ref_name }} --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # 保存到文件
+          echo "$CHANGELOG" > CHANGELOG.txt
+          cat CHANGELOG.txt
+
+          # 设置输出（处理多行）
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -148,7 +171,11 @@ jobs:
 
             高性能内网穿透解决方案
 
-            ### 下载说明
+            ### 📝 更新内容
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            ### 📦 下载说明
 
             请根据您的操作系统下载对应的二进制文件：
 
@@ -163,14 +190,14 @@ jobs:
             - `node` - 节点服务器
             - `client` - 客户端
 
-            ### 校验文件完整性
+            ### 🔒 校验文件完整性
 
             下载 `SHA256SUMS` 文件并验证：
             ```bash
             sha256sum -c SHA256SUMS
             ```
 
-            ### 快速开始
+            ### 🚀 快速开始
 
             1. 解压下载的文件
             2. 运行 controller：`./controller`
