@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, NotSet};
+use sea_orm::sea_query::{OnConflict, Expr};
 use std::collections::HashMap;
 use tracing::{debug, error, info};
 use tokio::sync::mpsc;
@@ -81,40 +82,37 @@ impl TrafficManager {
                 }
             }
 
-            // 2. 更新每日流量统计
-            match TrafficDaily::find()
-                .filter(traffic_daily::Column::ProxyId.eq(proxy_id))
-                .filter(traffic_daily::Column::Date.eq(&today))
-                .one(db)
+            // 2. 更新每日流量统计（使用 upsert 避免竞态条件）
+            let daily = traffic_daily::ActiveModel {
+                id: NotSet,
+                proxy_id: Set(proxy_id),
+                client_id: Set(client_id),
+                bytes_sent: Set(bytes_sent),
+                bytes_received: Set(bytes_received),
+                date: Set(today.clone()),
+                created_at: Set(now),
+                updated_at: Set(now),
+            };
+            let on_conflict = OnConflict::columns([
+                traffic_daily::Column::ProxyId,
+                traffic_daily::Column::Date,
+            ])
+            .value(
+                traffic_daily::Column::BytesSent,
+                Expr::col(traffic_daily::Column::BytesSent).add(bytes_sent),
+            )
+            .value(
+                traffic_daily::Column::BytesReceived,
+                Expr::col(traffic_daily::Column::BytesReceived).add(bytes_received),
+            )
+            .value(traffic_daily::Column::UpdatedAt, now)
+            .to_owned();
+            if let Err(e) = TrafficDaily::insert(daily)
+                .on_conflict(on_conflict)
+                .exec(db)
                 .await
             {
-                Ok(Some(existing)) => {
-                    let mut daily_active: traffic_daily::ActiveModel = existing.into();
-                    daily_active.bytes_sent = Set(daily_active.bytes_sent.unwrap() + bytes_sent);
-                    daily_active.bytes_received = Set(daily_active.bytes_received.unwrap() + bytes_received);
-                    daily_active.updated_at = Set(now);
-                    if let Err(e) = daily_active.update(db).await {
-                        error!("更新每日流量统计失败: {}", e);
-                    }
-                }
-                Ok(None) => {
-                    let daily = traffic_daily::ActiveModel {
-                        id: Set(0),
-                        proxy_id: Set(proxy_id),
-                        client_id: Set(client_id),
-                        bytes_sent: Set(bytes_sent),
-                        bytes_received: Set(bytes_received),
-                        date: Set(today.clone()),
-                        created_at: Set(now),
-                        updated_at: Set(now),
-                    };
-                    if let Err(e) = daily.insert(db).await {
-                        error!("插入每日流量统计失败: {}", e);
-                    }
-                }
-                Err(e) => {
-                    error!("查询每日流量统计失败: {}", e);
-                }
+                error!("插入/更新每日流量统计失败: {}", e);
             }
 
             // 3. 更新客户端流量
