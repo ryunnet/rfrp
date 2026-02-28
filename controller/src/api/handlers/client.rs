@@ -81,6 +81,7 @@ pub async fn create_client(
         name: Set(req.name),
         token: Set(token.clone()),
         is_online: NotSet,
+        public_ip: Set(None),
         user_id: Set(Some(auth_user.id)),
         total_bytes_sent: Set(0),
         total_bytes_received: Set(0),

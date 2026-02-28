@@ -34,6 +34,7 @@ impl AgentClientService for AgentClientServiceImpl {
         &self,
         request: Request<Streaming<rfrp::AgentClientMessage>>,
     ) -> Result<Response<Self::AgentClientChannelStream>, Status> {
+        let client_ip = crate::geo_ip::extract_client_ip_from_request(&request);
         let mut in_stream = request.into_inner();
         let (tx, rx) = mpsc::channel::<Result<rfrp::ControllerToClientMessage, Status>>(256);
 
@@ -128,6 +129,9 @@ impl AgentClientService for AgentClientServiceImpl {
             // 更新客户端为在线状态
             let mut client_active: client::ActiveModel = client_model.into();
             client_active.is_online = Set(true);
+            if let Some(ref ip) = client_ip {
+                client_active.public_ip = Set(Some(ip.clone()));
+            }
             client_active.updated_at = Set(Utc::now().naive_utc());
             if let Err(e) = client_active.update(db).await {
                 error!("更新客户端 #{} 在线状态失败: {}", client_id, e);

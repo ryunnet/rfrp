@@ -30,6 +30,7 @@ mod m20260225_000003_add_grpc_tls_config;
 mod m20260226_000001_add_subscription_port_limit;
 mod m20260226_000002_add_cert_content_config;
 mod m20260227_000001_add_web_tls_config;
+mod m20260228_000001_add_client_public_ip;
 
 pub struct Migrator;
 
@@ -63,6 +64,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260226_000001_add_subscription_port_limit::Migration),
             Box::new(m20260226_000002_add_cert_content_config::Migration),
             Box::new(m20260227_000001_add_web_tls_config::Migration),
+            Box::new(m20260228_000001_add_client_public_ip::Migration),
         ]
     }
 }

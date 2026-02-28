@@ -9,6 +9,8 @@ pub struct Model {
     pub name: String,
     pub token: String,
     pub is_online: bool,
+    #[serde(rename = "publicIp")]
+    pub public_ip: Option<String>,
     #[serde(rename = "totalBytesSent")]
     pub total_bytes_sent: i64,
     #[serde(rename = "totalBytesReceived")]
