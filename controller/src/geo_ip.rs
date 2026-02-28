@@ -13,23 +13,23 @@ pub struct GeoIpInfo {
     pub region: String,
 }
 
-/// 从 IP-API 查询地理位置信息
+/// 从 ipwhois.app 查询地理位置信息
 #[derive(Debug, Deserialize)]
-struct IpApiResponse {
-    status: String,
-    #[serde(rename = "countryCode")]
-    country_code: Option<String>,
+struct IpWhoisResponse {
+    ip: Option<String>,
+    success: Option<bool>,
     country: Option<String>,
-    #[serde(rename = "regionName")]
-    region_name: Option<String>,
+    region: Option<String>,
     city: Option<String>,
-    query: Option<String>,
 }
 
 /// 查询 IP 地址的地理位置信息
-/// 使用 ip-api.com 免费服务（每分钟限制 45 次请求）
+/// 使用 ipwhois.app 免费服务（每月 10k 次请求，支持中文）
 pub async fn query_geo_ip(ip: &str) -> Result<GeoIpInfo> {
-    let url = format!("http://ip-api.com/json/{}?lang=zh-CN", ip);
+    let url = format!(
+        "https://ipwhois.app/json/{}?lang=zh-CN&objects=ip,success,country,region,city",
+        ip
+    );
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
@@ -45,12 +45,12 @@ pub async fn query_geo_ip(ip: &str) -> Result<GeoIpInfo> {
         return Err(anyhow!("IP 地理位置 API 返回错误状态: {}", response.status()));
     }
 
-    let api_response: IpApiResponse = response
+    let api_response: IpWhoisResponse = response
         .json()
         .await
         .map_err(|e| anyhow!("解析 IP 地理位置响应失败: {}", e))?;
 
-    if api_response.status != "success" {
+    if api_response.success == Some(false) {
         return Err(anyhow!("IP 地理位置查询失败"));
     }
 
@@ -58,10 +58,12 @@ pub async fn query_geo_ip(ip: &str) -> Result<GeoIpInfo> {
     let mut region_parts = Vec::new();
 
     if let Some(country) = api_response.country {
-        region_parts.push(country);
+        if !country.is_empty() {
+            region_parts.push(country);
+        }
     }
 
-    if let Some(region) = api_response.region_name {
+    if let Some(region) = api_response.region {
         if !region.is_empty() {
             region_parts.push(region);
         }
@@ -79,7 +81,7 @@ pub async fn query_geo_ip(ip: &str) -> Result<GeoIpInfo> {
         region_parts.join("-")
     };
 
-    let ip = api_response.query.unwrap_or_else(|| ip.to_string());
+    let ip = api_response.ip.unwrap_or_else(|| ip.to_string());
 
     info!("查询到 IP {} 的地理位置: {}", ip, region);
 
