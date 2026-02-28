@@ -18,8 +18,8 @@ pub async fn get_client_logs(
 ) -> impl IntoResponse {
     info!("请求客户端 {} 的日志", client_id);
 
-    // 通过 ProxyControl trait 获取客户端日志
-    match app_state.proxy_control.fetch_client_logs(&client_id.to_string(), 200).await {
+    // 直接通过 ClientStreamManager 向客户端请求日志
+    match app_state.client_stream_manager.fetch_client_logs(client_id, 200).await {
         Ok(logs) => {
             info!("成功获取客户端 {} 的 {} 条日志", client_id, logs.len());
             (StatusCode::OK, ApiResponse::success(logs))

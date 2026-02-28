@@ -68,6 +68,7 @@ message AgentClientMessage {
   oneof payload {
     ClientAuthRequest auth = 1;
     Heartbeat heartbeat = 2;
+    AgentClientResponse response = 3;
   }
 }
 
@@ -78,6 +79,23 @@ message ControllerToClientMessage {
     ProxyListUpdate proxy_update = 2;
     Heartbeat heartbeat_response = 3;
     ErrorNotification error = 4;
+    // Controller 主动下发的指令
+    GetClientLogsDirectCommand get_logs = 10;
+  }
+}
+
+// ===== Controller 直接向 Client 请求日志 =====
+
+message GetClientLogsDirectCommand {
+  string request_id = 1;
+  uint32 count = 2;
+}
+
+// Agent Client 对指令的响应
+message AgentClientResponse {
+  string request_id = 1;
+  oneof result {
+    ClientLogsResponse client_logs = 2;
   }
 }
 

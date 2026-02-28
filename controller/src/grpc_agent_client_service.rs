@@ -175,6 +175,9 @@ impl AgentClientService for AgentClientServiceImpl {
                         };
                         let _ = tx.send(Ok(resp)).await;
                     }
+                    ClientPayload::Response(resp) => {
+                        client_stream_manager.complete_pending_request(client_id, &resp).await;
+                    }
                     _ => {
                         debug!("Client #{} 收到未知消息类型", client_id);
                     }

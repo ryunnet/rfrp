@@ -19,11 +19,14 @@ use common::protocol::client_config::{
 };
 use common::TunnelProtocol;
 
+use super::log_collector::LogCollector;
+
 /// 连接 Controller 并认证，返回代理列表更新的接收器
 pub async fn connect_and_run(
     controller_url: &str,
     token: &str,
     tls_ca_cert: Option<&[u8]>,
+    log_collector: LogCollector,
 ) -> Result<(i64, String, mpsc::Receiver<Vec<ClientServerProxyGroup>>)> {
     let mut endpoint = Channel::from_shared(controller_url.to_string())?
         .timeout(Duration::from_secs(30))
@@ -111,8 +114,9 @@ pub async fn connect_and_run(
     info!("客户端认证成功: {} (ID: {})", client_name, client_id);
 
     // 启动消息接收循环
+    let response_tx = tx.clone();
     tokio::spawn(async move {
-        message_loop(inbound, update_tx).await;
+        message_loop(inbound, update_tx, response_tx, log_collector).await;
     });
 
     // 启动心跳
@@ -128,6 +132,8 @@ pub async fn connect_and_run(
 async fn message_loop(
     mut inbound: tonic::Streaming<rfrp::ControllerToClientMessage>,
     update_tx: mpsc::Sender<Vec<ClientServerProxyGroup>>,
+    response_tx: mpsc::Sender<rfrp::AgentClientMessage>,
+    log_collector: LogCollector,
 ) {
     while let Some(result) = inbound.next().await {
         let msg = match result {
@@ -159,6 +165,36 @@ async fn message_loop(
 
             ControllerPayload::Error(err) => {
                 error!("收到 Controller 错误通知: [{}] {}", err.code, err.message);
+            }
+
+            ControllerPayload::GetLogs(cmd) => {
+                debug!("收到日志请求: count={}", cmd.count);
+                let count = cmd.count as usize;
+                let logs = if count == 0 {
+                    log_collector.get_all_logs()
+                } else {
+                    log_collector.get_recent_logs(count)
+                };
+
+                let grpc_logs: Vec<rfrp::LogEntry> = logs.into_iter().map(|l| rfrp::LogEntry {
+                    timestamp: l.timestamp.to_rfc3339(),
+                    level: l.level,
+                    message: l.message,
+                }).collect();
+
+                let resp_msg = rfrp::AgentClientMessage {
+                    payload: Some(ClientPayload::Response(rfrp::AgentClientResponse {
+                        request_id: cmd.request_id,
+                        result: Some(rfrp::agent_client_response::Result::ClientLogs(
+                            rfrp::ClientLogsResponse { logs: grpc_logs },
+                        )),
+                    })),
+                };
+
+                if response_tx.send(resp_msg).await.is_err() {
+                    warn!("发送日志响应失败，连接可能已断开");
+                    break;
+                }
             }
 
             _ => {

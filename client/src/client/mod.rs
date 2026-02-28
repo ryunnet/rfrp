@@ -49,7 +49,7 @@ pub async fn run_client(
 
     // 断线重连循环
     loop {
-        match grpc_client::connect_and_run(&controller_url, &token, tls_ca_cert.as_deref()).await {
+        match grpc_client::connect_and_run(&controller_url, &token, tls_ca_cert.as_deref(), log_collector.clone()).await {
             Ok((_client_id, client_name, mut update_rx)) => {
                 info!("已连接控制器: {}", client_name);
 

@@ -5,21 +5,30 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{debug, error, info};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
 use common::grpc::rfrp;
+use common::grpc::pending_requests::PendingRequests;
 use common::KcpConfig;
+use common::protocol::control::LogEntry;
 
 use crate::entity::{Client, Node, Proxy, proxy, node};
 use crate::migration::get_connection;
 
+/// 单个客户端的流连接
+struct ClientStream {
+    tx: mpsc::Sender<Result<rfrp::ControllerToClientMessage, tonic::Status>>,
+    pending: PendingRequests<rfrp::AgentClientResponse>,
+}
+
 /// 管理已连接的 Agent Client 流
 #[derive(Clone)]
 pub struct ClientStreamManager {
-    /// client_id -> stream sender
-    streams: Arc<RwLock<HashMap<i64, mpsc::Sender<Result<rfrp::ControllerToClientMessage, tonic::Status>>>>>,
+    /// client_id -> stream
+    streams: Arc<RwLock<HashMap<i64, ClientStream>>>,
 }
 
 impl ClientStreamManager {
@@ -36,7 +45,11 @@ impl ClientStreamManager {
         tx: mpsc::Sender<Result<rfrp::ControllerToClientMessage, tonic::Status>>,
     ) {
         info!("Agent Client #{} 已连接", client_id);
-        self.streams.write().await.insert(client_id, tx);
+        let stream = ClientStream {
+            tx,
+            pending: PendingRequests::new(),
+        };
+        self.streams.write().await.insert(client_id, stream);
     }
 
     /// 移除一个 Agent Client 流
@@ -61,11 +74,11 @@ impl ClientStreamManager {
         };
 
         let streams = self.streams.read().await;
-        if let Some(tx) = streams.get(&client_id) {
+        if let Some(stream) = streams.get(&client_id) {
             let msg = rfrp::ControllerToClientMessage {
                 payload: Some(rfrp::controller_to_client_message::Payload::ProxyUpdate(update)),
             };
-            if let Err(e) = tx.send(Ok(msg)).await {
+            if let Err(e) = stream.tx.send(Ok(msg)).await {
                 error!("推送代理更新到 Client #{} 失败: {}", client_id, e);
             } else {
                 debug!("已推送代理更新到 Client #{}", client_id);
@@ -123,6 +136,51 @@ impl ClientStreamManager {
                 (client.id, is_online)
             })
             .collect()
+    }
+
+    /// 完成一个待处理的请求（由 AgentClientResponse 触发）
+    pub async fn complete_pending_request(&self, client_id: i64, response: &rfrp::AgentClientResponse) {
+        let streams = self.streams.read().await;
+        if let Some(stream) = streams.get(&client_id) {
+            stream.pending.complete(&response.request_id, response.clone()).await;
+        }
+    }
+
+    /// 获取客户端日志
+    pub async fn fetch_client_logs(&self, client_id: i64, count: u16) -> anyhow::Result<Vec<LogEntry>> {
+        let (request_id, rx, tx_clone) = {
+            let streams = self.streams.read().await;
+            let stream = streams.get(&client_id)
+                .ok_or_else(|| anyhow::anyhow!("客户端 #{} 未连接", client_id))?;
+
+            let (request_id, rx) = stream.pending.register().await;
+            (request_id, rx, stream.tx.clone())
+        };
+
+        let msg = rfrp::ControllerToClientMessage {
+            payload: Some(rfrp::controller_to_client_message::Payload::GetLogs(
+                rfrp::GetClientLogsDirectCommand {
+                    request_id: request_id.clone(),
+                    count: count as u32,
+                },
+            )),
+        };
+
+        tx_clone.send(Ok(msg)).await
+            .map_err(|_| anyhow::anyhow!("发送日志请求到客户端 #{} 失败", client_id))?;
+
+        let resp = PendingRequests::wait(rx, Duration::from_secs(10)).await?;
+
+        match resp.result {
+            Some(rfrp::agent_client_response::Result::ClientLogs(logs)) => {
+                Ok(logs.logs.into_iter().map(|l| LogEntry {
+                    timestamp: l.timestamp,
+                    level: l.level,
+                    message: l.message,
+                }).collect())
+            }
+            _ => Err(anyhow::anyhow!("收到意外的响应类型")),
+        }
     }
 
     /// 构建代理列表更新消息
