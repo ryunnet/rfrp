@@ -234,6 +234,20 @@ export const systemService = {
     const response = await api.post('/system/restart');
     return response.data;
   },
+
+  async getGrpcTlsStatus(): Promise<{ enabled: boolean; domain: string }> {
+    const response = await api.get('/system/configs');
+    const data = response.data as ApiResponse<{ configs: Array<{ key: string; value: any }> }>;
+    let enabled = false;
+    let domain = '';
+    if (data.success && data.data?.configs) {
+      for (const c of data.data.configs) {
+        if (c.key === 'grpc_tls_enabled') enabled = c.value === true || c.value === 'true';
+        if (c.key === 'grpc_domain') domain = String(c.value || '');
+      }
+    }
+    return { enabled, domain };
+  },
 };
 
 // ============ 节点服务 ============

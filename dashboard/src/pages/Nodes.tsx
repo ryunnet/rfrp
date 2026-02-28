@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { nodeService } from '../lib/services';
+import { nodeService, systemService } from '../lib/services';
 import type { Node } from '../lib/types';
 import { formatDate } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
@@ -31,6 +31,7 @@ export default function Nodes() {
   const [nodeLogs, setNodeLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [controllerUrl, setControllerUrl] = useState('');
+  const [grpcTlsEnabled, setGrpcTlsEnabled] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -97,6 +98,8 @@ export default function Nodes() {
         setShowCommandModal(true);
         resetForm();
         loadNodes();
+        // 获取 TLS 配置状态
+        systemService.getGrpcTlsStatus().then(s => setGrpcTlsEnabled(s.enabled)).catch(() => {});
       } else {
         showToast(response.message || '创建失败', 'error');
       }
@@ -250,33 +253,39 @@ export default function Nodes() {
   const getStartupCommand = (node?: Node | { name: string; secret: string }, platform: 'windows' | 'linux' | 'macos' = 'linux') => {
     if (!node) return '';
     const url = controllerUrl || `${window.location.hostname}:3100`;
+    const protocol = grpcTlsEnabled ? 'https' : 'http';
     const token = node.secret;
 
     if (platform === 'windows') {
-      return `node.exe start --controller-url http://${url} --token ${token} --bind-port 7000`;
-    } else if (platform === 'macos') {
-      return `./node start --controller-url http://${url} --token ${token} --bind-port 7000`;
+      return `node.exe start --controller-url ${protocol}://${url} --token ${token} --bind-port 7000`;
     } else {
-      return `./node start --controller-url http://${url} --token ${token} --bind-port 7000`;
+      return `./node start --controller-url ${protocol}://${url} --token ${token} --bind-port 7000`;
     }
   };
 
   const getDaemonCommand = (node?: Node | { name: string; secret: string }, platform: 'windows' | 'linux' | 'macos' = 'linux') => {
     if (!node) return '';
     const url = controllerUrl || `${window.location.hostname}:3100`;
+    const protocol = grpcTlsEnabled ? 'https' : 'http';
     const token = node.secret;
 
     if (platform === 'windows') {
-      return `node.exe start --controller-url http://${url} --token ${token} --bind-port 7000 --install-service`;
+      return `node.exe daemon --controller-url ${protocol}://${url} --token ${token} --bind-port 7000`;
     } else {
-      return `./node start --controller-url http://${url} --token ${token} --bind-port 7000 --daemon`;
+      return `./node daemon --controller-url ${protocol}://${url} --token ${token} --bind-port 7000 --pid-file /var/run/rfrp-node.pid --log-file /var/log/rfrp-node.log`;
     }
   };
 
-  const handleShowCommand = (node: Node) => {
+  const handleShowCommand = async (node: Node) => {
     setCommandNode(node);
     setControllerUrl(`${window.location.hostname}:3100`);
     setShowCommandModal(true);
+    try {
+      const tlsStatus = await systemService.getGrpcTlsStatus();
+      setGrpcTlsEnabled(tlsStatus.enabled);
+    } catch {
+      setGrpcTlsEnabled(false);
+    }
   };
 
   const handleShowLogs = async (node: Node) => {
@@ -509,7 +518,7 @@ export default function Nodes() {
       {/* 创建节点弹窗 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
@@ -600,7 +609,7 @@ export default function Nodes() {
       {/* 编辑节点弹窗 */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
@@ -696,7 +705,7 @@ export default function Nodes() {
       {/* 启动命令弹窗 */}
       {showCommandModal && (createdNodeInfo || commandNode) && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50 p-4">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
@@ -752,6 +761,10 @@ export default function Nodes() {
                 <p className="mt-1.5 text-xs text-muted-foreground">
                   修改为节点服务器可以访问的 Controller 地址（IP:端口）
                 </p>
+                <div className={`mt-2 flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${grpcTlsEnabled ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                  <span className={`w-2 h-2 rounded-full ${grpcTlsEnabled ? 'bg-green-500' : 'bg-amber-500'}`}></span>
+                  {grpcTlsEnabled ? 'gRPC TLS 已启用，将使用 https:// 协议连接' : 'gRPC TLS 未启用，将使用 http:// 协议连接'}
+                </div>
               </div>
 
               {/* 步骤 1: 下载 */}
@@ -824,8 +837,8 @@ export default function Nodes() {
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
                   {selectedPlatform === 'windows'
-                    ? '使用 --install-service 将节点安装为 Windows 服务，开机自动启动'
-                    : '使用 --daemon 参数在后台运行节点，进程会持续运行'}
+                    ? '使用 daemon 子命令在后台运行节点，日志输出到文件'
+                    : '使用 daemon 子命令在后台运行节点，进程会持续运行'}
                 </p>
               </div>
 
@@ -885,7 +898,7 @@ export default function Nodes() {
       {/* 日志查看弹窗 */}
       {showLogsModal && logsNode && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden transform transition-all">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">

@@ -627,7 +627,7 @@ export default function Proxies() {
       {/* 创建/编辑代理模态框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-start justify-center z-50 p-4">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8 transform transition-all flex flex-col max-h-[calc(100vh-4rem)]">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-2xl my-8 transform transition-all flex flex-col max-h-[calc(100vh-4rem)]">
             {/* 固定头部 */}
             <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-border">
               <div className="flex items-center justify-between">

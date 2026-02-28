@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { clientService, userService } from '../lib/services';
+import { clientService, userService, systemService } from '../lib/services';
 import type { Client, LogEntry } from '../lib/types';
 import { formatBytes, formatDate, copyToClipboard } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
@@ -39,10 +39,11 @@ export default function Clients() {
   const [showCommandModal, setShowCommandModal] = useState(false);
   const [commandClient, setCommandClient] = useState<Client | null>(null);
   const [selectedPlatform, setSelectedPlatform] = useState<'windows' | 'linux' | 'macos'>('linux');
-  const [controllerUrl] = useState(() => {
+  const [controllerUrl, setControllerUrl] = useState(() => {
     const hostname = window.location.hostname;
     return hostname === 'localhost' ? 'localhost:3100' : `${hostname}:3100`;
   });
+  const [grpcTlsEnabled, setGrpcTlsEnabled] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -248,12 +249,13 @@ export default function Clients() {
   const getClientStartupCommand = (client?: Client, platform: 'windows' | 'linux' | 'macos' = 'linux') => {
     if (!client) return '';
     const url = controllerUrl || `${window.location.hostname}:3100`;
+    const protocol = grpcTlsEnabled ? 'https' : 'http';
     const token = client.token;
 
     if (platform === 'windows') {
-      return `client.exe start --controller-url http://${url} --token ${token}`;
+      return `client.exe start --controller-url ${protocol}://${url} --token ${token}`;
     } else {
-      return `./client start --controller-url http://${url} --token ${token}`;
+      return `./client start --controller-url ${protocol}://${url} --token ${token}`;
     }
   };
 
@@ -261,18 +263,25 @@ export default function Clients() {
   const getClientDaemonCommand = (client?: Client, platform: 'windows' | 'linux' | 'macos' = 'linux') => {
     if (!client) return '';
     const url = controllerUrl || `${window.location.hostname}:3100`;
+    const protocol = grpcTlsEnabled ? 'https' : 'http';
     const token = client.token;
 
     if (platform === 'windows') {
-      return `client.exe install-service --controller-url http://${url} --token ${token}`;
+      return `client.exe install-service --controller-url ${protocol}://${url} --token ${token}`;
     } else {
-      return `./client start --controller-url http://${url} --token ${token} --daemon --pid-file /var/run/rfrp-client.pid --log-file /var/log/rfrp-client.log`;
+      return `./client daemon --controller-url ${protocol}://${url} --token ${token} --pid-file /var/run/rfrp-client.pid --log-file /var/log/rfrp-client.log`;
     }
   };
 
-  const handleShowCommand = (client: Client) => {
+  const handleShowCommand = async (client: Client) => {
     setCommandClient(client);
     setShowCommandModal(true);
+    try {
+      const tlsStatus = await systemService.getGrpcTlsStatus();
+      setGrpcTlsEnabled(tlsStatus.enabled);
+    } catch {
+      setGrpcTlsEnabled(false);
+    }
   };
 
   return (
@@ -501,7 +510,7 @@ export default function Clients() {
       {/* 创建节点模态框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
@@ -553,7 +562,7 @@ export default function Clients() {
       {/* 日志查看模态框 */}
       {showLogsModal && selectedClient && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[85vh] flex flex-col transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[85vh] flex flex-col transform transition-all">
             <div className="flex items-center justify-between p-6 border-b border-border">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
@@ -642,7 +651,7 @@ export default function Clients() {
       {/* 配额分配模态框 */}
       {showQuotaModal && selectedClient && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
@@ -765,7 +774,7 @@ export default function Clients() {
       {/* 启动命令教程模态框 */}
       {showCommandModal && commandClient && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto transform transition-all">
             <div className="sticky top-0 bg-card border-b border-border p-6 z-10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -828,6 +837,25 @@ export default function Clients() {
             </div>
 
             <div className="p-6 space-y-6">
+              {/* Controller 地址 */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-foreground">Controller 地址</label>
+                <input
+                  type="text"
+                  value={controllerUrl}
+                  onChange={(e) => setControllerUrl(e.target.value)}
+                  placeholder="例如: 192.168.1.100:3100"
+                  className="w-full px-4 py-2.5 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  修改为客户端可以访问的 Controller 地址（IP:端口）
+                </p>
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${grpcTlsEnabled ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                  <span className={`w-2 h-2 rounded-full ${grpcTlsEnabled ? 'bg-green-500' : 'bg-amber-500'}`}></span>
+                  {grpcTlsEnabled ? 'gRPC TLS 已启用，将使用 https:// 协议连接' : 'gRPC TLS 未启用，将使用 http:// 协议连接'}
+                </div>
+              </div>
+
               {/* 步骤 1: 下载 */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">

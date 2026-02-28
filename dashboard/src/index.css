@@ -1,5 +1,50 @@
 @import "tailwindcss";
 
+/* Tailwind v4: 注册 shadcn/ui 颜色变量为工具类 */
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-blue: hsl(var(--blue));
+  --color-blue-foreground: hsl(var(--blue-foreground));
+  --color-green: hsl(var(--green));
+  --color-green-foreground: hsl(var(--green-foreground));
+  --color-purple: hsl(var(--purple));
+  --color-purple-foreground: hsl(var(--purple-foreground));
+  --color-amber: hsl(var(--amber));
+  --color-amber-foreground: hsl(var(--amber-foreground));
+  --color-teal: hsl(var(--teal));
+  --color-teal-foreground: hsl(var(--teal-foreground));
+  --color-indigo: hsl(var(--indigo));
+  --color-indigo-foreground: hsl(var(--indigo-foreground));
+  --color-rose: hsl(var(--rose));
+  --color-rose-foreground: hsl(var(--rose-foreground));
+  --color-cyan: hsl(var(--cyan));
+  --color-cyan-foreground: hsl(var(--cyan-foreground));
+  --radius: var(--radius);
+}
+
 /* shadcn/ui 官方配色变量 */
 @layer base {
   :root {
