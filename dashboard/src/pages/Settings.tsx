@@ -22,6 +22,7 @@ interface ConfigItem {
 const configHints: Record<string, string> = {
   web_port: 'Web 管理界面的访问端口',
   internal_port: 'Node 和 Client 连接到 Controller 的 gRPC 端口',
+  enable_registration: '开启后，任何人可以通过登录页面注册新账号',
   jwt_expiration_hours: 'JWT 令牌的有效期，过期后需要重新登录',
   db_path: '数据库文件的存储路径',
   grpc_tls_enabled: '启用后 gRPC 连接将使用 TLS 加密，可避免 GFW 干扰',
@@ -381,7 +382,7 @@ export default function Settings() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {configs.filter(c => ['web_port', 'internal_port'].includes(c.key)).map((config) => (
+            {configs.filter(c => ['web_port', 'internal_port', 'enable_registration'].includes(c.key)).map((config) => (
               <div key={config.key} className="space-y-2">
                 <Label className="text-foreground">
                   {config.description}

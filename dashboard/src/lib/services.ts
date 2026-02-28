@@ -21,6 +21,16 @@ export const authService = {
     const response = await api.post<ApiResponse<LoginResponse>>('/auth/login', data);
     return response.data;
   },
+
+  async register(data: { username: string; password: string }): Promise<ApiResponse<LoginResponse>> {
+    const response = await api.post<ApiResponse<LoginResponse>>('/auth/register', data);
+    return response.data;
+  },
+
+  async getRegisterStatus(): Promise<ApiResponse<{ enabled: boolean }>> {
+    const response = await api.get<ApiResponse<{ enabled: boolean }>>('/auth/register-status');
+    return response.data;
+  },
 };
 
 // ============ 用户服务 ============

@@ -75,6 +75,8 @@ pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
         let api_routes = Router::new()
             // 公开路由（无需认证）
             .route("/auth/login", post(handlers::login))
+            .route("/auth/register", post(handlers::register))
+            .route("/auth/register-status", get(handlers::get_register_status))
             .route("/client/connect-config", post(handlers::get_client_connect_config))
             // 认证路由（需要登录）
             .route("/auth/me", get(handlers::me))

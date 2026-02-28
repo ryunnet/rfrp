@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../lib/services';
 import { Server, User, Lock, Eye, EyeOff, ArrowRight, Loader2, AlertCircle, Shield } from 'lucide-react';
@@ -26,10 +26,16 @@ export default function Login() {
   const [shakeError, setShakeError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [registerEnabled, setRegisterEnabled] = useState(false);
 
   // 入场动画
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
+    authService.getRegisterStatus().then(res => {
+      if (res.success && res.data) {
+        setRegisterEnabled(res.data.enabled);
+      }
+    }).catch(() => {});
   }, []);
 
   // 自动聚焦：有记住的用户名则聚焦密码框，否则聚焦用户名框
@@ -242,7 +248,15 @@ export default function Login() {
           </CardContent>
 
           <CardFooter className="flex flex-col space-y-2">
-            <div className="w-full border-t border-border/[0.06] pt-4">
+            <div className="w-full border-t border-border/[0.06] pt-4 space-y-3">
+              {registerEnabled && (
+                <p className="text-center text-sm text-primary-foreground/50">
+                  没有账号？{' '}
+                  <Link to="/register" className="text-primary-foreground/80 hover:text-primary-foreground font-medium transition-colors">
+                    立即注册
+                  </Link>
+                </p>
+              )}
               <p className="text-center text-xs text-primary-foreground/25 flex items-center justify-center gap-1.5">
                 <Shield className="w-3 h-3" />
                 安全登录 · 数据加密传输
