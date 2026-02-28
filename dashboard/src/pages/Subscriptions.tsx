@@ -307,7 +307,7 @@ export default function Subscriptions() {
       {/* 创建/编辑订阅套餐模态框 */}
       {(showCreateModal || (showEditModal && selectedSubscription)) && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
             <div className="p-6">
               {/* 头部 */}
               <div className="flex items-center gap-3 mb-6">
