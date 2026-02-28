@@ -188,6 +188,26 @@ impl NodeManager {
             _ => Err(anyhow!("收到意外的响应类型")),
         }
     }
+
+    pub async fn send_update_speed_limit(&self, node_id: i64, speed_limit: i64) -> Result<()> {
+        let cmd = ControllerPayload::UpdateSpeedLimit(rfrp::UpdateSpeedLimitCommand {
+            request_id: String::new(),
+            speed_limit,
+        });
+
+        let resp = self.send_command_and_wait(node_id, cmd).await?;
+
+        match resp.result {
+            Some(AgentResult::CommandAck(ack)) => {
+                if ack.success {
+                    Ok(())
+                } else {
+                    Err(anyhow!("速度限制更新失败: {}", ack.error.unwrap_or_default()))
+                }
+            }
+            _ => Err(anyhow!("收到意外的响应类型")),
+        }
+    }
 }
 
 /// 替换 payload 中的 request_id
@@ -216,6 +236,10 @@ fn replace_request_id(payload: ControllerPayload, request_id: &str) -> Controlle
         ControllerPayload::UpdateProtocol(mut cmd) => {
             cmd.request_id = request_id.to_string();
             ControllerPayload::UpdateProtocol(cmd)
+        }
+        ControllerPayload::UpdateSpeedLimit(mut cmd) => {
+            cmd.request_id = request_id.to_string();
+            ControllerPayload::UpdateSpeedLimit(cmd)
         }
         other => other,
     }

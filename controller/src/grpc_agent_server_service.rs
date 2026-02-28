@@ -91,6 +91,8 @@ impl AgentServerService for AgentServerServiceImpl {
             let node_id = node_model.id;
             let node_name = node_model.name.clone();
             let authoritative_protocol = node_model.tunnel_protocol.clone();
+            let node_speed_limit = node_model.speed_limit;
+            let current_tunnel_addr = node_model.tunnel_addr.clone();
 
             // 查询地理位置信息
             let geo_info = if let Some(ref ip) = client_ip {
@@ -107,9 +109,16 @@ impl AgentServerService for AgentServerServiceImpl {
 
             // 更新公网IP和地理位置
             if let Some(geo) = geo_info {
+                // 如果隧道地址为空，自动设置为公网IP
+                if current_tunnel_addr.is_empty() {
+                    active.tunnel_addr = Set(geo.ip.clone());
+                }
                 active.public_ip = Set(Some(geo.ip));
                 active.region = Set(Some(geo.region));
             } else if let Some(ip) = client_ip {
+                if current_tunnel_addr.is_empty() {
+                    active.tunnel_addr = Set(ip.clone());
+                }
                 active.public_ip = Set(Some(ip));
             }
 
@@ -125,6 +134,7 @@ impl AgentServerService for AgentServerServiceImpl {
                     node_id,
                     node_name: node_name.clone(),
                     tunnel_protocol: authoritative_protocol,
+                    speed_limit: node_speed_limit,
                 })),
             };
             if tx.send(Ok(register_resp)).await.is_err() {

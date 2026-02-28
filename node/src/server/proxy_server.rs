@@ -106,6 +106,7 @@ pub struct ProxyListenerManager {
     // UDP会话管理: (client_id, proxy_id) -> (source_addr -> UdpSession)
     udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
     traffic_manager: Arc<TrafficManager>,
+    speed_limiter: Arc<super::speed_limiter::SpeedLimiter>,
 }
 
 /// Connection provider for proxy listeners
@@ -152,11 +153,12 @@ impl ConnectionProvider {
 }
 
 impl ProxyListenerManager {
-    pub fn new(traffic_manager: Arc<TrafficManager>) -> Self {
+    pub fn new(traffic_manager: Arc<TrafficManager>, speed_limiter: Arc<super::speed_limiter::SpeedLimiter>) -> Self {
         Self {
             listeners: Arc::new(RwLock::new(HashMap::new())),
             udp_sessions: Arc::new(RwLock::new(HashMap::new())),
             traffic_manager,
+            speed_limiter,
         }
     }
 
@@ -191,7 +193,38 @@ impl ProxyListenerManager {
             let conn_provider_clone = conn_provider.clone();
             let traffic_manager = self.traffic_manager.clone();
 
+            // 预检端口是否可用：尝试绑定后立即释放
+            match proxy_protocol {
+                ProxyProtocol::Tcp => {
+                    match TcpListener::bind(&listen_addr).await {
+                        Ok(_listener) => {
+                            // 绑定成功，drop 释放端口，后续 spawn 任务会重新绑定
+                        }
+                        Err(e) => {
+                            return Err(anyhow::anyhow!(
+                                "代理「{}」无法监听 {} 端口 {}：{}",
+                                proxy_name, proxy_protocol_str, proxy.remote_port, e
+                            ));
+                        }
+                    }
+                }
+                ProxyProtocol::Udp => {
+                    match UdpSocket::bind(&listen_addr).await {
+                        Ok(_socket) => {
+                            // 绑定成功，drop 释放端口
+                        }
+                        Err(e) => {
+                            return Err(anyhow::anyhow!(
+                                "代理「{}」无法监听 {} 端口 {}：{}",
+                                proxy_name, proxy_protocol_str, proxy.remote_port, e
+                            ));
+                        }
+                    }
+                }
+            }
+
             let udp_sessions = self.udp_sessions.clone();
+            let speed_limiter = self.speed_limiter.clone();
 
             let handle = tokio::spawn(async move {
                 loop {
@@ -205,6 +238,7 @@ impl ProxyListenerManager {
                                 conn_provider_clone.clone(),
                                 proxy_id,
                                 traffic_manager.clone(),
+                                speed_limiter.clone(),
                             ).await
                         }
                         ProxyProtocol::Udp => {
@@ -217,6 +251,7 @@ impl ProxyListenerManager {
                                 proxy_id,
                                 udp_sessions.clone(),
                                 traffic_manager.clone(),
+                                speed_limiter.clone(),
                             ).await
                         }
                     };
@@ -275,9 +310,10 @@ impl ProxyServer {
         traffic_manager: Arc<TrafficManager>,
         config_manager: Arc<ConfigManager>,
         auth_provider: Arc<dyn common::protocol::auth::ClientAuthProvider>,
+        speed_limiter: Arc<super::speed_limiter::SpeedLimiter>,
     ) -> Result<Self> {
         let cert = rcgen::generate_simple_self_signed(&["rfrp".to_string()])?;
-        let listener_manager = Arc::new(ProxyListenerManager::new(traffic_manager.clone()));
+        let listener_manager = Arc::new(ProxyListenerManager::new(traffic_manager.clone(), speed_limiter));
         let client_connections = Arc::new(RwLock::new(HashMap::new()));
         let tunnel_connections = Arc::new(RwLock::new(HashMap::new()));
 
@@ -951,6 +987,7 @@ async fn run_tcp_proxy_listener_unified(
     conn_provider: ConnectionProvider,
     proxy_id: i64,
     traffic_manager: Arc<TrafficManager>,
+    speed_limiter: Arc<super::speed_limiter::SpeedLimiter>,
 ) -> Result<()> {
     let listener = TcpListener::bind(&listen_addr).await?;
     info!("[{}] 🔌 TCP监听端口: {} -> {}", proxy_name, listen_addr, target_addr);
@@ -965,6 +1002,7 @@ async fn run_tcp_proxy_listener_unified(
                 let target_addr = target_addr.clone();
                 let proxy_name = proxy_name.clone();
                 let traffic_manager = traffic_manager.clone();
+                let speed_limiter = speed_limiter.clone();
 
                 tokio::spawn(async move {
                     if let Err(e) = handle_tcp_to_tunnel_unified(
@@ -976,6 +1014,7 @@ async fn run_tcp_proxy_listener_unified(
                         conn_provider_clone,
                         proxy_id,
                         traffic_manager,
+                        speed_limiter,
                     ).await {
                         error!("❌ 处理连接错误: {}", e);
                     }
@@ -997,6 +1036,7 @@ async fn run_udp_proxy_listener_unified(
     proxy_id: i64,
     udp_sessions: Arc<RwLock<HashMap<(String, i64), HashMap<SocketAddr, UdpSession>>>>,
     traffic_manager: Arc<TrafficManager>,
+    speed_limiter: Arc<super::speed_limiter::SpeedLimiter>,
 ) -> Result<()> {
     let socket = Arc::new(create_configured_udp_socket(listen_addr.parse()?).await?);
     info!("[{}] 🔌 UDP监听端口: {} -> {}", proxy_name, listen_addr, target_addr);
@@ -1073,6 +1113,7 @@ async fn handle_tcp_to_tunnel_unified(
     conn_provider: ConnectionProvider,
     proxy_id: i64,
     traffic_manager: Arc<TrafficManager>,
+    speed_limiter: Arc<super::speed_limiter::SpeedLimiter>,
 ) -> Result<()> {
     // 获取统一连接
     let conn = match conn_provider.get_connection(&client_id).await {
@@ -1109,6 +1150,7 @@ async fn handle_tcp_to_tunnel_unified(
 
     // TCP -> Tunnel
     let proxy_name_t2t = proxy_name.clone();
+    let speed_limiter_t2t = speed_limiter.clone();
     let tcp_to_tunnel = async move {
         let mut buf = vec![0u8; 8192];
         loop {
@@ -1116,6 +1158,7 @@ async fn handle_tcp_to_tunnel_unified(
             if n == 0 {
                 break;
             }
+            speed_limiter_t2t.consume(n).await;
             tunnel_send.write_all(&buf[..n]).await?;
             sent_stats_clone.fetch_add(n as i64, std::sync::atomic::Ordering::Relaxed);
         }
@@ -1126,6 +1169,7 @@ async fn handle_tcp_to_tunnel_unified(
 
     // Tunnel -> TCP
     let proxy_name_t2c = proxy_name.clone();
+    let speed_limiter_t2c = speed_limiter.clone();
     let tunnel_to_tcp = async move {
         let mut buf = vec![0u8; 8192];
         loop {
@@ -1134,6 +1178,7 @@ async fn handle_tcp_to_tunnel_unified(
                     if n == 0 {
                         break;
                     }
+                    speed_limiter_t2c.consume(n).await;
                     tcp_write.write_all(&buf[..n]).await?;
                     received_stats_clone.fetch_add(n as i64, std::sync::atomic::Ordering::Relaxed);
                 }

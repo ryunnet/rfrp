@@ -108,7 +108,7 @@ impl AgentGrpcClient {
         tunnel_port: u16,
         tunnel_protocol: &str,
         tls_ca_cert: Option<&[u8]>,
-    ) -> Result<(Arc<Self>, mpsc::Receiver<ControllerCommand>, String)> {
+    ) -> Result<(Arc<Self>, mpsc::Receiver<ControllerCommand>, String, Option<i64>)> {
         let mut endpoint = Channel::from_shared(controller_url.to_string())?
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
@@ -186,6 +186,7 @@ impl AgentGrpcClient {
             register_resp.tunnel_protocol.clone()
         };
         info!("gRPC 连接认证成功: 节点 #{} ({}), 隧道协议: {}", node_id, register_resp.node_name, authoritative_protocol);
+        let speed_limit = register_resp.speed_limit;
 
         let shared_sender = SharedGrpcSender::new(tx.clone());
         let shared_pending = SharedPendingRequests::new(pending.clone());
@@ -210,7 +211,7 @@ impl AgentGrpcClient {
             Self::shared_heartbeat_loop(heartbeat_sender).await;
         });
 
-        Ok((grpc_client, cmd_rx, authoritative_protocol))
+        Ok((grpc_client, cmd_rx, authoritative_protocol, speed_limit))
     }
 
     /// 重连 Controller（复用已有的 SharedGrpcSender 和 SharedPendingRequests）
@@ -223,7 +224,7 @@ impl AgentGrpcClient {
         tunnel_port: u16,
         tunnel_protocol: &str,
         tls_ca_cert: Option<&[u8]>,
-    ) -> Result<(mpsc::Receiver<ControllerCommand>, String)> {
+    ) -> Result<(mpsc::Receiver<ControllerCommand>, String, Option<i64>)> {
         let mut endpoint = Channel::from_shared(controller_url.to_string())?;
 
         if controller_url.starts_with("https://") {
@@ -295,6 +296,7 @@ impl AgentGrpcClient {
             register_resp.tunnel_protocol.clone()
         };
         info!("gRPC 重连认证成功: 节点 #{} ({}), 隧道协议: {}", node_id, register_resp.node_name, authoritative_protocol);
+        let speed_limit = register_resp.speed_limit;
 
         // 热替换 sender 和 pending
         self.shared_sender.replace(tx.clone()).await;
@@ -315,7 +317,7 @@ impl AgentGrpcClient {
             Self::shared_heartbeat_loop(heartbeat_sender).await;
         });
 
-        Ok((cmd_rx, authoritative_protocol))
+        Ok((cmd_rx, authoritative_protocol, speed_limit))
     }
 
     /// 消息接收循环
@@ -414,6 +416,13 @@ impl AgentGrpcClient {
                     }).await;
                 }
 
+                ControllerPayload::UpdateSpeedLimit(cmd) => {
+                    let _ = cmd_tx.send(ControllerCommand::UpdateSpeedLimit {
+                        request_id: cmd.request_id,
+                        speed_limit: cmd.speed_limit,
+                    }).await;
+                }
+
                 _ => {
                     warn!("收到未知的 Controller 消息类型");
                 }
@@ -498,6 +507,10 @@ pub enum ControllerCommand {
         request_id: String,
         tunnel_protocol: String,
     },
+    UpdateSpeedLimit {
+        request_id: String,
+        speed_limit: i64,
+    },
 }
 
 /// 命令处理器：处理 Controller 下发的命令并发送响应
@@ -506,11 +519,13 @@ pub async fn handle_controller_commands(
     grpc_client: Arc<AgentGrpcClient>,
     proxy_control: Arc<dyn ProxyControl>,
     tunnel_manager: Arc<super::tunnel_manager::TunnelManager>,
+    speed_limiter: Arc<super::speed_limiter::SpeedLimiter>,
 ) {
     while let Some(cmd) = cmd_rx.recv().await {
         let grpc = grpc_client.clone();
         let control = proxy_control.clone();
         let tm = tunnel_manager.clone();
+        let sl = speed_limiter.clone();
 
         tokio::spawn(async move {
             match cmd {
@@ -641,6 +656,19 @@ pub async fn handle_controller_commands(
                     let resp = rfrp::AgentServerResponse {
                         request_id,
                         result: Some(AgentResult::CommandAck(ack)),
+                    };
+                    let _ = grpc.send_response(resp).await;
+                }
+
+                ControllerCommand::UpdateSpeedLimit { request_id, speed_limit } => {
+                    sl.update_rate(speed_limit as u64);
+                    info!("速度限制已更新: {} bytes/s", speed_limit);
+                    let resp = rfrp::AgentServerResponse {
+                        request_id,
+                        result: Some(AgentResult::CommandAck(rfrp::CommandAck {
+                            success: true,
+                            error: None,
+                        })),
                     };
                     let _ = grpc.send_response(resp).await;
                 }

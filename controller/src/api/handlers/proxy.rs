@@ -301,6 +301,66 @@ pub async fn create_proxy(
         // 共享节点对所有用户可用，无需额外检查
     }
 
+    // 验证节点限制（代理数量、端口范围、流量）
+    if let Some(node_id) = req.node_id {
+        match crate::node_limiter::validate_node_proxy_limit(node_id, req.remote_port, db).await {
+            Ok((allowed, reason)) => {
+                if !allowed {
+                    return (
+                        StatusCode::FORBIDDEN,
+                        ApiResponse::<crate::entity::proxy::Model>::error(reason),
+                    );
+                }
+            }
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    ApiResponse::<crate::entity::proxy::Model>::error(format!(
+                        "验证节点限制失败: {}",
+                        e
+                    )),
+                );
+            }
+        }
+    }
+
+    // 检查端口是否已被占用（同一节点上的 remote_port 必须唯一）
+    {
+        let mut port_query = Proxy::find()
+            .filter(crate::entity::proxy::Column::RemotePort.eq(req.remote_port))
+            .filter(crate::entity::proxy::Column::Enabled.eq(true));
+
+        if let Some(node_id) = req.node_id {
+            port_query =
+                port_query.filter(crate::entity::proxy::Column::NodeId.eq(node_id));
+        } else {
+            port_query =
+                port_query.filter(crate::entity::proxy::Column::NodeId.is_null());
+        }
+
+        match port_query.one(db).await {
+            Ok(Some(existing)) => {
+                return (
+                    StatusCode::CONFLICT,
+                    ApiResponse::<crate::entity::proxy::Model>::error(format!(
+                        "远程端口 {} 已被代理「{}」占用",
+                        req.remote_port, existing.name
+                    )),
+                );
+            }
+            Ok(None) => {} // 端口未被占用
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    ApiResponse::<crate::entity::proxy::Model>::error(format!(
+                        "检查端口占用失败: {}",
+                        e
+                    )),
+                );
+            }
+        }
+    }
+
     let now = chrono::Utc::now().naive_utc();
 
     let new_proxy = crate::entity::proxy::ActiveModel {
@@ -323,19 +383,21 @@ pub async fn create_proxy(
         Ok(proxy) => {
             info!("代理已创建: {} (ID: {}, 客户端: {})", proxy.name, proxy.id, proxy.client_id);
 
-            // 通过 ProxyControl trait 动态启动代理监听器
-            let proxy_control = app_state.proxy_control.clone();
-            let proxy_id = proxy.id;
-            let proxy_name = proxy.name.clone();
-            let client_id = req.client_id.clone();
+            // 通过 ProxyControl trait 动态启动代理监听器（同步等待，检测端口占用）
+            if let Err(e) = app_state.proxy_control.start_proxy(&req.client_id, proxy.id).await {
+                // 启动失败（可能端口被占用），回滚删除数据库记录
+                tracing::warn!("启动代理监听器失败，回滚创建: {}", e);
+                let _ = Proxy::delete_by_id(proxy.id).exec(db).await;
+                return (
+                    StatusCode::CONFLICT,
+                    ApiResponse::<crate::entity::proxy::Model>::error(format!(
+                        "启动代理监听器失败: {}",
+                        e
+                    )),
+                );
+            }
 
-            tokio::spawn(async move {
-                if let Err(e) = proxy_control.start_proxy(&client_id, proxy_id).await {
-                    tracing::error!("启动代理监听器失败: {}", e);
-                } else {
-                    info!("代理监听器已动态启动: {}", proxy_name);
-                }
-            });
+            info!("代理监听器已动态启动: {}", proxy.name);
 
             // 通知 Agent Client 代理配置已变更
             let csm = app_state.client_stream_manager.clone();
@@ -370,6 +432,7 @@ pub async fn update_proxy(
             let old_local_ip = proxy.local_ip.clone();
             let old_local_port = proxy.local_port;
             let old_remote_port = proxy.remote_port;
+            let proxy_node_id = proxy.node_id;
             let client_id = proxy.client_id.clone();
             let mut proxy: crate::entity::proxy::ActiveModel = proxy.into();
 
@@ -398,6 +461,73 @@ pub async fn update_proxy(
             }
             if let Some(remote_port) = req.remote_port {
                 if remote_port != old_remote_port {
+                    // 验证节点端口范围限制
+                    if let Some(node_id) = proxy_node_id {
+                        match crate::node_limiter::validate_node_proxy_limit(
+                            node_id,
+                            remote_port,
+                            db,
+                        )
+                        .await
+                        {
+                            Ok((allowed, reason)) => {
+                                if !allowed {
+                                    return (
+                                        StatusCode::FORBIDDEN,
+                                        ApiResponse::<crate::entity::proxy::Model>::error(
+                                            reason,
+                                        ),
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                return (
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    ApiResponse::<crate::entity::proxy::Model>::error(
+                                        format!("验证节点限制失败: {}", e),
+                                    ),
+                                );
+                            }
+                        }
+                    }
+
+                    // 检查新端口是否已被占用（排除当前代理自身）
+                    let mut port_query = Proxy::find()
+                        .filter(crate::entity::proxy::Column::RemotePort.eq(remote_port))
+                        .filter(crate::entity::proxy::Column::Enabled.eq(true))
+                        .filter(crate::entity::proxy::Column::Id.ne(id));
+
+                    if let Some(node_id) = proxy_node_id {
+                        port_query = port_query
+                            .filter(crate::entity::proxy::Column::NodeId.eq(node_id));
+                    } else {
+                        port_query = port_query
+                            .filter(crate::entity::proxy::Column::NodeId.is_null());
+                    }
+
+                    match port_query.one(db).await {
+                        Ok(Some(existing)) => {
+                            return (
+                                StatusCode::CONFLICT,
+                                ApiResponse::<crate::entity::proxy::Model>::error(
+                                    format!(
+                                        "远程端口 {} 已被代理「{}」占用",
+                                        remote_port, existing.name
+                                    ),
+                                ),
+                            );
+                        }
+                        Ok(None) => {} // 端口未被占用
+                        Err(e) => {
+                            return (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                ApiResponse::<crate::entity::proxy::Model>::error(
+                                    format!("检查端口占用失败: {}", e),
+                                ),
+                            );
+                        }
+                    }
+
                     config_changed = true;
                 }
                 proxy.remote_port = Set(remote_port);
@@ -419,29 +549,36 @@ pub async fn update_proxy(
                     let need_restart = enabled_changed || (config_changed && updated.enabled);
 
                     if need_restart {
-                        let proxy_control = app_state.proxy_control.clone();
-                        let proxy_id = updated.id;
-                        let proxy_name = updated.name.clone();
-                        let is_enabled = updated.enabled;
-                        let client_id_clone = client_id.clone();
+                        // 先停止旧监听器
+                        if let Err(e) = app_state.proxy_control.stop_proxy(&client_id, updated.id).await {
+                            tracing::warn!("停止旧代理监听器: {}", e);
+                        }
 
-                        tokio::spawn(async move {
-                            // 先停止旧监听器
-                            if let Err(e) = proxy_control.stop_proxy(&client_id_clone, proxy_id).await {
-                                tracing::warn!("停止旧代理监听器: {}", e);
-                            }
+                        if updated.enabled {
+                            // 同步启动新监听器，检测端口占用
+                            if let Err(e) = app_state.proxy_control.start_proxy(&client_id, updated.id).await {
+                                tracing::error!("启动代理监听器失败: {}", e);
 
-                            if is_enabled {
-                                // 启动新监听器
-                                if let Err(e) = proxy_control.start_proxy(&client_id_clone, proxy_id).await {
-                                    tracing::error!("启动代理监听器失败: {}", e);
-                                } else {
-                                    info!("代理监听器已重启: {}", proxy_name);
+                                // 如果是端口变更导致启动失败，回滚 remote_port
+                                if config_changed && req.remote_port.is_some() {
+                                    let mut revert: crate::entity::proxy::ActiveModel = updated.into();
+                                    revert.remote_port = Set(old_remote_port);
+                                    revert.updated_at = Set(chrono::Utc::now().naive_utc());
+                                    let _ = revert.update(&*db).await;
                                 }
-                            } else {
-                                info!("代理监听器已停止: {}", proxy_name);
+
+                                return (
+                                    StatusCode::CONFLICT,
+                                    ApiResponse::<crate::entity::proxy::Model>::error(format!(
+                                        "启动代理监听器失败: {}",
+                                        e
+                                    )),
+                                );
                             }
-                        });
+                            info!("代理监听器已重启: {}", updated.name);
+                        } else {
+                            info!("代理监听器已停止: {}", updated.name);
+                        }
                     }
 
                     // 通知 Agent Client 代理配置已变更

@@ -25,6 +25,24 @@ pub struct Model {
     pub kcp_config: Option<String>,
     #[serde(rename = "nodeType")]
     pub node_type: String,
+    #[serde(rename = "maxProxyCount")]
+    pub max_proxy_count: Option<i32>,
+    #[serde(rename = "allowedPortRange")]
+    pub allowed_port_range: Option<String>,
+    #[serde(rename = "trafficQuotaGb")]
+    pub traffic_quota_gb: Option<f64>,
+    #[serde(rename = "trafficResetCycle")]
+    pub traffic_reset_cycle: String,
+    #[serde(rename = "totalBytesSent")]
+    pub total_bytes_sent: i64,
+    #[serde(rename = "totalBytesReceived")]
+    pub total_bytes_received: i64,
+    #[serde(rename = "lastResetAt")]
+    pub last_reset_at: Option<DateTime>,
+    #[serde(rename = "isTrafficExceeded")]
+    pub is_traffic_exceeded: bool,
+    #[serde(rename = "speedLimit")]
+    pub speed_limit: Option<i64>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

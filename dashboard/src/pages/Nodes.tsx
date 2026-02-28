@@ -43,6 +43,11 @@ export default function Nodes() {
     tunnelPort: '7000',
     tunnelProtocol: 'quic',
     nodeType: 'shared',
+    maxProxyCount: '',
+    allowedPortRange: '',
+    trafficQuotaGb: '',
+    trafficResetCycle: 'none',
+    speedLimit: '',
   });
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
   const [testingId, setTestingId] = useState<number | null>(null);
@@ -86,6 +91,11 @@ export default function Nodes() {
         tunnelPort: formData.tunnelPort ? parseInt(formData.tunnelPort) : undefined,
         tunnelProtocol: formData.tunnelProtocol || undefined,
         nodeType: formData.nodeType || undefined,
+        maxProxyCount: formData.maxProxyCount ? parseInt(formData.maxProxyCount) : undefined,
+        allowedPortRange: formData.allowedPortRange || undefined,
+        trafficQuotaGb: formData.trafficQuotaGb ? parseFloat(formData.trafficQuotaGb) : undefined,
+        trafficResetCycle: formData.trafficResetCycle !== 'none' ? formData.trafficResetCycle : undefined,
+        speedLimit: formData.speedLimit ? Math.round(parseFloat(formData.speedLimit) * 1024 * 1024) : undefined,
       });
       if (response.success) {
         showToast('节点创建成功', 'success');
@@ -123,6 +133,11 @@ export default function Nodes() {
         tunnelPort: formData.tunnelPort ? parseInt(formData.tunnelPort) : undefined,
         tunnelProtocol: formData.tunnelProtocol || undefined,
         nodeType: formData.nodeType || undefined,
+        maxProxyCount: formData.maxProxyCount ? parseInt(formData.maxProxyCount) : null,
+        allowedPortRange: formData.allowedPortRange || null,
+        trafficQuotaGb: formData.trafficQuotaGb ? parseFloat(formData.trafficQuotaGb) : null,
+        trafficResetCycle: formData.trafficResetCycle || 'none',
+        speedLimit: formData.speedLimit ? Math.round(parseFloat(formData.speedLimit) * 1024 * 1024) : null,
       });
       if (response.success) {
         showToast('节点更新成功', 'success');
@@ -193,12 +208,17 @@ export default function Nodes() {
       tunnelPort: String(node.tunnelPort || 7000),
       tunnelProtocol: node.tunnelProtocol || 'quic',
       nodeType: node.nodeType || 'shared',
+      maxProxyCount: node.maxProxyCount != null ? String(node.maxProxyCount) : '',
+      allowedPortRange: node.allowedPortRange || '',
+      trafficQuotaGb: node.trafficQuotaGb != null ? String(node.trafficQuotaGb) : '',
+      trafficResetCycle: node.trafficResetCycle || 'none',
+      speedLimit: node.speedLimit != null ? String(Math.round(node.speedLimit / 1024 / 1024)) : '',
     });
     setShowEditModal(true);
   };
 
   const resetForm = () => {
-    setFormData({ name: '', url: '', secret: '', region: '', description: '', tunnelAddr: '', tunnelPort: '7000', tunnelProtocol: 'quic', nodeType: 'shared' });
+    setFormData({ name: '', url: '', secret: '', region: '', description: '', tunnelAddr: '', tunnelPort: '7000', tunnelProtocol: 'quic', nodeType: 'shared', maxProxyCount: '', allowedPortRange: '', trafficQuotaGb: '', trafficResetCycle: 'none', speedLimit: '' });
   };
 
   const tunnelFields = (
@@ -236,6 +256,75 @@ export default function Nodes() {
           >
             <option value="quic">QUIC</option>
             <option value="kcp">KCP</option>
+          </select>
+        </div>
+      </div>
+    </>
+  );
+
+  const limitFields = (
+    <>
+      <div className="border-t border-border pt-4 mt-4">
+        <h3 className="text-sm font-semibold text-foreground mb-3">节点限制配置</h3>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-1.5">最大隧道数</label>
+          <input
+            type="number"
+            value={formData.maxProxyCount}
+            onChange={(e) => setFormData({ ...formData, maxProxyCount: e.target.value })}
+            className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
+            placeholder="不限制"
+            min="0"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-1.5">速度限制 (MB/s)</label>
+          <input
+            type="number"
+            value={formData.speedLimit}
+            onChange={(e) => setFormData({ ...formData, speedLimit: e.target.value })}
+            className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
+            placeholder="不限制"
+            min="0"
+            step="0.1"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-foreground mb-1.5">允许端口范围</label>
+        <input
+          type="text"
+          value={formData.allowedPortRange}
+          onChange={(e) => setFormData({ ...formData, allowedPortRange: e.target.value })}
+          className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
+          placeholder="例如：1000-9999,20000-30000（留空不限制）"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-1.5">流量配额 (GB)</label>
+          <input
+            type="number"
+            value={formData.trafficQuotaGb}
+            onChange={(e) => setFormData({ ...formData, trafficQuotaGb: e.target.value })}
+            className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
+            placeholder="不限制"
+            min="0"
+            step="0.1"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-1.5">流量重置周期</label>
+          <select
+            value={formData.trafficResetCycle}
+            onChange={(e) => setFormData({ ...formData, trafficResetCycle: e.target.value })}
+            className="w-full px-4 py-3 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
+          >
+            <option value="none">不重置</option>
+            <option value="daily">每天</option>
+            <option value="monthly">每月</option>
           </select>
         </div>
       </div>
@@ -586,6 +675,7 @@ export default function Nodes() {
                   <p className="text-xs text-muted-foreground mt-1.5">共享节点可被多个用户使用，独享节点仅分配给特定用户</p>
                 </div>
                 {tunnelFields}
+                {limitFields}
               </div>
               <div className="mt-6 flex gap-3">
                 <button
@@ -682,6 +772,7 @@ export default function Nodes() {
                   <p className="text-xs text-muted-foreground mt-1.5">共享节点可被多个用户使用，独享节点仅分配给特定用户</p>
                 </div>
                 {tunnelFields}
+                {limitFields}
               </div>
               <div className="mt-6 flex gap-3">
                 <button

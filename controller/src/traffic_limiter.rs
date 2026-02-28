@@ -3,7 +3,7 @@ use chrono::{Datelike, Utc};
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use tracing::{info};
 
-use crate::entity::{client, user, Client, User};
+use crate::entity::{client, node, user, Client, User};
 
 /// GB 转字节
 pub fn gb_to_bytes(gb: f64) -> i64 {
@@ -239,4 +239,24 @@ pub async fn check_user_quota_allocation(user_id: i64, additional_quota_gb: f64,
     }
 
     Ok((true, String::new()))
+}
+
+/// 检查节点流量是否需要重置
+pub fn should_reset_node_traffic(node: &node::Model) -> bool {
+    let now = Utc::now().naive_utc();
+
+    if node.last_reset_at.is_none() {
+        return true;
+    }
+
+    let last_reset = node.last_reset_at.unwrap();
+
+    match node.traffic_reset_cycle.as_str() {
+        "daily" => now.date() > last_reset.date(),
+        "monthly" => {
+            now.year() > last_reset.year()
+                || (now.year() == last_reset.year() && now.month() > last_reset.month())
+        }
+        _ => false,
+    }
 }

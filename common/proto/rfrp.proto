@@ -53,6 +53,8 @@ message ControllerToAgentMessage {
     GetNodeLogsCommand get_node_logs = 14;
     // Controller 主动推送协议变更
     UpdateProtocolCommand update_protocol = 15;
+    // Controller 主动推送速度限制变更
+    UpdateSpeedLimitCommand update_speed_limit = 16;
   }
 }
 
@@ -111,6 +113,7 @@ message NodeRegisterResponse {
   int64 node_id = 1;
   string node_name = 2;
   string tunnel_protocol = 3;  // Controller 下发的权威隧道协议
+  optional int64 speed_limit = 4;  // 速度限制(字节/秒)，0或不设=不限
 }
 
 // ===== 认证 =====
@@ -224,6 +227,11 @@ message GetNodeLogsCommand {
 message UpdateProtocolCommand {
   string request_id = 1;
   string tunnel_protocol = 2;  // "quic" 或 "kcp"
+}
+
+message UpdateSpeedLimitCommand {
+  string request_id = 1;
+  int64 speed_limit = 2;  // bytes/sec, 0 = unlimited
 }
 
 // ===== Agent Server 对指令的响应 =====

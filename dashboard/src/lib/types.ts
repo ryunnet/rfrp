@@ -166,6 +166,15 @@ export interface Node {
   tunnelProtocol: string;
   kcpConfig: string | null;
   nodeType: string;
+  maxProxyCount: number | null;
+  allowedPortRange: string | null;
+  trafficQuotaGb: number | null;
+  trafficResetCycle: string;
+  totalBytesSent: number;
+  totalBytesReceived: number;
+  lastResetAt: string | null;
+  isTrafficExceeded: boolean;
+  speedLimit: number | null;
   created_at: string;
   updated_at: string;
 }

@@ -35,6 +35,16 @@ pub struct CreateNodeRequest {
     pub kcp_config: Option<String>,
     #[serde(rename = "nodeType")]
     pub node_type: Option<String>,
+    #[serde(rename = "maxProxyCount")]
+    pub max_proxy_count: Option<i32>,
+    #[serde(rename = "allowedPortRange")]
+    pub allowed_port_range: Option<String>,
+    #[serde(rename = "trafficQuotaGb")]
+    pub traffic_quota_gb: Option<f64>,
+    #[serde(rename = "trafficResetCycle")]
+    pub traffic_reset_cycle: Option<String>,
+    #[serde(rename = "speedLimit")]
+    pub speed_limit: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -54,6 +64,16 @@ pub struct UpdateNodeRequest {
     pub kcp_config: Option<String>,
     #[serde(rename = "nodeType")]
     pub node_type: Option<String>,
+    #[serde(rename = "maxProxyCount")]
+    pub max_proxy_count: Option<Option<i32>>,
+    #[serde(rename = "allowedPortRange")]
+    pub allowed_port_range: Option<Option<String>>,
+    #[serde(rename = "trafficQuotaGb")]
+    pub traffic_quota_gb: Option<Option<f64>>,
+    #[serde(rename = "trafficResetCycle")]
+    pub traffic_reset_cycle: Option<String>,
+    #[serde(rename = "speedLimit")]
+    pub speed_limit: Option<Option<i64>>,
 }
 
 /// GET /api/nodes — 列出节点（管理员看全部，普通用户看可用的）
@@ -136,6 +156,15 @@ pub async fn create_node(
         tunnel_protocol: Set(req.tunnel_protocol.unwrap_or_else(|| "quic".to_string())),
         kcp_config: Set(req.kcp_config),
         node_type: Set(req.node_type.unwrap_or_else(|| "shared".to_string())),
+        max_proxy_count: Set(req.max_proxy_count),
+        allowed_port_range: Set(req.allowed_port_range),
+        traffic_quota_gb: Set(req.traffic_quota_gb),
+        traffic_reset_cycle: Set(req.traffic_reset_cycle.unwrap_or_else(|| "none".to_string())),
+        total_bytes_sent: Set(0),
+        total_bytes_received: Set(0),
+        last_reset_at: Set(None),
+        is_traffic_exceeded: Set(false),
+        speed_limit: Set(req.speed_limit),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -203,6 +232,7 @@ pub async fn update_node(
 
     // 保存旧的协议值，用于检测变更
     let old_protocol = node_model.tunnel_protocol.clone();
+    let old_speed_limit = node_model.speed_limit;
     let new_protocol_opt = req.tunnel_protocol.clone();
 
     let mut active: node::ActiveModel = node_model.into();
@@ -237,6 +267,21 @@ pub async fn update_node(
     if let Some(node_type) = req.node_type {
         active.node_type = Set(node_type);
     }
+    if let Some(max_proxy_count) = req.max_proxy_count {
+        active.max_proxy_count = Set(max_proxy_count);
+    }
+    if let Some(allowed_port_range) = req.allowed_port_range {
+        active.allowed_port_range = Set(allowed_port_range);
+    }
+    if let Some(traffic_quota_gb) = req.traffic_quota_gb {
+        active.traffic_quota_gb = Set(traffic_quota_gb);
+    }
+    if let Some(traffic_reset_cycle) = req.traffic_reset_cycle {
+        active.traffic_reset_cycle = Set(traffic_reset_cycle);
+    }
+    if let Some(speed_limit) = req.speed_limit {
+        active.speed_limit = Set(speed_limit);
+    }
     active.updated_at = Set(Utc::now().naive_utc());
 
     match active.update(db).await {
@@ -263,6 +308,20 @@ pub async fn update_node(
             }
 
             // gRPC 模式下节点会主动重连，无需手动更新连接
+
+            // 如果 speed_limit 变更，推送到在线节点
+            if updated.speed_limit != old_speed_limit {
+                let connected_ids = app_state.node_manager.get_loaded_node_ids().await;
+                if connected_ids.contains(&id) {
+                    let new_limit = updated.speed_limit.unwrap_or(0);
+                    if let Err(e) = app_state.node_manager.send_update_speed_limit(id, new_limit).await {
+                        warn!("推送速度限制到节点 #{} 失败: {}", id, e);
+                    } else {
+                        info!("已推送速度限制到节点 #{}: {} bytes/s", id, new_limit);
+                    }
+                }
+            }
+
             (StatusCode::OK, ApiResponse::success(updated))
         }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<node::Model>::error(format!("Failed to update node: {}", e))),

@@ -332,6 +332,21 @@ code {
   }
 }
 
+@keyframes login-float-alt {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(-20px, 25px) scale(1.03);
+  }
+  50% {
+    transform: translate(15px, -10px) scale(0.98);
+  }
+  75% {
+    transform: translate(-10px, -20px) scale(1.06);
+  }
+}
+
 .login-float {
   animation: login-float 12s ease-in-out infinite;
 }
@@ -346,19 +361,114 @@ code {
   animation-delay: -8s;
 }
 
+.login-float-alt {
+  animation: login-float-alt 16s ease-in-out infinite;
+  animation-delay: -2s;
+}
+
+.login-float-alt-delayed {
+  animation: login-float-alt 20s ease-in-out infinite;
+  animation-delay: -6s;
+}
+
+/* 登录背景动态渐变 */
+@keyframes login-bg-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  25% {
+    background-position: 50% 0%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  75% {
+    background-position: 50% 100%;
+  }
+}
+
+.login-bg-animated {
+  background-size: 400% 400%;
+  animation: login-bg-shift 20s ease infinite;
+}
+
+/* 卡片顶部发光线条 */
+.login-card-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.login-card-glow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    hsl(189 94% 55% / 0.5),
+    hsl(210 100% 60% / 0.6),
+    hsl(189 94% 55% / 0.5),
+    transparent
+  );
+  z-index: 1;
+}
+
+/* 登录按钮发光效果 */
+.login-btn-glow {
+  transition: box-shadow 0.3s ease, transform 0.15s ease;
+}
+
+.login-btn-glow:hover {
+  box-shadow:
+    0 0 20px hsl(189 94% 43% / 0.3),
+    0 0 40px hsl(210 100% 45% / 0.15);
+}
+
+.login-btn-glow:active {
+  transform: scale(0.98);
+}
+
 /* Logo 光晕 */
 @keyframes logo-glow {
   0%, 100% {
-    box-shadow: 0 0 20px hsl(var(--primary) / 0.3), 0 0 60px hsl(var(--primary) / 0.1);
+    box-shadow: 0 0 20px hsl(189 94% 43% / 0.3), 0 0 60px hsl(210 100% 45% / 0.15);
   }
   50% {
-    box-shadow: 0 0 30px hsl(var(--primary) / 0.4), 0 0 80px hsl(var(--primary) / 0.15);
+    box-shadow: 0 0 35px hsl(189 94% 43% / 0.45), 0 0 80px hsl(210 100% 45% / 0.2);
   }
 }
 
 .login-logo-glow {
   animation: logo-glow 3s ease-in-out infinite;
 }
+
+/* 登录输入框发光 focus */
+.login-input-glow:focus-within {
+  box-shadow: 0 0 0 1px hsl(189 94% 55% / 0.3), 0 0 12px hsl(189 94% 43% / 0.12);
+  border-color: hsl(189 94% 55% / 0.4);
+}
+
+/* 交错入场动画 */
+@keyframes login-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-stagger-1 { animation: login-stagger-in 0.5s ease-out 0.1s both; }
+.login-stagger-2 { animation: login-stagger-in 0.5s ease-out 0.2s both; }
+.login-stagger-3 { animation: login-stagger-in 0.5s ease-out 0.3s both; }
+.login-stagger-4 { animation: login-stagger-in 0.5s ease-out 0.4s both; }
+.login-stagger-5 { animation: login-stagger-in 0.5s ease-out 0.5s both; }
+.login-stagger-6 { animation: login-stagger-in 0.5s ease-out 0.6s both; }
 
 /* 错误抖动 */
 @keyframes login-shake {

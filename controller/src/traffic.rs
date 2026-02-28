@@ -7,7 +7,7 @@ use tracing::{debug, error, info};
 use tokio::sync::mpsc;
 use std::time::Duration;
 
-use crate::entity::{proxy, client, user, traffic_daily, Proxy, Client, User, TrafficDaily};
+use crate::entity::{proxy, client, user, node, traffic_daily, Proxy, Client, User, Node, TrafficDaily};
 use crate::migration::get_connection;
 
 struct TrafficEvent {
@@ -66,13 +66,23 @@ impl TrafficManager {
         let count = buffer.len();
         debug!("🔄 正在批量写入流量统计数据: {} 条聚合记录", count);
 
+        // 用于聚合节点流量
+        let mut node_traffic: HashMap<i64, (i64, i64)> = HashMap::new();
+
         for ((proxy_id, client_id, _user_id), (bytes_sent, bytes_received)) in buffer.drain() {
             if bytes_sent == 0 && bytes_received == 0 {
                 continue;
             }
 
-            // 1. 更新代理流量
+            // 1. 更新代理流量，同时收集 node_id
             if let Ok(Some(proxy)) = Proxy::find_by_id(proxy_id).one(db).await {
+                // 收集节点流量
+                if let Some(nid) = proxy.node_id {
+                    let entry = node_traffic.entry(nid).or_insert((0, 0));
+                    entry.0 += bytes_sent;
+                    entry.1 += bytes_received;
+                }
+
                 let mut proxy_active: proxy::ActiveModel = proxy.into();
                 proxy_active.total_bytes_sent = Set(proxy_active.total_bytes_sent.unwrap() + bytes_sent);
                 proxy_active.total_bytes_received = Set(proxy_active.total_bytes_received.unwrap() + bytes_received);
@@ -202,6 +212,54 @@ impl TrafficManager {
                                             quota_gb);
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. 批量更新节点流量
+        for (nid, (sent, received)) in node_traffic {
+            if let Ok(Some(node_model)) = Node::find_by_id(nid).one(db).await {
+                let needs_reset = crate::traffic_limiter::should_reset_node_traffic(&node_model);
+
+                let mut node_active: node::ActiveModel = node_model.clone().into();
+
+                let (new_sent, new_received) = if needs_reset {
+                    node_active.total_bytes_sent = Set(sent);
+                    node_active.total_bytes_received = Set(received);
+                    node_active.is_traffic_exceeded = Set(false);
+                    node_active.last_reset_at = Set(Some(now));
+                    info!("🔄 节点 #{} ({}) 流量已自动重置", nid, node_model.name);
+                    (sent, received)
+                } else {
+                    let ns = node_model.total_bytes_sent + sent;
+                    let nr = node_model.total_bytes_received + received;
+                    node_active.total_bytes_sent = Set(ns);
+                    node_active.total_bytes_received = Set(nr);
+                    (ns, nr)
+                };
+
+                node_active.updated_at = Set(now);
+
+                if let Err(e) = node_active.update(db).await {
+                    error!("更新节点流量失败: {}", e);
+                } else {
+                    // 检查节点配额
+                    if let Some(quota_gb) = node_model.traffic_quota_gb {
+                        let total_used = new_sent + new_received;
+                        let quota_bytes = crate::traffic_limiter::gb_to_bytes(quota_gb);
+                        if total_used >= quota_bytes && !node_model.is_traffic_exceeded {
+                            if let Ok(Some(n)) = Node::find_by_id(nid).one(db).await {
+                                let mut n_active: node::ActiveModel = n.into();
+                                n_active.is_traffic_exceeded = Set(true);
+                                n_active.updated_at = Set(now);
+                                let _ = n_active.update(db).await;
+                                error!("⚠️ 节点 #{} ({}) 流量配额已用尽: {:.2} GB / {:.2} GB",
+                                    nid, node_model.name,
+                                    crate::traffic_limiter::bytes_to_gb(total_used),
+                                    quota_gb);
                             }
                         }
                     }

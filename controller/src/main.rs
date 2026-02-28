@@ -7,6 +7,7 @@ mod middleware;
 mod traffic;
 mod traffic_limiter;
 mod port_limiter;
+mod node_limiter;
 mod subscription_quota;
 mod config_manager;
 mod api;

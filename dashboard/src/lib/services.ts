@@ -283,6 +283,11 @@ export const nodeService = {
     tunnelProtocol?: string;
     kcpConfig?: string;
     nodeType?: string;
+    maxProxyCount?: number | null;
+    allowedPortRange?: string | null;
+    trafficQuotaGb?: number | null;
+    trafficResetCycle?: string;
+    speedLimit?: number | null;
   }): Promise<ApiResponse<Node>> {
     const response = await api.post<ApiResponse<Node>>('/nodes', data);
     return response.data;
@@ -301,6 +306,11 @@ export const nodeService = {
       tunnelProtocol?: string;
       kcpConfig?: string;
       nodeType?: string;
+      maxProxyCount?: number | null;
+      allowedPortRange?: string | null;
+      trafficQuotaGb?: number | null;
+      trafficResetCycle?: string;
+      speedLimit?: number | null;
     }
   ): Promise<ApiResponse<Node>> {
     const response = await api.put<ApiResponse<Node>>(`/nodes/${id}`, data);

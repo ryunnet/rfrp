@@ -7,6 +7,7 @@ pub mod grpc_client;
 pub mod grpc_auth_provider;
 pub mod node_logs;
 pub mod tunnel_manager;
+pub mod speed_limiter;
 
 use anyhow::Result;
 use std::sync::Arc;
@@ -57,7 +58,7 @@ pub async fn run_server_controller_mode(
     info!("隧道协议: {}", protocol);
 
     // 首次连接 Controller 并认证（protocol 作为回退值，最终以 Controller 返回为准）
-    let (grpc_client, cmd_rx, authoritative_protocol) = grpc_client::AgentGrpcClient::connect_and_authenticate(
+    let (grpc_client, cmd_rx, authoritative_protocol, initial_speed_limit) = grpc_client::AgentGrpcClient::connect_and_authenticate(
         &controller_url,
         &token,
         bind_port,
@@ -67,6 +68,14 @@ pub async fn run_server_controller_mode(
 
     let node_id = grpc_client.node_id().await;
     info!("连接认证成功: 节点 #{}, Controller 协议: {}", node_id, authoritative_protocol);
+
+    // 创建速度限制器（0 表示不限速）
+    let speed_limiter = speed_limiter::SpeedLimiter::new(initial_speed_limit.unwrap_or(0) as u64);
+    if let Some(limit) = initial_speed_limit {
+        if limit > 0 {
+            info!("速度限制: {} bytes/sec", limit);
+        }
+    }
 
     // 创建 gRPC 认证提供者（使用 SharedGrpcSender，重连后自动使用新 sender）
     let auth_provider: Arc<dyn ClientAuthProvider> = Arc::new(
@@ -87,6 +96,7 @@ pub async fn run_server_controller_mode(
             traffic_manager.clone(),
             config_manager.clone(),
             auth_provider.clone(),
+            speed_limiter.clone(),
         )?
     );
 
@@ -106,8 +116,9 @@ pub async fn run_server_controller_mode(
     let grpc_client_clone = grpc_client.clone();
     let proxy_control_clone = proxy_control.clone();
     let tunnel_manager_clone = tunnel_manager.clone();
+    let speed_limiter_clone = speed_limiter.clone();
     tokio::spawn(async move {
-        grpc_client::handle_controller_commands(cmd_rx, grpc_client_clone, proxy_control_clone, tunnel_manager_clone).await;
+        grpc_client::handle_controller_commands(cmd_rx, grpc_client_clone, proxy_control_clone, tunnel_manager_clone, speed_limiter_clone).await;
     });
 
     info!("所有服务已启动");
@@ -116,6 +127,7 @@ pub async fn run_server_controller_mode(
     let grpc_client_reconnect = grpc_client.clone();
     let proxy_control_reconnect = proxy_control.clone();
     let tunnel_manager_reconnect = tunnel_manager.clone();
+    let speed_limiter_reconnect = speed_limiter.clone();
     let controller_url_clone = controller_url.clone();
     let token_clone = token.clone();
     let protocol_clone = protocol.clone();
@@ -148,8 +160,13 @@ pub async fn run_server_controller_mode(
                         &protocol_clone,
                         tls_ca_cert_clone.as_deref(),
                     ).await {
-                        Ok((new_cmd_rx, new_protocol)) => {
+                        Ok((new_cmd_rx, new_protocol, new_speed_limit)) => {
                             info!("gRPC 重连成功");
+
+                            // 更新速度限制
+                            if let Some(limit) = new_speed_limit {
+                                speed_limiter_reconnect.update_rate(limit as u64);
+                            }
 
                             // 如果协议变更，切换隧道协议
                             if !new_protocol.is_empty() {
@@ -162,9 +179,10 @@ pub async fn run_server_controller_mode(
                             let grpc_clone = grpc_client_reconnect.clone();
                             let control_clone = proxy_control_reconnect.clone();
                             let tm_clone = tunnel_manager_reconnect.clone();
+                            let sl_clone = speed_limiter_reconnect.clone();
                             tokio::spawn(async move {
                                 grpc_client::handle_controller_commands(
-                                    new_cmd_rx, grpc_clone, control_clone, tm_clone,
+                                    new_cmd_rx, grpc_clone, control_clone, tm_clone, sl_clone,
                                 ).await;
                             });
 
