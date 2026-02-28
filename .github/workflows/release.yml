@@ -78,34 +78,33 @@ jobs:
       - name: Prepare artifacts (Unix)
         if: matrix.archive == 'tar.gz'
         run: |
-          mkdir -p release
-          cp target/${{ matrix.target }}/release/controller release/
-          cp target/${{ matrix.target }}/release/node release/
-          cp target/${{ matrix.target }}/release/client release/
-          cp README.md release/ || true
-          cp LICENSE release/ || true
-          cd release
-          tar czf ../rfrp-${{ matrix.target }}.tar.gz *
+          mkdir -p rfrp
+          cp target/${{ matrix.target }}/release/controller rfrp/
+          cp target/${{ matrix.target }}/release/node rfrp/
+          cp target/${{ matrix.target }}/release/client rfrp/
+          cp README.md rfrp/ || true
+          cp LICENSE rfrp/ || true
+          tar czf rfrp-${{ github.ref_name }}-${{ matrix.target }}.tar.gz rfrp
 
       - name: Prepare artifacts (Windows)
         if: matrix.archive == 'zip'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path release
-          Copy-Item target/${{ matrix.target }}/release/controller.exe release/
-          Copy-Item target/${{ matrix.target }}/release/node.exe release/
-          Copy-Item target/${{ matrix.target }}/release/client.exe release/
-          if (Test-Path README.md) { Copy-Item README.md release/ }
-          if (Test-Path LICENSE) { Copy-Item LICENSE release/ }
-          Compress-Archive -Path release/* -DestinationPath rfrp-${{ matrix.target }}.zip
+          New-Item -ItemType Directory -Force -Path rfrp
+          Copy-Item target/${{ matrix.target }}/release/controller.exe rfrp/
+          Copy-Item target/${{ matrix.target }}/release/node.exe rfrp/
+          Copy-Item target/${{ matrix.target }}/release/client.exe rfrp/
+          if (Test-Path README.md) { Copy-Item README.md rfrp/ }
+          if (Test-Path LICENSE) { Copy-Item LICENSE rfrp/ }
+          Compress-Archive -Path rfrp -DestinationPath rfrp-${{ github.ref_name }}-${{ matrix.target }}.zip
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: rfrp-${{ matrix.target }}
           path: |
-            rfrp-${{ matrix.target }}.tar.gz
-            rfrp-${{ matrix.target }}.zip
+            rfrp-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+            rfrp-${{ github.ref_name }}-${{ matrix.target }}.zip
           if-no-files-found: ignore
 
   release:
@@ -179,11 +178,11 @@ jobs:
 
             请根据您的操作系统下载对应的二进制文件：
 
-            - **Linux x86_64**: `rfrp-x86_64-unknown-linux-gnu.tar.gz`
-            - **Linux ARM64**: `rfrp-aarch64-unknown-linux-gnu.tar.gz`
-            - **Windows x86_64**: `rfrp-x86_64-pc-windows-msvc.zip`
-            - **macOS x86_64 (Intel)**: `rfrp-x86_64-apple-darwin.tar.gz`
-            - **macOS ARM64 (Apple Silicon)**: `rfrp-aarch64-apple-darwin.tar.gz`
+            - **Linux x86_64**: `rfrp-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz`
+            - **Linux ARM64**: `rfrp-${{ github.ref_name }}-aarch64-unknown-linux-gnu.tar.gz`
+            - **Windows x86_64**: `rfrp-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip`
+            - **macOS x86_64 (Intel)**: `rfrp-${{ github.ref_name }}-x86_64-apple-darwin.tar.gz`
+            - **macOS ARM64 (Apple Silicon)**: `rfrp-${{ github.ref_name }}-aarch64-apple-darwin.tar.gz`
 
             每个压缩包包含三个组件：
             - `controller` - 控制器服务
@@ -199,10 +198,11 @@ jobs:
 
             ### 🚀 快速开始
 
-            1. 解压下载的文件
-            2. 运行 controller：`./controller`
-            3. 运行 node：`./node --controller-url http://localhost:3100 --token <token> --bind-port 7000`
-            4. 运行 client：`./client --controller-url http://localhost:3100 --token <token>`
+            1. 解压下载的文件（会得到 `rfrp` 文件夹）
+            2. 进入目录：`cd rfrp`
+            3. 运行 controller：`./controller start`
+            4. 运行 node：`./node start --controller-url http://localhost:3100 --token <token> --bind-port 7000`
+            5. 运行 client：`./client start --controller-url http://localhost:3100 --token <token>`
 
             详细文档请参考 [README.md](https://github.com/${{ github.repository }})
         env:
