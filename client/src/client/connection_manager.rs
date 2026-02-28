@@ -66,22 +66,38 @@ impl ConnectionManager {
                 let conns = self.connections.read().await;
                 match conns.get(&group.node_id) {
                     Some(conn) => {
-                        // 已有连接，更新代理列表（暂不需要重连）
-                        if conn.proxy_ids != new_proxy_ids {
-                            debug!(
-                                "节点 #{} 代理数量: {} -> {}",
-                                group.node_id,
-                                conn.proxy_ids.len(),
-                                new_proxy_ids.len()
+                        // 检查连接 task 是否已终止，如果终止则需要重新连接
+                        if conn.handle.is_finished() {
+                            warn!(
+                                "节点 #{} 连接 task 已终止，需要重新连接",
+                                group.node_id
                             );
+                            true
+                        } else {
+                            // 已有连接且 task 仍在运行，更新代理列表
+                            if conn.proxy_ids != new_proxy_ids {
+                                debug!(
+                                    "节点 #{} 代理数量: {} -> {}",
+                                    group.node_id,
+                                    conn.proxy_ids.len(),
+                                    new_proxy_ids.len()
+                                );
+                            }
+                            false
                         }
-                        false
                     }
                     None => true,
                 }
             };
 
             if needs_connect {
+                // 先清理旧的已终止连接（如果存在）
+                {
+                    let mut conns = self.connections.write().await;
+                    if let Some(old_conn) = conns.remove(&group.node_id) {
+                        old_conn.cancel_token.cancel();
+                    }
+                }
                 self.connect(group, new_proxy_ids).await;
             } else {
                 // 更新代理列表

@@ -587,16 +587,30 @@ async fn handle_client_auth(
             }
             Err(_) => {
                 warn!("⚠️  客户端断开连接: {}", client_name);
+                let client_id_str = format!("{}", client_id);
                 let mut conns = connections.write().await;
-                conns.remove(&format!("{}", client_id));
-                drop(conns);
 
-                // 停止该客户端的所有代理监听器
-                listener_manager.stop_client_proxies(&format!("{}", client_id)).await;
+                // 检查当前存储的连接是否与我们监控的连接是同一个（防止误删重连后的新连接）
+                let should_cleanup = if let Some(current_conn) = conns.get(&client_id_str) {
+                    Arc::ptr_eq(current_conn, &conn)
+                } else {
+                    false
+                };
 
-                // 更新客户端为离线状态
-                if let Err(e) = auth_provider.set_client_online(client_id, false).await {
-                    error!("更新客户端离线状态失败: {}", e);
+                if should_cleanup {
+                    conns.remove(&client_id_str);
+                    drop(conns);
+
+                    // 停止该客户端的所有代理监听器
+                    listener_manager.stop_client_proxies(&client_id_str).await;
+
+                    // 更新客户端为离线状态
+                    if let Err(e) = auth_provider.set_client_online(client_id, false).await {
+                        error!("更新客户端离线状态失败: {}", e);
+                    }
+                } else {
+                    drop(conns);
+                    debug!("跳过清理: 客户端 {} 已经重新连接", client_name);
                 }
                 break;
             }
@@ -744,14 +758,28 @@ async fn handle_tunnel_client_auth(
             }
             Err(_) => {
                 warn!("KCP client disconnected: {}", client_name);
+                let client_id_str = format!("{}", client_id);
                 let mut conns = tunnel_connections.write().await;
-                conns.remove(&format!("{}", client_id));
-                drop(conns);
 
-                listener_manager.stop_client_proxies(&format!("{}", client_id)).await;
+                // 检查当前存储的连接是否与我们监控的连接是同一个（防止误删重连后的新连接）
+                let should_cleanup = if let Some(current_conn) = conns.get(&client_id_str) {
+                    Arc::ptr_eq(current_conn, &conn)
+                } else {
+                    false
+                };
 
-                if let Err(e) = auth_provider.set_client_online(client_id, false).await {
-                    error!("Failed to update client offline status: {}", e);
+                if should_cleanup {
+                    conns.remove(&client_id_str);
+                    drop(conns);
+
+                    listener_manager.stop_client_proxies(&client_id_str).await;
+
+                    if let Err(e) = auth_provider.set_client_online(client_id, false).await {
+                        error!("Failed to update client offline status: {}", e);
+                    }
+                } else {
+                    drop(conns);
+                    debug!("Skipping cleanup: KCP client {} has already reconnected", client_name);
                 }
                 break;
             }
