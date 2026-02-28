@@ -117,10 +117,11 @@ async fn run_node(controller_url: String, token: String, bind_port: u16, protoco
 }
 
 // ─── Unix 入口 ───────────────────────────────────────────
+// 注意：不使用 #[tokio::main]，因为 daemon 模式需要在 fork 之后才创建 tokio runtime。
+// 在 fork 之前创建的 runtime（epoll fd、worker 线程）会在 fork 后损坏，导致网络连接失败。
 
 #[cfg(not(windows))]
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
@@ -136,7 +137,8 @@ async fn main() -> anyhow::Result<()> {
             tls_ca_cert,
         } => {
             let ca_cert = load_tls_ca_cert(&tls_ca_cert)?;
-            run_node(controller_url, token, bind_port, protocol, ca_cert).await?;
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(run_node(controller_url, token, bind_port, protocol, ca_cert))?;
         }
 
         Command::Stop { pid_file } => {
@@ -174,8 +176,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
+            // fork 完成后再创建 tokio runtime，确保 epoll fd 和线程池状态正确
             let ca_cert = load_tls_ca_cert(&tls_ca_cert)?;
-            run_node(controller_url, token, bind_port, protocol, ca_cert).await?;
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(run_node(controller_url, token, bind_port, protocol, ca_cert))?;
         }
 
         Command::Update => {
