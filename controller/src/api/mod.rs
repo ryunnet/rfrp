@@ -8,6 +8,7 @@ use crate::AppState;
 use crate::middleware::auth_middleware;
 use std::sync::Arc;
 use axum_server::tls_rustls::RustlsConfig;
+use axum_server_dual_protocol::ServerExt;
 use base64::Engine;
 
 pub mod handlers;
@@ -142,9 +143,10 @@ pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
 
         // 尝试加载 TLS 配置
         if let Some(tls_config) = load_web_tls_config(&config_manager).await {
-            // 使用 HTTPS
+            // 使用 HTTPS（同时支持 HTTP 自动重定向到 HTTPS）
             info!("🌐 Web管理界面: https://{}", web_addr);
-            match axum_server::bind_rustls(web_addr.parse().unwrap(), tls_config)
+            match axum_server_dual_protocol::bind_dual_protocol(web_addr.parse().unwrap(), tls_config)
+                .set_upgrade(true)
                 .serve(app.into_make_service())
                 .await
             {

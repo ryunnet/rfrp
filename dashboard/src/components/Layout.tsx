@@ -120,9 +120,16 @@ export default function Layout({ children }: LayoutProps) {
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, #0f172a, #1e3a5f)' }}>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" className="w-7 h-7">
-                  <path d="M8 14 L36 14 L36 9 L48 18 L36 27 L36 22 L8 22Z" fill="#38bdf8" opacity="0.95"/>
-                  <path d="M56 50 L28 50 L28 55 L16 46 L28 37 L28 42 L56 42Z" fill="#818cf8" opacity="0.95"/>
-                  <circle cx="32" cy="32" r="2.5" fill="#e2e8f0" opacity="0.7"/>
+                  <path d="M14 18 L38 18 L38 13 L50 22 L38 31 L38 26 L14 26Z" fill="#38bdf8" opacity="0.9"/>
+                  <path d="M50 46 L26 46 L26 51 L14 42 L26 33 L26 38 L50 38Z" fill="#818cf8" opacity="0.9"/>
+                  <circle cx="10" cy="22" r="3" fill="none" stroke="#38bdf8" strokeWidth="1.5" opacity="0.7"/>
+                  <circle cx="10" cy="22" r="1.2" fill="#38bdf8" opacity="0.8"/>
+                  <circle cx="54" cy="42" r="3" fill="none" stroke="#818cf8" strokeWidth="1.5" opacity="0.7"/>
+                  <circle cx="54" cy="42" r="1.2" fill="#818cf8" opacity="0.8"/>
+                  <circle cx="32" cy="32" r="4" fill="none" stroke="#e2e8f0" strokeWidth="1.2" opacity="0.5"/>
+                  <circle cx="32" cy="32" r="2" fill="#e2e8f0" opacity="0.8"/>
+                  <circle cx="21" cy="32" r="1.2" fill="#38bdf8" opacity="0.4"/>
+                  <circle cx="43" cy="32" r="1.2" fill="#818cf8" opacity="0.4"/>
                 </svg>
               </div>
               <div>

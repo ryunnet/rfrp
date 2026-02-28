@@ -357,6 +357,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-server-dual-protocol"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2164551db024e87f20316d164eab9f5ad342d8188b08051ceb15ca92a60ea7b7"
+dependencies = [
+ "axum-server",
+ "bytes",
+ "http",
+ "http-body-util",
+ "pin-project",
+ "rustls",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
 name = "base16ct"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -716,6 +735,7 @@ dependencies = [
  "async-trait",
  "axum 0.8.8",
  "axum-server",
+ "axum-server-dual-protocol",
  "base64",
  "bcrypt",
  "chrono",
