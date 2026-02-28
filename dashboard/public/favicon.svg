@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e3a5f"/>
+    </linearGradient>
+    <linearGradient id="arrow1" x1="12" y1="20" x2="52" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <linearGradient id="arrow2" x1="52" y1="44" x2="12" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+
+  <!-- Subtle border -->
+  <rect x="1" y="1" width="62" height="62" rx="13" fill="none" stroke="#38bdf8" stroke-opacity="0.15" stroke-width="1"/>
+
+  <!-- Top arrow (right-pointing) -->
+  <g filter="url(#glow)">
+    <path d="M12 16 L40 16 L40 11 L52 20 L40 29 L40 24 L12 24 Z" fill="url(#arrow1)" opacity="0.95"/>
+  </g>
+
+  <!-- Bottom arrow (left-pointing) -->
+  <g filter="url(#glow)">
+    <path d="M52 48 L24 48 L24 53 L12 44 L24 35 L24 40 L52 40 Z" fill="url(#arrow2)" opacity="0.95"/>
+  </g>
+
+  <!-- Center divider dot accent -->
+  <circle cx="32" cy="32" r="2.5" fill="#e2e8f0" opacity="0.7"/>
+  <circle cx="22" cy="32" r="1.5" fill="#e2e8f0" opacity="0.35"/>
+  <circle cx="42" cy="32" r="1.5" fill="#e2e8f0" opacity="0.35"/>
+</svg>

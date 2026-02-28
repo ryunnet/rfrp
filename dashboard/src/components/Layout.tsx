@@ -118,9 +118,11 @@ export default function Layout({ children }: LayoutProps) {
         <div className="h-20 flex items-center justify-between px-5 border-b border-border">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-primary-foreground">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, #0f172a, #1e3a5f)' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" className="w-7 h-7">
+                  <path d="M8 14 L36 14 L36 9 L48 18 L36 27 L36 22 L8 22Z" fill="#38bdf8" opacity="0.95"/>
+                  <path d="M56 50 L28 50 L28 55 L16 46 L28 37 L28 42 L56 42Z" fill="#818cf8" opacity="0.95"/>
+                  <circle cx="32" cy="32" r="2.5" fill="#e2e8f0" opacity="0.7"/>
                 </svg>
               </div>
               <div>
