@@ -1,5 +1,3 @@
-version: '3.8'
-
 # ==================== RFRP Docker Compose 配置 ====================
 #
 # 本文件提供完整的 RFRP 部署示例（Controller + Node）
@@ -66,28 +64,20 @@ services:
   # 节点服务，提供隧道服务
   # 如果 Node 部署在其他服务器上，可以注释掉此服务
   node:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: rfrp:latest
+    image: docker.yunnet.top/all/rfrp:latest
     container_name: rfrp-node
     restart: unless-stopped
 
     # 端口映射
     ports:
-      # 隧道服务端口 (QUIC/KCP 协议)
+      # 隧道服务端口 (QUIC/KCP 协议, UDP)
       - "7000:7000/udp"
+      # 代理端口范围（根据实际配置的代理端口调整）
+      # - "10000-10100:10000-10100/tcp"
+      # - "10000-10100:10000-10100/udp"
 
     # 环境变量
     environment:
-      # Controller 地址
-      # 如果 Controller 在同一 docker-compose 中，使用服务名
-      - CONTROLLER_URL=http://controller:3100
-      # 节点 Token（从 Controller Web 界面获取）
-      # 首次启动前需要在 Controller 中创建节点并获取 token
-      - NODE_TOKEN=${NODE_TOKEN:-your-node-token-here}
-      # 隧道绑定端口
-      - BIND_PORT=7000
       # 时区设置
       - TZ=Asia/Shanghai
       # 日志级别
