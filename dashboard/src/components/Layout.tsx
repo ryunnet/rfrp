@@ -118,7 +118,7 @@ export default function Layout({ children }: LayoutProps) {
         <div className="h-20 flex items-center justify-between px-5 border-b border-border">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-primary-foreground">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
                 </svg>
@@ -156,7 +156,7 @@ export default function Layout({ children }: LayoutProps) {
                     ? 'text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 }`}
-                style={isActive ? { background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' } : undefined}
+                style={isActive ? { background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' } : undefined}
                 title={sidebarCollapsed ? item.name : undefined}
               >
                 <span className="relative z-10 transition-colors">
@@ -178,7 +178,7 @@ export default function Layout({ children }: LayoutProps) {
         {/* 用户信息 */}
         <div className="p-4 border-t border-border">
           <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-lg bg-muted border border-border`}>
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center text-primary-foreground font-bold shadow-sm text-sm" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center text-primary-foreground font-bold shadow-sm text-sm" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
               {user?.username?.charAt(0).toUpperCase()}
             </div>
             {!sidebarCollapsed && (
@@ -209,7 +209,7 @@ export default function Layout({ children }: LayoutProps) {
         <header className="h-16 bg-card border-b border-border flex items-center justify-between px-8">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
                 <span className="text-primary-foreground">
                   {allNavigation.find(item => item.href === location.pathname)?.icon}
                 </span>
@@ -224,13 +224,13 @@ export default function Layout({ children }: LayoutProps) {
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 px-4 py-2 bg-muted rounded-lg border border-border">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-primary-foreground font-semibold text-xs shadow-sm" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-primary-foreground font-semibold text-xs shadow-sm" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
                 {user?.username?.charAt(0).toUpperCase()}
               </div>
               <div className="text-sm">
                 <p className="font-semibold text-foreground">{user?.username}</p>
                 {isAdmin && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-primary-foreground rounded-md" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-primary-foreground rounded-md" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
                     </svg>

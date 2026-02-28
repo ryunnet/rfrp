@@ -96,11 +96,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, hsl(222.2 47.4% 11.2%), hsl(217 91% 30%), hsl(263 70% 35%))' }}>
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, hsl(210 100% 12%), hsl(210 100% 28%), hsl(189 94% 30%))' }}>
       {/* 背景装饰 */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full blur-3xl login-float" style={{ background: 'hsl(217 91% 60% / 0.2)' }} />
-        <div className="absolute -bottom-40 -left-40 w-[400px] h-[400px] rounded-full blur-3xl login-float-delayed" style={{ background: 'hsl(263 70% 58% / 0.2)' }} />
+        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full blur-3xl login-float" style={{ background: 'hsl(210 100% 45% / 0.2)' }} />
+        <div className="absolute -bottom-40 -left-40 w-[400px] h-[400px] rounded-full blur-3xl login-float-delayed" style={{ background: 'hsl(189 94% 43% / 0.2)' }} />
         <div className="absolute top-1/3 right-1/4 w-[300px] h-[300px] rounded-full blur-3xl login-float-slow" style={{ background: 'hsl(172 66% 50% / 0.15)' }} />
         {/* 网格纹理 */}
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxIiBjeT0iMSIgcj0iMC41IiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMDMpIi8+PC9zdmc+')] opacity-60" />
@@ -109,7 +109,7 @@ export default function Login() {
       <div className={`relative max-w-md w-full space-y-6 transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
         {/* Logo 和标题 */}
         <div className="text-center space-y-4">
-          <div className="mx-auto w-20 h-20 rounded-3xl flex items-center justify-center shadow-2xl animate-gradient login-logo-glow" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+          <div className="mx-auto w-20 h-20 rounded-3xl flex items-center justify-center shadow-2xl animate-gradient login-logo-glow" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
             <Server className="w-10 h-10 text-primary-foreground drop-shadow-lg" strokeWidth={2.5} />
           </div>
           <div>
@@ -223,7 +223,7 @@ export default function Login() {
                 type="submit"
                 disabled={loading}
                 className="w-full text-white hover:opacity-90 shadow-sm transition-all duration-300"
-                style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}
+                style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}
                 size="lg"
               >
                 {loading ? (

@@ -348,7 +348,7 @@ export default function Settings() {
             onClick={handleSave}
             disabled={!hasChanges || saving}
             className="text-primary-foreground border-0"
-            style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}
+            style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}
           >
             <Save className="w-4 h-4" />
             {saving ? '保存中...' : '保存更改'}
@@ -496,8 +496,8 @@ export default function Settings() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'hsl(263 70% 58% / 0.15)' }}>
-                <Globe className="w-5 h-5" style={{ color: 'hsl(263 70% 58%)' }} />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'hsl(189 94% 43% / 0.15)' }}>
+                <Globe className="w-5 h-5" style={{ color: 'hsl(189 94% 43%)' }} />
               </div>
               <div>
                 <CardTitle className="text-lg">Web TLS 配置</CardTitle>

@@ -185,7 +185,7 @@ export default function UserSubscriptions() {
             setShowCreateModal(true);
           }}
           className="inline-flex items-center gap-2 px-5 py-2.5 text-primary-foreground text-sm font-medium rounded-xl shadow-sm transition-all hover:opacity-90"
-          style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}
+          style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}
         >
           分配订阅
         </button>

@@ -216,7 +216,7 @@ export default function Traffic() {
                     <div className="flex-1 bg-muted rounded-full h-8 overflow-hidden">
                       <div
                         className="h-full rounded-full flex items-center justify-end pr-3 transition-all duration-500"
-                        style={{ width: `${Math.max(percentage, 8)}%`, background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}
+                        style={{ width: `${Math.max(percentage, 8)}%`, background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}
                       >
                         <span className="text-xs text-primary-foreground font-semibold whitespace-nowrap drop-shadow">
                           {formatBytes(day.total_bytes)}
@@ -258,7 +258,7 @@ export default function Traffic() {
                 <TableRow key={userTraffic.user_id}>
                   <TableCell className="whitespace-nowrap">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-primary-foreground text-xs font-semibold" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-primary-foreground text-xs font-semibold" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
                         {userTraffic.username.charAt(0).toUpperCase()}
                       </div>
                       <span className="text-sm font-medium text-foreground">{userTraffic.username}</span>

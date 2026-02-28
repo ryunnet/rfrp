@@ -39,7 +39,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* 欢迎横幅 - 渐变色设计 */}
-      <div className="relative overflow-hidden rounded-xl p-8 text-white shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+      <div className="relative overflow-hidden rounded-xl p-8 text-white shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzRjMC0yLjIxLTEuNzktNC00LTRzLTQgMS43OS00IDQgMS43OSA0IDQgNCA0LTEuNzkgNC00em0wLTEwYzAtMi4yMS0xLjc5LTQtNC00cy00IDEuNzktNCA0IDEuNzkgNCA0IDQgNC0xLjc5IDQtNHptMC0xMGMwLTIuMjEtMS43OS00LTQtNHMtNCAxLjc5LTQgNCAxLjc5IDQgNCA0IDQtMS43OSA0LTR6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-10"></div>
         <div className="relative z-10 flex items-center justify-between">
           <div className="flex-1">
@@ -133,7 +133,7 @@ export default function Dashboard() {
                 <p className="mt-2 text-3xl font-bold text-foreground">{stats?.total_nodes || 0}</p>
                 <p className="mt-2 text-xs text-muted-foreground">点击查看详情</p>
               </div>
-              <div className="p-3 rounded-lg shadow-sm group-hover:scale-105 transition-transform duration-200" style={{ background: 'linear-gradient(135deg, hsl(239 84% 67%), hsl(263 70% 58%))' }}>
+              <div className="p-3 rounded-lg shadow-sm group-hover:scale-105 transition-transform duration-200" style={{ background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(189 94% 43%))' }}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-8 h-8 text-white">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
                 </svg>
@@ -165,7 +165,7 @@ export default function Dashboard() {
       <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
         <div className="px-6 py-4 border-b border-border bg-muted/50">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 58%))' }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-white">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
               </svg>
@@ -222,7 +222,7 @@ interface StatCardProps {
 const colorMap = {
   blue: { bg: 'bg-[hsl(217,91%,60%)]/10', text: 'text-[hsl(217,91%,60%)]', border: 'border-[hsl(217,91%,60%)]/20' },
   green: { bg: 'bg-[hsl(142,71%,45%)]/10', text: 'text-[hsl(142,71%,45%)]', border: 'border-[hsl(142,71%,45%)]/20' },
-  purple: { bg: 'bg-[hsl(263,70%,58%)]/10', text: 'text-[hsl(263,70%,58%)]', border: 'border-[hsl(263,70%,58%)]/20' },
+  purple: { bg: 'bg-[hsl(189,94%,43%)]/10', text: 'text-[hsl(189,94%,43%)]', border: 'border-[hsl(189,94%,43%)]/20' },
   amber: { bg: 'bg-[hsl(38,92%,50%)]/10', text: 'text-[hsl(38,92%,50%)]', border: 'border-[hsl(38,92%,50%)]/20' },
   teal: { bg: 'bg-[hsl(172,66%,50%)]/10', text: 'text-[hsl(172,66%,50%)]', border: 'border-[hsl(172,66%,50%)]/20' },
 };
@@ -255,7 +255,7 @@ interface TrafficStatCardProps {
 const trafficColorMap = {
   blue: 'linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 50%))',
   green: 'linear-gradient(135deg, hsl(142 71% 45%), hsl(142 71% 38%))',
-  purple: 'linear-gradient(135deg, hsl(263 70% 58%), hsl(263 70% 48%))',
+  purple: 'linear-gradient(135deg, hsl(189 94% 43%), hsl(189 94% 36%))',
 };
 
 function TrafficStatCard({ title, value, icon, color }: TrafficStatCardProps) {
