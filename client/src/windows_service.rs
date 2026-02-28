@@ -204,7 +204,7 @@ fn run_service_impl(arguments: Vec<OsString>) -> Result<()> {
     // 运行客户端
     runtime.block_on(async {
         tokio::select! {
-            result = crate::client::run_client(controller_url, token, tls_ca_cert) => {
+            result = crate::client::run_client(controller_url, token, tls_ca_cert, None) => {
                 if let Err(e) = result {
                     eprintln!("客户端运行错误: {}", e);
                 }

@@ -33,6 +33,10 @@ enum Command {
         /// 自定义 CA 证书文件路径（PEM 格式，用于验证 Controller 的 TLS 证书）
         #[arg(long)]
         tls_ca_cert: Option<String>,
+
+        /// 日志目录路径（按天自动分割，不指定则输出到控制台）
+        #[arg(long)]
+        log_dir: Option<String>,
     },
 
     /// 停止运行中的守护进程
@@ -67,20 +71,20 @@ enum Command {
         #[arg(long, default_value = "/var/run/rfrp-client.pid")]
         pid_file: String,
 
-        /// 日志文件路径
+        /// 日志目录路径（按天自动分割）
         #[cfg(unix)]
-        #[arg(long, default_value = "/var/log/rfrp-client.log")]
-        log_file: String,
+        #[arg(long, default_value = "./logs")]
+        log_dir: String,
 
         /// PID 文件路径
         #[cfg(windows)]
         #[arg(long, default_value = "rfrp-client.pid")]
         pid_file: String,
 
-        /// 日志文件路径
+        /// 日志目录路径（按天自动分割）
         #[cfg(windows)]
-        #[arg(long, default_value = "rfrp-client.log")]
-        log_file: String,
+        #[arg(long, default_value = "./logs")]
+        log_dir: String,
     },
 
     /// 安装为 Windows 服务（仅 Windows 系统）
@@ -149,10 +153,14 @@ fn main() -> anyhow::Result<()> {
             controller_url,
             token,
             tls_ca_cert,
+            log_dir,
         } => {
             let ca_cert = load_tls_ca_cert(&tls_ca_cert)?;
+            if let Some(ref dir) = log_dir {
+                fs::create_dir_all(dir).expect("无法创建日志目录");
+            }
             let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(client::run_client(controller_url, token, ca_cert))?;
+            runtime.block_on(client::run_client(controller_url, token, ca_cert, log_dir))?;
         }
 
         Command::Stop { pid_file } => {
@@ -164,16 +172,20 @@ fn main() -> anyhow::Result<()> {
             token,
             tls_ca_cert,
             pid_file,
-            log_file,
+            log_dir,
         } => {
+            // 确保日志目录存在
+            fs::create_dir_all(&log_dir).expect("无法创建日志目录");
+
             println!("启动守护进程模式...");
             println!("PID 文件: {}", pid_file);
-            println!("日志文件: {}", log_file);
+            println!("日志目录: {}", log_dir);
 
+            // daemon 模式下 stdout/stderr 重定向到日志目录中的固定文件
             let stdout =
-                File::create(&log_file).expect("无法创建日志文件");
+                File::create(format!("{}/daemon.log", log_dir)).expect("无法创建日志文件");
             let stderr =
-                File::create(format!("{}.err", log_file)).expect("无法创建错误日志文件");
+                File::create(format!("{}/daemon.err", log_dir)).expect("无法创建错误日志文件");
 
             let daemonize = Daemonize::new()
                 .pid_file(&pid_file)
@@ -192,7 +204,7 @@ fn main() -> anyhow::Result<()> {
             // fork 完成后再创建 tokio runtime，确保 epoll fd 和线程池状态正确
             let ca_cert = load_tls_ca_cert(&tls_ca_cert)?;
             let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(client::run_client(controller_url, token, ca_cert))?;
+            runtime.block_on(client::run_client(controller_url, token, ca_cert, Some(log_dir)))?;
         }
 
         Command::Update => {
@@ -244,10 +256,14 @@ fn main() -> anyhow::Result<()> {
             controller_url,
             token,
             tls_ca_cert,
+            log_dir,
         } => {
             let ca_cert = load_tls_ca_cert(&tls_ca_cert)?;
+            if let Some(ref dir) = log_dir {
+                fs::create_dir_all(dir).expect("无法创建日志目录");
+            }
             let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(async { client::run_client(controller_url, token, ca_cert).await })
+            runtime.block_on(async { client::run_client(controller_url, token, ca_cert, log_dir).await })
         }
 
         Command::Stop { pid_file } => stop_daemon_windows(&pid_file),
@@ -257,8 +273,8 @@ fn main() -> anyhow::Result<()> {
             token,
             tls_ca_cert,
             pid_file,
-            log_file,
-        } => start_daemon_windows(&controller_url, &token, &tls_ca_cert, &pid_file, &log_file),
+            log_dir,
+        } => start_daemon_windows(&controller_url, &token, &tls_ca_cert, &pid_file, &log_dir),
 
         Command::InstallService {
             controller_url,
@@ -280,16 +296,20 @@ fn start_daemon_windows(
     token: &str,
     tls_ca_cert: &Option<String>,
     pid_file: &str,
-    log_file: &str,
+    log_dir: &str,
 ) -> anyhow::Result<()> {
     use std::os::windows::process::CommandExt;
 
     const DETACHED_PROCESS: u32 = 0x00000008;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-    let stdout = fs::File::create(log_file)
-        .map_err(|e| anyhow::anyhow!("无法创建日志文件 {}: {}", log_file, e))?;
-    let stderr = fs::File::create(format!("{}.err", log_file))
+    // 确保日志目录存在
+    fs::create_dir_all(log_dir)
+        .map_err(|e| anyhow::anyhow!("无法创建日志目录 {}: {}", log_dir, e))?;
+
+    let stdout = fs::File::create(format!("{}/daemon.log", log_dir))
+        .map_err(|e| anyhow::anyhow!("无法创建日志文件: {}", e))?;
+    let stderr = fs::File::create(format!("{}/daemon.err", log_dir))
         .map_err(|e| anyhow::anyhow!("无法创建错误日志文件: {}", e))?;
 
     let exe = std::env::current_exe()?;
@@ -299,6 +319,8 @@ fn start_daemon_windows(
         controller_url.to_string(),
         "--token".to_string(),
         token.to_string(),
+        "--log-dir".to_string(),
+        log_dir.to_string(),
     ];
 
     if let Some(ca_path) = tls_ca_cert {
@@ -318,7 +340,7 @@ fn start_daemon_windows(
 
     println!("守护进程已启动 (PID: {})", child.id());
     println!("PID 文件: {}", pid_file);
-    println!("日志文件: {}", log_file);
+    println!("日志目录: {}", log_dir);
     println!();
     println!("停止守护进程: client stop --pid-file {}", pid_file);
 

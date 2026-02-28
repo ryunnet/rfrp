@@ -13,6 +13,7 @@ pub async fn run_client(
     controller_url: String,
     token: String,
     tls_ca_cert: Option<Vec<u8>>,
+    log_dir: Option<String>,
 ) -> Result<()> {
     // 初始化日志收集器（保留最近 1000 条日志）
     let log_collector = LogCollector::new(1000);
@@ -21,11 +22,21 @@ pub async fn run_client(
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,sqlx::query=warn"));
 
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(fmt::layer())
-        .with(LogCollectorLayer::new(log_collector.clone()))
-        .init();
+    // 按天轮转文件日志（daemon 模式）或控制台日志（前台模式）
+    if let Some(dir) = &log_dir {
+        let file_appender = tracing_appender::rolling::daily(dir, "client.log");
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt::layer().with_writer(file_appender).with_ansi(false))
+            .with(LogCollectorLayer::new(log_collector.clone()))
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt::layer())
+            .with(LogCollectorLayer::new(log_collector.clone()))
+            .init();
+    }
 
     info!("RFRP 客户端启动");
     info!("控制器地址: {}", controller_url);

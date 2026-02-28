@@ -66,20 +66,20 @@ enum Command {
         #[arg(long, default_value = "/var/run/rfrp-controller.pid")]
         pid_file: String,
 
-        /// 日志文件路径
+        /// 日志目录路径（按天自动分割）
         #[cfg(unix)]
-        #[arg(long, default_value = "/var/log/rfrp-controller.log")]
-        log_file: String,
+        #[arg(long, default_value = "./logs")]
+        log_dir: String,
 
         /// PID 文件路径
         #[cfg(windows)]
         #[arg(long, default_value = "rfrp-controller.pid")]
         pid_file: String,
 
-        /// 日志文件路径
+        /// 日志目录路径（按天自动分割）
         #[cfg(windows)]
-        #[arg(long, default_value = "rfrp-controller.log")]
-        log_file: String,
+        #[arg(long, default_value = "./logs")]
+        log_dir: String,
     },
 
     /// 更新到最新版本
@@ -98,15 +98,17 @@ pub struct AppState {
 }
 
 // ─── Unix 入口 ───────────────────────────────────────────
+// 注意：不使用 #[tokio::main]，因为 daemon 模式需要在 fork 之后才创建 tokio runtime。
+// 在 fork 之前创建的 runtime（epoll fd、worker 线程）会在 fork 后损坏，导致网络连接失败。
 
 #[cfg(not(windows))]
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
         Command::Start => {
-            run_controller().await?;
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(run_controller(None))?;
         }
 
         Command::Stop { pid_file } => {
@@ -115,16 +117,20 @@ async fn main() -> Result<()> {
 
         Command::Daemon {
             pid_file,
-            log_file,
+            log_dir,
         } => {
             use daemonize::Daemonize;
 
+            // 确保日志目录存在
+            fs::create_dir_all(&log_dir).expect("无法创建日志目录");
+
             println!("启动守护进程模式...");
             println!("PID 文件: {}", pid_file);
-            println!("日志文件: {}", log_file);
+            println!("日志目录: {}", log_dir);
 
-            let stdout = std::fs::File::create(&log_file).expect("无法创建日志文件");
-            let stderr = std::fs::File::create(format!("{}.err", log_file))
+            // daemon 模式下 stdout/stderr 重定向到日志目录中的固定文件
+            let stdout = std::fs::File::create(format!("{}/daemon.log", log_dir)).expect("无法创建日志文件");
+            let stderr = std::fs::File::create(format!("{}/daemon.err", log_dir))
                 .expect("无法创建错误日志文件");
 
             let daemonize = Daemonize::new()
@@ -141,7 +147,9 @@ async fn main() -> Result<()> {
                 }
             }
 
-            run_controller().await?;
+            // fork 完成后再创建 tokio runtime，确保 epoll fd 和线程池状态正确
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(run_controller(Some(log_dir)))?;
         }
 
         Command::Update => {
@@ -186,30 +194,34 @@ fn main() -> Result<()> {
     match cli.command {
         Command::Start => {
             let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(async { run_controller().await })
+            runtime.block_on(async { run_controller(None).await })
         }
 
         Command::Stop { pid_file } => stop_daemon_windows(&pid_file),
 
         Command::Daemon {
             pid_file,
-            log_file,
-        } => start_daemon_windows(&pid_file, &log_file),
+            log_dir,
+        } => start_daemon_windows(&pid_file, &log_dir),
 
         Command::Update => update_binary(),
     }
 }
 
 #[cfg(windows)]
-fn start_daemon_windows(pid_file: &str, log_file: &str) -> Result<()> {
+fn start_daemon_windows(pid_file: &str, log_dir: &str) -> Result<()> {
     use std::os::windows::process::CommandExt;
 
     const DETACHED_PROCESS: u32 = 0x00000008;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-    let stdout = fs::File::create(log_file)
-        .map_err(|e| anyhow::anyhow!("无法创建日志文件 {}: {}", log_file, e))?;
-    let stderr = fs::File::create(format!("{}.err", log_file))
+    // 确保日志目录存在
+    fs::create_dir_all(log_dir)
+        .map_err(|e| anyhow::anyhow!("无法创建日志目录 {}: {}", log_dir, e))?;
+
+    let stdout = fs::File::create(format!("{}/daemon.log", log_dir))
+        .map_err(|e| anyhow::anyhow!("无法创建日志文件: {}", e))?;
+    let stderr = fs::File::create(format!("{}/daemon.err", log_dir))
         .map_err(|e| anyhow::anyhow!("无法创建错误日志文件: {}", e))?;
 
     let exe = std::env::current_exe()?;
@@ -225,7 +237,7 @@ fn start_daemon_windows(pid_file: &str, log_file: &str) -> Result<()> {
 
     println!("守护进程已启动 (PID: {})", child.id());
     println!("PID 文件: {}", pid_file);
-    println!("日志文件: {}", log_file);
+    println!("日志目录: {}", log_dir);
     println!();
     println!("停止守护进程: controller stop --pid-file {}", pid_file);
 
@@ -299,7 +311,7 @@ fn update_binary() -> Result<()> {
 }
 
 /// 运行控制器主逻辑
-async fn run_controller() -> Result<()> {
+async fn run_controller(log_dir: Option<String>) -> Result<()> {
     // 安装 rustls CryptoProvider（TLS 需要）
     let _ = rustls::crypto::ring::default_provider().install_default();
 
@@ -307,10 +319,19 @@ async fn run_controller() -> Result<()> {
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,sqlx::query=warn"));
 
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(fmt::layer())
-        .init();
+    // 按天轮转文件日志（daemon 模式）或控制台日志（前台模式）
+    if let Some(dir) = &log_dir {
+        let file_appender = tracing_appender::rolling::daily(dir, "controller.log");
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt::layer().with_writer(file_appender).with_ansi(false))
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt::layer())
+            .init();
+    }
 
     // 读取配置
     let config = get_config().await;

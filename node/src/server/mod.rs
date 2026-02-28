@@ -25,6 +25,7 @@ pub async fn run_server_controller_mode(
     bind_port: u16,
     protocol: String,
     tls_ca_cert: Option<Vec<u8>>,
+    log_dir: Option<String>,
 ) -> Result<()> {
     // 初始化内存日志缓冲区（保存最近 1000 条日志）
     let log_buffer = node_logs::init_global_log_buffer(1000);
@@ -34,11 +35,21 @@ pub async fn run_server_controller_mode(
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,sqlx::query=warn"));
 
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(fmt::layer())
-        .with(log_layer)
-        .init();
+    // 按天轮转文件日志（daemon 模式）或控制台日志（前台模式）
+    if let Some(dir) = &log_dir {
+        let file_appender = tracing_appender::rolling::daily(dir, "node.log");
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt::layer().with_writer(file_appender).with_ansi(false))
+            .with(log_layer)
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt::layer())
+            .with(log_layer)
+            .init();
+    }
 
     info!("Agent Server 启动 (Controller gRPC 模式)");
     info!("Controller: {}", controller_url);

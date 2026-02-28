@@ -272,7 +272,7 @@ export default function Nodes() {
     if (platform === 'windows') {
       return `node.exe daemon --controller-url ${protocol}://${url} --token ${token} --bind-port 7000`;
     } else {
-      return `./node daemon --controller-url ${protocol}://${url} --token ${token} --bind-port 7000 --pid-file /var/run/rfrp-node.pid --log-file /var/log/rfrp-node.log`;
+      return `./node daemon --controller-url ${protocol}://${url} --token ${token} --bind-port 7000 --pid-file /var/run/rfrp-node.pid --log-dir ./logs`;
     }
   };
 
