@@ -19,6 +19,8 @@ pub struct Model {
     pub enabled: bool,
     #[serde(rename = "nodeId")]
     pub node_id: Option<i64>,
+    #[serde(rename = "groupId")]
+    pub group_id: Option<String>,
     #[serde(rename = "totalBytesSent")]
     pub total_bytes_sent: i64,
     #[serde(rename = "totalBytesReceived")]

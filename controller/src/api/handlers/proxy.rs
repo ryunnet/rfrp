@@ -6,6 +6,7 @@ use axum::{
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, QueryFilter, Set};
 use serde::Deserialize;
 use tracing::info;
+use uuid::Uuid;
 
 use crate::{entity::Proxy, migration::get_connection, middleware::AuthUser, AppState};
 
@@ -373,6 +374,7 @@ pub async fn create_proxy(
         remote_port: Set(req.remote_port),
         enabled: Set(true),
         node_id: Set(req.node_id),
+        group_id: Set(None),
         total_bytes_sent: Set(0),
         total_bytes_received: Set(0),
         created_at: Set(now),
@@ -671,4 +673,417 @@ pub async fn delete_proxy(
             ApiResponse::<&str>::error(format!("Failed to delete proxy: {}", e)),
         ),
     }
+}
+
+// ============ 批量创建 / 分组操作 ============
+
+#[derive(Deserialize)]
+pub struct BatchCreateProxyRequest {
+    pub client_id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub proxy_type: String,
+    #[serde(rename = "localIP")]
+    pub local_ip: String,
+    #[serde(rename = "localPorts")]
+    pub local_ports: Vec<u16>,
+    #[serde(rename = "remotePorts")]
+    pub remote_ports: Vec<u16>,
+    #[serde(rename = "nodeId")]
+    pub node_id: Option<i64>,
+}
+
+pub async fn batch_create_proxies(
+    Extension(auth_user_opt): Extension<Option<AuthUser>>,
+    Extension(app_state): Extension<AppState>,
+    Json(req): Json<BatchCreateProxyRequest>,
+) -> impl IntoResponse {
+    let auth_user = match auth_user_opt {
+        Some(user) => user,
+        None => return (StatusCode::UNAUTHORIZED, ApiResponse::<Vec<crate::entity::proxy::Model>>::error("未认证".to_string())),
+    };
+
+    if req.remote_ports.is_empty() {
+        return (StatusCode::BAD_REQUEST, ApiResponse::<Vec<crate::entity::proxy::Model>>::error("远程端口列表不能为空".to_string()));
+    }
+
+    if req.local_ports.len() != 1 && req.local_ports.len() != req.remote_ports.len() {
+        return (StatusCode::BAD_REQUEST, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(
+            format!("本地端口数量（{}）必须为 1 或与远程端口数量（{}）一致", req.local_ports.len(), req.remote_ports.len()),
+        ));
+    }
+
+    let db = get_connection().await;
+
+    // 验证客户端
+    let client = match crate::entity::Client::find()
+        .filter(crate::entity::client::Column::Id.eq(req.client_id.parse::<i64>().unwrap_or(0)))
+        .one(db)
+        .await
+    {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, ApiResponse::<Vec<crate::entity::proxy::Model>>::error("客户端不存在".to_string())),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(format!("查询客户端失败: {}", e))),
+    };
+
+    // 验证端口限制（仅对非管理员）
+    if !auth_user.is_admin {
+        if let Some(user_id) = client.user_id {
+            for &remote_port in &req.remote_ports {
+                match crate::port_limiter::validate_user_port_limit(user_id, remote_port, db).await {
+                    Ok((allowed, reason)) => {
+                        if !allowed {
+                            return (StatusCode::FORBIDDEN, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(reason));
+                        }
+                    }
+                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(format!("验证端口限制失败: {}", e))),
+                }
+            }
+        }
+    }
+
+    // 验证节点权限
+    if let Some(node_id) = req.node_id {
+        let node = match crate::entity::Node::find_by_id(node_id).one(db).await {
+            Ok(Some(n)) => n,
+            Ok(None) => return (StatusCode::NOT_FOUND, ApiResponse::<Vec<crate::entity::proxy::Model>>::error("节点不存在".to_string())),
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(format!("查询节点失败: {}", e))),
+        };
+
+        if node.node_type == "dedicated" && !auth_user.is_admin {
+            if client.user_id != Some(auth_user.id) {
+                return (StatusCode::FORBIDDEN, ApiResponse::<Vec<crate::entity::proxy::Model>>::error("无权访问此客户端".to_string()));
+            }
+
+            let user_node = crate::entity::UserNode::find()
+                .filter(crate::entity::user_node::Column::UserId.eq(auth_user.id))
+                .filter(crate::entity::user_node::Column::NodeId.eq(node_id))
+                .one(db)
+                .await;
+
+            match user_node {
+                Ok(Some(_)) => {}
+                Ok(None) => return (StatusCode::FORBIDDEN, ApiResponse::<Vec<crate::entity::proxy::Model>>::error("此独享节点未分配给您，无法使用".to_string())),
+                Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(format!("检查节点权限失败: {}", e))),
+            }
+        }
+    }
+
+    // 验证所有端口（节点限制 + 端口唯一性）
+    for &remote_port in &req.remote_ports {
+        if let Some(node_id) = req.node_id {
+            match crate::node_limiter::validate_node_proxy_limit(node_id, remote_port, db).await {
+                Ok((allowed, reason)) => {
+                    if !allowed {
+                        return (StatusCode::FORBIDDEN, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(reason));
+                    }
+                }
+                Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(format!("验证节点限制失败: {}", e))),
+            }
+        }
+
+        // 检查端口唯一性
+        let mut port_query = Proxy::find()
+            .filter(crate::entity::proxy::Column::RemotePort.eq(remote_port))
+            .filter(crate::entity::proxy::Column::Enabled.eq(true));
+
+        if let Some(node_id) = req.node_id {
+            port_query = port_query.filter(crate::entity::proxy::Column::NodeId.eq(node_id));
+        } else {
+            port_query = port_query.filter(crate::entity::proxy::Column::NodeId.is_null());
+        }
+
+        match port_query.one(db).await {
+            Ok(Some(existing)) => {
+                return (StatusCode::CONFLICT, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(
+                    format!("远程端口 {} 已被代理「{}」占用", remote_port, existing.name),
+                ));
+            }
+            Ok(None) => {}
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(format!("检查端口占用失败: {}", e))),
+        }
+    }
+
+    // 所有验证通过，开始创建
+    let group_id = if req.remote_ports.len() > 1 {
+        Some(Uuid::new_v4().to_string())
+    } else {
+        None
+    };
+
+    let now = chrono::Utc::now().naive_utc();
+    let mut created_proxies: Vec<crate::entity::proxy::Model> = Vec::new();
+
+    for (i, &remote_port) in req.remote_ports.iter().enumerate() {
+        let local_port = if req.local_ports.len() == 1 { req.local_ports[0] } else { req.local_ports[i] };
+        let proxy_name = if req.remote_ports.len() == 1 {
+            req.name.clone()
+        } else {
+            format!("{}-{}", req.name, remote_port)
+        };
+
+        let new_proxy = crate::entity::proxy::ActiveModel {
+            id: NotSet,
+            client_id: Set(req.client_id.clone()),
+            name: Set(proxy_name),
+            proxy_type: Set(req.proxy_type.clone()),
+            local_ip: Set(req.local_ip.clone()),
+            local_port: Set(local_port),
+            remote_port: Set(remote_port),
+            enabled: Set(true),
+            node_id: Set(req.node_id),
+            group_id: Set(group_id.clone()),
+            total_bytes_sent: Set(0),
+            total_bytes_received: Set(0),
+            created_at: Set(now),
+            updated_at: Set(now),
+        };
+
+        match new_proxy.insert(db).await {
+            Ok(proxy) => {
+                // 启动代理监听器
+                if let Err(e) = app_state.proxy_control.start_proxy(&req.client_id, proxy.id).await {
+                    tracing::warn!("批量创建：启动代理监听器失败，回滚全部: {}", e);
+                    // 回滚：删除已创建的所有代理并停止监听器
+                    for p in &created_proxies {
+                        let _ = app_state.proxy_control.stop_proxy(&req.client_id, p.id).await;
+                        let _ = Proxy::delete_by_id(p.id).exec(db).await;
+                    }
+                    let _ = Proxy::delete_by_id(proxy.id).exec(db).await;
+                    return (StatusCode::CONFLICT, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(
+                        format!("端口 {} 启动代理监听器失败: {}", remote_port, e),
+                    ));
+                }
+                created_proxies.push(proxy);
+            }
+            Err(e) => {
+                // 回滚已创建的代理
+                for p in &created_proxies {
+                    let _ = app_state.proxy_control.stop_proxy(&req.client_id, p.id).await;
+                    let _ = Proxy::delete_by_id(p.id).exec(db).await;
+                }
+                return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<Vec<crate::entity::proxy::Model>>::error(
+                    format!("创建代理失败: {}", e),
+                ));
+            }
+        }
+    }
+
+    info!("批量创建 {} 个代理 (group_id: {:?}, 客户端: {})", created_proxies.len(), group_id, req.client_id);
+
+    // 通知客户端（只通知一次）
+    let csm = app_state.client_stream_manager.clone();
+    let client_id_notify = req.client_id.clone();
+    tokio::spawn(async move {
+        csm.notify_proxy_change(&client_id_notify).await;
+    });
+
+    (StatusCode::OK, ApiResponse::success(created_proxies))
+}
+
+#[derive(Deserialize)]
+pub struct ToggleGroupRequest {
+    pub enabled: bool,
+}
+
+pub async fn toggle_proxy_group(
+    Path(group_id): Path<String>,
+    Extension(_auth_user): Extension<Option<AuthUser>>,
+    Extension(app_state): Extension<AppState>,
+    Json(req): Json<ToggleGroupRequest>,
+) -> impl IntoResponse {
+    let db = get_connection().await;
+
+    let proxies = match Proxy::find()
+        .filter(crate::entity::proxy::Column::GroupId.eq(&group_id))
+        .all(db)
+        .await
+    {
+        Ok(p) => p,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<&str>::error(format!("查询代理组失败: {}", e))),
+    };
+
+    if proxies.is_empty() {
+        return (StatusCode::NOT_FOUND, ApiResponse::<&str>::error("代理组不存在".to_string()));
+    }
+
+    let client_id = proxies[0].client_id.clone();
+    let now = chrono::Utc::now().naive_utc();
+
+    for proxy in &proxies {
+        let old_enabled = proxy.enabled;
+        if old_enabled == req.enabled {
+            continue;
+        }
+
+        let mut active: crate::entity::proxy::ActiveModel = proxy.clone().into();
+        active.enabled = Set(req.enabled);
+        active.updated_at = Set(now);
+
+        if let Err(e) = active.update(db).await {
+            tracing::error!("更新代理 {} 状态失败: {}", proxy.id, e);
+            continue;
+        }
+
+        if req.enabled {
+            if let Err(e) = app_state.proxy_control.start_proxy(&client_id, proxy.id).await {
+                tracing::warn!("启动代理监听器失败 (ID: {}): {}", proxy.id, e);
+            }
+        } else if let Err(e) = app_state.proxy_control.stop_proxy(&client_id, proxy.id).await {
+            tracing::warn!("停止代理监听器失败 (ID: {}): {}", proxy.id, e);
+        }
+    }
+
+    info!("代理组 {} 已{}", group_id, if req.enabled { "启用" } else { "禁用" });
+
+    // 通知客户端
+    let csm = app_state.client_stream_manager.clone();
+    let client_id_notify = client_id.clone();
+    tokio::spawn(async move {
+        csm.notify_proxy_change(&client_id_notify).await;
+    });
+
+    (StatusCode::OK, ApiResponse::success("操作成功"))
+}
+
+pub async fn delete_proxy_group(
+    Path(group_id): Path<String>,
+    Extension(_auth_user): Extension<Option<AuthUser>>,
+    Extension(app_state): Extension<AppState>,
+) -> impl IntoResponse {
+    let db = get_connection().await;
+
+    let proxies = match Proxy::find()
+        .filter(crate::entity::proxy::Column::GroupId.eq(&group_id))
+        .all(db)
+        .await
+    {
+        Ok(p) => p,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<&str>::error(format!("查询代理组失败: {}", e))),
+    };
+
+    if proxies.is_empty() {
+        return (StatusCode::NOT_FOUND, ApiResponse::<&str>::error("代理组不存在".to_string()));
+    }
+
+    let client_id = proxies[0].client_id.clone();
+    let count = proxies.len();
+
+    for proxy in &proxies {
+        let _ = Proxy::delete_by_id(proxy.id).exec(db).await;
+
+        let proxy_control = app_state.proxy_control.clone();
+        let cid = client_id.clone();
+        let pid = proxy.id;
+        tokio::spawn(async move {
+            if let Err(e) = proxy_control.stop_proxy(&cid, pid).await {
+                tracing::error!("停止代理监听器失败 (ID: {}): {}", pid, e);
+            }
+        });
+    }
+
+    info!("代理组 {} 已删除（共 {} 个）", group_id, count);
+
+    // 通知客户端
+    let csm = app_state.client_stream_manager.clone();
+    let client_id_notify = client_id.clone();
+    tokio::spawn(async move {
+        csm.notify_proxy_change(&client_id_notify).await;
+    });
+
+    (StatusCode::OK, ApiResponse::success("代理组删除成功"))
+}
+
+#[derive(Deserialize)]
+pub struct UpdateGroupRequest {
+    pub name: Option<String>,
+    #[serde(rename = "type")]
+    pub proxy_type: Option<String>,
+    #[serde(rename = "localIP")]
+    pub local_ip: Option<String>,
+}
+
+pub async fn update_proxy_group(
+    Path(group_id): Path<String>,
+    Extension(_auth_user): Extension<Option<AuthUser>>,
+    Extension(app_state): Extension<AppState>,
+    Json(req): Json<UpdateGroupRequest>,
+) -> impl IntoResponse {
+    let db = get_connection().await;
+
+    let proxies = match Proxy::find()
+        .filter(crate::entity::proxy::Column::GroupId.eq(&group_id))
+        .all(db)
+        .await
+    {
+        Ok(p) => p,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<&str>::error(format!("查询代理组失败: {}", e))),
+    };
+
+    if proxies.is_empty() {
+        return (StatusCode::NOT_FOUND, ApiResponse::<&str>::error("代理组不存在".to_string()));
+    }
+
+    let client_id = proxies[0].client_id.clone();
+    let now = chrono::Utc::now().naive_utc();
+    let mut config_changed = false;
+
+    for proxy in &proxies {
+        let mut active: crate::entity::proxy::ActiveModel = proxy.clone().into();
+        let mut changed = false;
+
+        if let Some(ref name) = req.name {
+            // 更新名称：保留 -port 后缀
+            let new_name = if proxies.len() > 1 {
+                format!("{}-{}", name, proxy.remote_port)
+            } else {
+                name.clone()
+            };
+            active.name = Set(new_name);
+            changed = true;
+        }
+        if let Some(ref proxy_type) = req.proxy_type {
+            if proxy_type != &proxy.proxy_type {
+                config_changed = true;
+            }
+            active.proxy_type = Set(proxy_type.clone());
+            changed = true;
+        }
+        if let Some(ref local_ip) = req.local_ip {
+            if local_ip != &proxy.local_ip {
+                config_changed = true;
+            }
+            active.local_ip = Set(local_ip.clone());
+            changed = true;
+        }
+
+        if changed {
+            active.updated_at = Set(now);
+            if let Err(e) = active.update(db).await {
+                tracing::error!("更新代理 {} 失败: {}", proxy.id, e);
+            }
+        }
+    }
+
+    // 如果配置变更且代理已启用，重启监听器
+    if config_changed {
+        for proxy in &proxies {
+            if proxy.enabled {
+                let _ = app_state.proxy_control.stop_proxy(&client_id, proxy.id).await;
+                if let Err(e) = app_state.proxy_control.start_proxy(&client_id, proxy.id).await {
+                    tracing::error!("重启代理监听器失败 (ID: {}): {}", proxy.id, e);
+                }
+            }
+        }
+
+        // 通知客户端
+        let csm = app_state.client_stream_manager.clone();
+        let client_id_notify = client_id.clone();
+        tokio::spawn(async move {
+            csm.notify_proxy_change(&client_id_notify).await;
+        });
+    }
+
+    info!("代理组 {} 已更新", group_id);
+    (StatusCode::OK, ApiResponse::success("代理组更新成功"))
 }

@@ -201,6 +201,38 @@ export const proxyService = {
     const response = await api.delete<ApiResponse<string>>(`/proxies/${id}`);
     return response.data;
   },
+
+  async batchCreateProxies(data: {
+    client_id: string;
+    name: string;
+    type: string;
+    localIP: string;
+    localPorts: number[];
+    remotePorts: number[];
+    nodeId?: number;
+  }): Promise<ApiResponse<Proxy[]>> {
+    const response = await api.post<ApiResponse<Proxy[]>>('/proxies/batch', data);
+    return response.data;
+  },
+
+  async deleteProxyGroup(groupId: string): Promise<ApiResponse<string>> {
+    const response = await api.delete<ApiResponse<string>>(`/proxies/group/${groupId}`);
+    return response.data;
+  },
+
+  async toggleProxyGroup(groupId: string, enabled: boolean): Promise<ApiResponse<string>> {
+    const response = await api.post<ApiResponse<string>>(`/proxies/group/${groupId}/toggle`, { enabled });
+    return response.data;
+  },
+
+  async updateProxyGroup(groupId: string, data: {
+    name?: string;
+    type?: string;
+    localIP?: string;
+  }): Promise<ApiResponse<string>> {
+    const response = await api.put<ApiResponse<string>>(`/proxies/group/${groupId}`, data);
+    return response.data;
+  },
 };
 
 // ============ 流量服务 ============

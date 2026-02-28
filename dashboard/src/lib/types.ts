@@ -81,11 +81,30 @@ export interface Proxy {
   remotePort: number;  // 后端返回驼峰命名
   enabled: boolean;
   nodeId: number | null;
+  groupId: string | null;  // 代理分组 ID，同组代理共享
   totalBytesSent: number;  // 后端返回驼峰命名
   totalBytesReceived: number;  // 后端返回驼峰命名
   created_at: string;
   updated_at: string;
 }
+
+// 代理分组（前端聚合类型）
+export interface ProxyGroup {
+  groupId: string;
+  name: string;
+  proxies: Proxy[];
+  client_id: string;
+  nodeId: number | null;
+  type: string;
+  localIP: string;
+  enabled: boolean;
+  totalBytesSent: number;
+  totalBytesReceived: number;
+}
+
+export type ProxyDisplayRow =
+  | { kind: 'standalone'; proxy: Proxy }
+  | { kind: 'group'; group: ProxyGroup };
 
 // 流量类型
 export interface TrafficOverview {

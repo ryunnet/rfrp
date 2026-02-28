@@ -1,6 +1,6 @@
 use axum::middleware::from_fn;
 use axum::{Extension, Router};
-use axum::routing::{get, post, put};
+use axum::routing::{get, post, put, delete};
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::{info, error, warn};
@@ -88,6 +88,9 @@ pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
             .route("/clients/{id}/traffic", get(handlers::get_client_traffic))
             .route("/clients/{id}/allocate-quota", post(handlers::allocate_client_quota))
             .route("/proxies", get(handlers::list_proxies).post(handlers::create_proxy))
+            .route("/proxies/batch", post(handlers::batch_create_proxies))
+            .route("/proxies/group/{group_id}", put(handlers::update_proxy_group).delete(handlers::delete_proxy_group))
+            .route("/proxies/group/{group_id}/toggle", post(handlers::toggle_proxy_group))
             .route("/proxies/{id}", put(handlers::update_proxy).delete(handlers::delete_proxy))
             .route("/clients/{id}/proxies", get(handlers::list_proxies_by_client))
             // 流量统计路由

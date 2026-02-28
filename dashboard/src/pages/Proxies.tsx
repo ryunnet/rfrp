@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { proxyService, clientService, nodeService, userService } from '../lib/services';
-import type { Proxy, Client, Node } from '../lib/types';
+import type { Proxy, Client, Node, ProxyGroup, ProxyDisplayRow } from '../lib/types';
 import { formatBytes } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -47,7 +47,8 @@ export default function Proxies() {
   } | null>(null);
   const [parsedPorts, setParsedPorts] = useState<number[]>([]);
   const [portParseError, setPortParseError] = useState<string>('');
-
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   useEffect(() => {
     loadData();
   }, []);
@@ -126,6 +127,7 @@ export default function Proxies() {
       enabled: true,
     });
     setEditingProxy(null);
+    setEditingGroupId(null);
   };
 
   const handleCreateProxy = async () => {
@@ -183,53 +185,23 @@ export default function Proxies() {
     }
 
     try {
-      // 批量创建代理
-      let successCount = 0;
-      let failCount = 0;
-      const errors: string[] = [];
+      const response = await proxyService.batchCreateProxies({
+        client_id: formData.client_id,
+        name: formData.name,
+        type: formData.type,
+        localIP: formData.localIP,
+        localPorts: localPorts,
+        remotePorts: ports,
+        nodeId: parseInt(formData.node_id),
+      });
 
-      for (let i = 0; i < ports.length; i++) {
-        const port = ports[i];
-        const localPort = localPorts.length === 1 ? localPorts[0] : localPorts[i];
-        const proxyName = ports.length === 1 ? formData.name : `${formData.name}-${port}`;
-
-        try {
-          const response = await proxyService.createProxy({
-            client_id: formData.client_id,
-            name: proxyName,
-            type: formData.type,
-            localIP: formData.localIP,
-            localPort: localPort,
-            remotePort: port,
-            nodeId: parseInt(formData.node_id),
-          });
-
-          if (response.success) {
-            successCount++;
-          } else {
-            failCount++;
-            errors.push(`端口 ${port}: ${response.message || '创建失败'}`);
-          }
-        } catch (error) {
-          failCount++;
-          errors.push(`端口 ${port}: 创建失败`);
-        }
-      }
-
-      // 显示结果
-      if (successCount > 0 && failCount === 0) {
-        showToast(`成功创建 ${successCount} 个代理`, 'success');
+      if (response.success) {
+        showToast(`成功创建 ${ports.length} 个代理`, 'success');
         resetForm();
         setShowCreateModal(false);
         loadData();
-      } else if (successCount > 0 && failCount > 0) {
-        showToast(`部分成功：${successCount} 个成功，${failCount} 个失败`, 'error');
-        if (errors.length > 0) {
-          console.error('创建失败的代理:', errors);
-        }
-        loadData();
       } else {
-        showToast(`创建失败：${errors[0] || '未知错误'}`, 'error');
+        showToast(response.message || '创建失败', 'error');
       }
     } catch (error) {
       console.error('创建代理失败:', error);
@@ -484,6 +456,157 @@ export default function Proxies() {
     });
   };
 
+  // 将代理列表按 group_id 分组为显示行
+  const getDisplayRows = (): ProxyDisplayRow[] => {
+    const groups = new Map<string, Proxy[]>();
+    const standalone: Proxy[] = [];
+
+    for (const proxy of proxies) {
+      if (proxy.groupId) {
+        if (!groups.has(proxy.groupId)) {
+          groups.set(proxy.groupId, []);
+        }
+        groups.get(proxy.groupId)!.push(proxy);
+      } else {
+        standalone.push(proxy);
+      }
+    }
+
+    const rows: ProxyDisplayRow[] = [];
+
+    for (const [groupId, groupProxies] of groups) {
+      if (groupProxies.length === 1) {
+        rows.push({ kind: 'standalone', proxy: groupProxies[0] });
+      } else {
+        const sorted = groupProxies.sort((a, b) => a.remotePort - b.remotePort);
+        const first = sorted[0];
+        const baseName = first.name.replace(/-\d+$/, '');
+        rows.push({
+          kind: 'group',
+          group: {
+            groupId,
+            name: baseName,
+            proxies: sorted,
+            client_id: first.client_id,
+            nodeId: first.nodeId,
+            type: first.type,
+            localIP: first.localIP,
+            enabled: sorted.every(p => p.enabled),
+            totalBytesSent: sorted.reduce((sum, p) => sum + p.totalBytesSent, 0),
+            totalBytesReceived: sorted.reduce((sum, p) => sum + p.totalBytesReceived, 0),
+          },
+        });
+      }
+    }
+
+    for (const proxy of standalone) {
+      rows.push({ kind: 'standalone', proxy });
+    }
+
+    return rows;
+  };
+
+  const toggleGroupExpand = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
+  const handleDeleteGroup = (groupId: string, proxyCount: number) => {
+    setConfirmDialog({
+      open: true,
+      title: '删除代理组',
+      message: `确定要删除这个代理组（共 ${proxyCount} 个代理）吗？`,
+      onConfirm: async () => {
+        try {
+          const response = await proxyService.deleteProxyGroup(groupId);
+          if (response.success) {
+            showToast('代理组删除成功', 'success');
+            loadData();
+          } else {
+            showToast(response.message || '删除失败', 'error');
+          }
+        } catch (error) {
+          showToast('删除失败', 'error');
+        }
+      },
+    });
+  };
+
+  const handleToggleGroupEnabled = async (groupId: string, currentlyEnabled: boolean) => {
+    try {
+      const response = await proxyService.toggleProxyGroup(groupId, !currentlyEnabled);
+      if (response.success) {
+        showToast(`代理组已${currentlyEnabled ? '禁用' : '启用'}`, 'success');
+        loadData();
+      }
+    } catch (error) {
+      showToast('操作失败', 'error');
+    }
+  };
+
+  const handleEditGroup = (group: ProxyGroup) => {
+    setEditingGroupId(group.groupId);
+    setEditingProxy(null);
+    const firstProxy = group.proxies[0];
+    setFormData({
+      client_id: group.client_id,
+      node_id: group.nodeId ? group.nodeId.toString() : '',
+      name: group.name,
+      type: group.type,
+      localIP: group.localIP,
+      localPort: firstProxy.localPort.toString(),
+      remotePort: '',
+      enabled: group.enabled,
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleUpdateGroup = async () => {
+    if (!editingGroupId) return;
+    try {
+      const response = await proxyService.updateProxyGroup(editingGroupId, {
+        name: formData.name || undefined,
+        type: formData.type || undefined,
+        localIP: formData.localIP || undefined,
+      });
+      if (response.success) {
+        showToast('代理组更新成功', 'success');
+        resetForm();
+        setEditingGroupId(null);
+        setShowCreateModal(false);
+        loadData();
+      } else {
+        showToast(response.message || '更新失败', 'error');
+      }
+    } catch (error) {
+      showToast('更新失败', 'error');
+    }
+  };
+
+  // 格式化端口范围显示
+  const formatPortRange = (proxies: Proxy[]): string => {
+    const ports = proxies.map(p => p.remotePort).sort((a, b) => a - b);
+    if (ports.length <= 3) {
+      return ports.map(p => `:${p}`).join(', ');
+    }
+    return `:${ports[0]}-${ports[ports.length - 1]}`;
+  };
+
+  const formatLocalPortRange = (proxies: Proxy[]): string => {
+    const localPorts = [...new Set(proxies.map(p => p.localPort))].sort((a, b) => a - b);
+    if (localPorts.length === 1) {
+      return `${proxies[0].localIP}:${localPorts[0]}`;
+    }
+    if (localPorts.length <= 3) {
+      return localPorts.map(p => `${proxies[0].localIP}:${p}`).join(', ');
+    }
+    return `${proxies[0].localIP}:${localPorts[0]}-${localPorts[localPorts.length - 1]}`;
+  };
+
   return (
     <div className="space-y-6">
       {/* 页面标题 */}
@@ -548,98 +671,266 @@ export default function Proxies() {
                   </TableCell>
                 </TableRow>
               ) : (
-                proxies.map((proxy) => (
-                  <TableRow key={proxy.id}>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center text-primary-foreground text-sm font-semibold shadow-sm">
-                          {proxy.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-sm font-semibold text-foreground">{proxy.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <span className="text-sm text-muted-foreground">{getClientName(proxy.client_id)}</span>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <span className="text-sm text-muted-foreground">{getNodeName(proxy.nodeId)}</span>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg" style={{
-                        background: (proxy.type || 'tcp').toLowerCase() === 'tcp' ? 'hsl(217 91% 60% / 0.15)' : 'hsl(263 70% 58% / 0.15)',
-                        color: (proxy.type || 'tcp').toLowerCase() === 'tcp' ? 'hsl(217 91% 60%)' : 'hsl(263 70% 58%)'
-                      }}>
-                        {(proxy.type || 'tcp').toUpperCase()}
-                      </span>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="px-2 py-1 bg-muted text-primary rounded-lg font-mono text-xs">
-                          :{proxy.remotePort}
-                        </span>
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-muted-foreground">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                        </svg>
-                        <span className="text-muted-foreground font-mono text-xs">
-                          {proxy.localIP}:{proxy.localPort}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg`}
-                        style={proxy.enabled
-                          ? { background: 'hsl(142 71% 45% / 0.15)', color: 'hsl(142 71% 45%)' }
-                          : { background: 'hsl(0 0% 50% / 0.1)', color: 'hsl(0 0% 45%)' }
-                        }
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: proxy.enabled ? 'hsl(142 71% 45%)' : 'hsl(0 0% 60%)' }}></span>
-                        {proxy.enabled ? '启用' : '禁用'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(217 91% 60%)' }}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
-                          </svg>
-                          <span className="text-muted-foreground">{formatBytes(proxy.totalBytesSent)}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(142 71% 45%)' }}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
-                          </svg>
-                          <span className="text-muted-foreground">{formatBytes(proxy.totalBytesReceived)}</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-right">
-                      <div className="flex flex-wrap items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleToggleEnabled(proxy)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                            proxy.enabled
-                              ? 'text-amber-600 hover:bg-amber-50'
-                              : 'text-green-600 hover:bg-green-50'
-                          }`}
-                        >
-                          {proxy.enabled ? '禁用' : '启用'}
-                        </button>
-                        <button
-                          onClick={() => handleEdit(proxy)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent rounded-lg transition-colors"
-                        >
-                          编辑
-                        </button>
-                        <button
-                          onClick={() => handleDelete(proxy.id)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          删除
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                getDisplayRows().map((row) => {
+                  if (row.kind === 'standalone') {
+                    const proxy = row.proxy;
+                    return (
+                      <TableRow key={proxy.id}>
+                        <TableCell className="whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center text-primary-foreground text-sm font-semibold shadow-sm">
+                              {proxy.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-sm font-semibold text-foreground">{proxy.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className="text-sm text-muted-foreground">{getClientName(proxy.client_id)}</span>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className="text-sm text-muted-foreground">{getNodeName(proxy.nodeId)}</span>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg" style={{
+                            background: (proxy.type || 'tcp').toLowerCase() === 'tcp' ? 'hsl(217 91% 60% / 0.15)' : 'hsl(263 70% 58% / 0.15)',
+                            color: (proxy.type || 'tcp').toLowerCase() === 'tcp' ? 'hsl(217 91% 60%)' : 'hsl(263 70% 58%)'
+                          }}>
+                            {(proxy.type || 'tcp').toUpperCase()}
+                          </span>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="px-2 py-1 bg-muted text-primary rounded-lg font-mono text-xs">
+                              :{proxy.remotePort}
+                            </span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-muted-foreground">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                            </svg>
+                            <span className="text-muted-foreground font-mono text-xs">
+                              {proxy.localIP}:{proxy.localPort}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg`}
+                            style={proxy.enabled
+                              ? { background: 'hsl(142 71% 45% / 0.15)', color: 'hsl(142 71% 45%)' }
+                              : { background: 'hsl(0 0% 50% / 0.1)', color: 'hsl(0 0% 45%)' }
+                            }
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: proxy.enabled ? 'hsl(142 71% 45%)' : 'hsl(0 0% 60%)' }}></span>
+                            {proxy.enabled ? '启用' : '禁用'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(217 91% 60%)' }}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+                              </svg>
+                              <span className="text-muted-foreground">{formatBytes(proxy.totalBytesSent)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(142 71% 45%)' }}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+                              </svg>
+                              <span className="text-muted-foreground">{formatBytes(proxy.totalBytesReceived)}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-right">
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleToggleEnabled(proxy)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                                proxy.enabled
+                                  ? 'text-amber-600 hover:bg-amber-50'
+                                  : 'text-green-600 hover:bg-green-50'
+                              }`}
+                            >
+                              {proxy.enabled ? '禁用' : '启用'}
+                            </button>
+                            <button
+                              onClick={() => handleEdit(proxy)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent rounded-lg transition-colors"
+                            >
+                              编辑
+                            </button>
+                            <button
+                              onClick={() => handleDelete(proxy.id)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              删除
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+
+                  // Group row
+                  const group = row.group;
+                  const isExpanded = expandedGroups.has(group.groupId);
+                  return (
+                    <Fragment key={`group-${group.groupId}`}>
+                      <TableRow className="cursor-pointer hover:bg-accent/50" onClick={() => toggleGroupExpand(group.groupId)}>
+                        <TableCell className="whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleGroupExpand(group.groupId); }}
+                              className="text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+                                className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                              </svg>
+                            </button>
+                            <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center text-primary-foreground text-sm font-semibold shadow-sm">
+                              {group.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <span className="text-sm font-semibold text-foreground">{group.name}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">({group.proxies.length} 个端口)</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className="text-sm text-muted-foreground">{getClientName(group.client_id)}</span>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className="text-sm text-muted-foreground">{getNodeName(group.nodeId)}</span>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg" style={{
+                            background: (group.type || 'tcp').toLowerCase() === 'tcp' ? 'hsl(217 91% 60% / 0.15)' : 'hsl(263 70% 58% / 0.15)',
+                            color: (group.type || 'tcp').toLowerCase() === 'tcp' ? 'hsl(217 91% 60%)' : 'hsl(263 70% 58%)'
+                          }}>
+                            {(group.type || 'tcp').toUpperCase()}
+                          </span>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="px-2 py-1 bg-muted text-primary rounded-lg font-mono text-xs">
+                              {formatPortRange(group.proxies)}
+                            </span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-muted-foreground">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                            </svg>
+                            <span className="text-muted-foreground font-mono text-xs">
+                              {formatLocalPortRange(group.proxies)}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg`}
+                            style={group.enabled
+                              ? { background: 'hsl(142 71% 45% / 0.15)', color: 'hsl(142 71% 45%)' }
+                              : { background: 'hsl(0 0% 50% / 0.1)', color: 'hsl(0 0% 45%)' }
+                            }
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: group.enabled ? 'hsl(142 71% 45%)' : 'hsl(0 0% 60%)' }}></span>
+                            {group.enabled ? '启用' : '禁用'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(217 91% 60%)' }}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+                              </svg>
+                              <span className="text-muted-foreground">{formatBytes(group.totalBytesSent)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5" style={{ color: 'hsl(142 71% 45%)' }}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+                              </svg>
+                              <span className="text-muted-foreground">{formatBytes(group.totalBytesReceived)}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-right">
+                          <div className="flex flex-wrap items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => handleToggleGroupEnabled(group.groupId, group.enabled)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                                group.enabled
+                                  ? 'text-amber-600 hover:bg-amber-50'
+                                  : 'text-green-600 hover:bg-green-50'
+                              }`}
+                            >
+                              {group.enabled ? '禁用' : '启用'}
+                            </button>
+                            <button
+                              onClick={() => handleEditGroup(group)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent rounded-lg transition-colors"
+                            >
+                              编辑
+                            </button>
+                            <button
+                              onClick={() => handleDeleteGroup(group.groupId, group.proxies.length)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              删除
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {/* Expanded sub-rows */}
+                      {isExpanded && group.proxies.map((proxy) => (
+                        <TableRow key={proxy.id} className="bg-muted/30">
+                          <TableCell className="whitespace-nowrap pl-16">
+                            <span className="text-xs text-muted-foreground">{proxy.name}</span>
+                          </TableCell>
+                          <TableCell></TableCell>
+                          <TableCell></TableCell>
+                          <TableCell></TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="px-2 py-1 bg-muted text-primary rounded-lg font-mono text-xs">
+                                :{proxy.remotePort}
+                              </span>
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-muted-foreground">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                              </svg>
+                              <span className="text-muted-foreground font-mono text-xs">
+                                {proxy.localIP}:{proxy.localPort}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded-lg`}
+                              style={proxy.enabled
+                                ? { background: 'hsl(142 71% 45% / 0.1)', color: 'hsl(142 71% 45%)' }
+                                : { background: 'hsl(0 0% 50% / 0.08)', color: 'hsl(0 0% 45%)' }
+                              }
+                            >
+                              <span className="w-1 h-1 rounded-full" style={{ background: proxy.enabled ? 'hsl(142 71% 45%)' : 'hsl(0 0% 60%)' }}></span>
+                              {proxy.enabled ? '启用' : '禁用'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3" style={{ color: 'hsl(217 91% 60%)' }}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+                                </svg>
+                                <span className="text-muted-foreground">{formatBytes(proxy.totalBytesSent)}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3" style={{ color: 'hsl(142 71% 45%)' }}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+                                </svg>
+                                <span className="text-muted-foreground">{formatBytes(proxy.totalBytesReceived)}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell></TableCell>
+                        </TableRow>
+                      ))}
+                    </Fragment>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -661,10 +952,10 @@ export default function Proxies() {
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-foreground">
-                      {editingProxy ? '编辑代理' : '创建新代理'}
+                      {editingGroupId ? '编辑代理组' : editingProxy ? '编辑代理' : '创建新代理'}
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      {editingProxy ? '修改代理配置信息' : '添加一个新的端口映射规则'}
+                      {editingGroupId ? '修改代理组共享配置' : editingProxy ? '修改代理配置信息' : '添加一个新的端口映射规则'}
                     </p>
                   </div>
                 </div>
@@ -689,7 +980,7 @@ export default function Proxies() {
                 {/* 客户端选择 */}
                 <div>
                   <label className="block text-sm font-semibold text-foreground mb-3">选择客户端 *</label>
-                  {editingProxy ? (
+                  {(editingProxy || editingGroupId) ? (
                     <div className="px-4 py-3 bg-muted rounded-xl text-muted-foreground text-sm">
                       {getClientName(formData.client_id)} (编辑时不可更改)
                     </div>
@@ -941,6 +1232,7 @@ export default function Proxies() {
                     />
                   </div>
                 </div>
+                {!editingGroupId && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1.5">客户端本地端口 *</label>
@@ -1074,6 +1366,7 @@ export default function Proxies() {
                     </p>
                   </div>
                 </div>
+                )}
                 {editingProxy && (
                   <div className="flex items-center gap-3 p-3 bg-muted rounded-xl">
                     <input
@@ -1105,10 +1398,10 @@ export default function Proxies() {
                   取消
                 </button>
                 <button
-                  onClick={editingProxy ? handleUpdateProxy : handleCreateProxy}
+                  onClick={editingGroupId ? handleUpdateGroup : (editingProxy ? handleUpdateProxy : handleCreateProxy)}
                   className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-xl hover:bg-primary/90 shadow-sm transition-all"
                 >
-                  {editingProxy ? '更新' : '创建'}
+                  {(editingProxy || editingGroupId) ? '更新' : '创建'}
                 </button>
               </div>
             </div>
