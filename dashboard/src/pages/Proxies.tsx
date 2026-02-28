@@ -134,7 +134,7 @@ export default function Proxies() {
       return;
     }
 
-    // 解析端口
+    // 解析远程端口
     const { ports, error } = parsePortString(formData.remotePort);
     if (error) {
       showToast(error, 'error');
@@ -143,6 +143,27 @@ export default function Proxies() {
 
     if (ports.length === 0) {
       showToast('请输入有效的端口', 'error');
+      return;
+    }
+
+    // 解析本地端口
+    const { ports: localPorts, error: localError } = parsePortString(formData.localPort);
+    if (localError) {
+      showToast(`本地端口: ${localError}`, 'error');
+      return;
+    }
+
+    if (localPorts.length === 0) {
+      showToast('请输入有效的本地端口', 'error');
+      return;
+    }
+
+    // 验证本地端口数量：要么是1个（所有代理共用），要么与远程端口数量一致（一一对应）
+    if (localPorts.length !== 1 && localPorts.length !== ports.length) {
+      showToast(
+        `本地端口数量（${localPorts.length}）与节点端口数量（${ports.length}）不匹配，请填写单个端口或与节点端口数量一致的范围`,
+        'error'
+      );
       return;
     }
 
@@ -169,6 +190,7 @@ export default function Proxies() {
 
       for (let i = 0; i < ports.length; i++) {
         const port = ports[i];
+        const localPort = localPorts.length === 1 ? localPorts[0] : localPorts[i];
         const proxyName = ports.length === 1 ? formData.name : `${formData.name}-${port}`;
 
         try {
@@ -177,7 +199,7 @@ export default function Proxies() {
             name: proxyName,
             type: formData.type,
             localIP: formData.localIP,
-            localPort: parseInt(formData.localPort),
+            localPort: localPort,
             remotePort: port,
             nodeId: parseInt(formData.node_id),
           });
@@ -923,12 +945,15 @@ export default function Proxies() {
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1.5">客户端本地端口 *</label>
                     <input
-                      type="number"
+                      type="text"
                       value={formData.localPort}
                       onChange={(e) => setFormData({ ...formData, localPort: e.target.value })}
-                      placeholder="如: 80"
+                      placeholder="如: 80 或 8080-9000"
                       className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     />
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      填单个端口则所有代理共用，填范围则与节点端口一一对应
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1.5">节点端口 *</label>
@@ -966,15 +991,30 @@ export default function Proxies() {
                                   <p className="font-medium mb-1">
                                     将创建 {parsedPorts.length} 个代理
                                   </p>
-                                  {parsedPorts.length <= 10 ? (
-                                    <p className="text-primary">
-                                      端口: {parsedPorts.join(', ')}
-                                    </p>
-                                  ) : (
-                                    <p className="text-primary">
-                                      端口: {parsedPorts.slice(0, 10).join(', ')} ... (共 {parsedPorts.length} 个)
-                                    </p>
-                                  )}
+                                  {(() => {
+                                    const { ports: lPorts } = parsePortString(formData.localPort);
+                                    const isMapping = lPorts.length > 1 && lPorts.length === parsedPorts.length;
+                                    if (isMapping) {
+                                      // 显示本地端口→节点端口映射
+                                      const items = parsedPorts.slice(0, 5).map((rp, i) => `${lPorts[i]}→${rp}`);
+                                      return (
+                                        <p className="text-primary">
+                                          映射: {items.join(', ')}{parsedPorts.length > 5 ? ` ... (共 ${parsedPorts.length} 个)` : ''}
+                                        </p>
+                                      );
+                                    } else {
+                                      // 单个本地端口，只显示节点端口
+                                      return parsedPorts.length <= 10 ? (
+                                        <p className="text-primary">
+                                          节点端口: {parsedPorts.join(', ')}
+                                        </p>
+                                      ) : (
+                                        <p className="text-primary">
+                                          节点端口: {parsedPorts.slice(0, 10).join(', ')} ... (共 {parsedPorts.length} 个)
+                                        </p>
+                                      );
+                                    }
+                                  })()}
                                 </div>
                               </div>
                             </div>
