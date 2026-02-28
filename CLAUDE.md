@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-RFRP 是一个基于 Rust 2024 Edition 的高性能反向代理工具（内网穿透解决方案），采用三层架构：
+RFRP 是一个基于 Rust 2021 Edition（workspace resolver = "3"）的高性能反向代理工具（内网穿透解决方案），采用三层架构：
 
 - **Controller**：中央控制器，提供 Web 管理界面、RESTful API 和 gRPC 服务
 - **Node**：节点服务器，提供 QUIC/KCP 隧道服务，通过 gRPC 连接到 Controller
@@ -187,7 +187,7 @@ bun run lint
 
 ### Dashboard (dashboard/src/)
 
-技术栈：React 19 + TypeScript 5.9 + Vite (rolldown) + shadcn/ui + Radix UI + Tailwind CSS 4 + Lucide 图标
+技术栈：React 19 + TypeScript 5.9 + rolldown-vite（别名为 vite）+ shadcn/ui + Radix UI + Tailwind CSS 4 + Lucide 图标 + Babel React Compiler
 
 - `lib/services.ts` - Axios API 客户端
 - `lib/types.ts` - TypeScript 类型定义
