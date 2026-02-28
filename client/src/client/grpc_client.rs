@@ -236,6 +236,7 @@ fn convert_server_groups(
         .map(|g| {
             let protocol = match g.protocol.as_str() {
                 "kcp" => TunnelProtocol::Kcp,
+                "tcp" => TunnelProtocol::Tcp,
                 _ => TunnelProtocol::Quic,
             };
 

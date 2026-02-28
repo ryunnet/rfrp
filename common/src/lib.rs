@@ -27,6 +27,8 @@ pub use tunnel::{
     KcpConnection,
     KcpConnector,
     KcpListener,
+    TcpTunnelConnector,
+    TcpTunnelListener,
 };
 
 pub use config::KcpConfig;

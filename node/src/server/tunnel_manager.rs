@@ -49,6 +49,10 @@ impl TunnelManager {
                             info!("启动 KCP 隧道服务: {}", bind_addr);
                             proxy_server.run_kcp(bind_addr, kcp_config).await
                         }
+                        "tcp" => {
+                            info!("启动 TCP 隧道服务: {}", bind_addr);
+                            proxy_server.run_tcp(bind_addr).await
+                        }
                         _ => {
                             info!("启动 QUIC 隧道服务: {}", bind_addr);
                             proxy_server.run(bind_addr).await

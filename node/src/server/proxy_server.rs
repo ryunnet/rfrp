@@ -19,7 +19,7 @@ use common::KcpConfig;
 // 从共享库导入隧道模块
 use common::{
     TunnelConnection, TunnelSendStream, TunnelRecvStream,
-    TunnelListener, KcpListener, QuicSendStream, QuicRecvStream
+    TunnelListener, KcpListener, TcpTunnelListener, QuicSendStream, QuicRecvStream
 };
 use common::utils::create_configured_udp_socket;
 
@@ -472,6 +472,49 @@ impl ProxyServer {
                 }
                 Err(e) => {
                     error!("KCP connection accept failed: {}", e);
+                }
+            }
+        }
+    }
+
+    /// Run TCP+yamux server on specified address
+    pub async fn run_tcp(&self, bind_addr: String) -> Result<()> {
+        let addr: SocketAddr = bind_addr.parse()?;
+        let listener = TcpTunnelListener::new(addr).await?;
+
+        info!("TCP tunnel server started successfully!");
+        info!("TCP listening on: {}", bind_addr);
+        info!("Waiting for TCP client connections...");
+
+        loop {
+            match listener.accept().await {
+                Ok(conn) => {
+                    let remote_addr = conn.remote_address();
+                    info!("New TCP tunnel connection from: {}", remote_addr);
+
+                    let conn = Arc::new(conn);
+                    let tunnel_connections = self.tunnel_connections.clone();
+                    let listener_mgr = self.listener_manager.clone();
+                    let config_mgr = self.config_manager.clone();
+                    let quic_connections = self.client_connections.clone();
+                    let auth_provider = self.auth_provider.clone();
+
+                    tokio::spawn(async move {
+                        debug!("Processing TCP tunnel connection!");
+                        if let Err(e) = handle_tunnel_client_auth(
+                            conn,
+                            tunnel_connections,
+                            quic_connections,
+                            listener_mgr,
+                            config_mgr,
+                            auth_provider,
+                        ).await {
+                            error!("TCP tunnel client authentication failed: {}", e);
+                        }
+                    });
+                }
+                Err(e) => {
+                    error!("TCP tunnel connection accept failed: {}", e);
                 }
             }
         }

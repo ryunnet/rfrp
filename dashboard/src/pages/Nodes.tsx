@@ -256,6 +256,7 @@ export default function Nodes() {
           >
             <option value="quic">QUIC</option>
             <option value="kcp">KCP</option>
+            <option value="tcp">TCP</option>
           </select>
         </div>
       </div>

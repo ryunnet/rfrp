@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{info, error, warn, debug};
 
-use common::{TunnelConnector, QuicConnector, KcpConnector, TunnelProtocol};
+use common::{TunnelConnector, QuicConnector, KcpConnector, TcpTunnelConnector, TunnelProtocol};
 use common::protocol::client_config::ServerProxyGroup;
 
 use crate::client::connector;
@@ -149,6 +149,9 @@ impl ConnectionManager {
                     }
                     TunnelProtocol::Kcp => {
                         Arc::new(KcpConnector::new(kcp_config.clone()))
+                    }
+                    TunnelProtocol::Tcp => {
+                        Arc::new(TcpTunnelConnector::new())
                     }
                 };
 

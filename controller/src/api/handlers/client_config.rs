@@ -124,6 +124,7 @@ pub async fn get_client_connect_config(
     // 5. 构建连接配置
     let protocol = match node_model.tunnel_protocol.as_str() {
         "kcp" => TunnelProtocol::Kcp,
+        "tcp" => TunnelProtocol::Tcp,
         _ => TunnelProtocol::Quic,
     };
 
