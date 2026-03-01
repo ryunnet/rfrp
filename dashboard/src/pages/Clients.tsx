@@ -21,7 +21,7 @@ export default function Clients() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newClientName, setNewClientName] = useState('');
-  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
+  const [newClientRegion, setNewClientRegion] = useState('');  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   // 日志相关状态
   const [showLogsModal, setShowLogsModal] = useState(false);
@@ -86,10 +86,11 @@ export default function Clients() {
     }
 
     try {
-      const response = await clientService.createClient({ name: newClientName });
+      const response = await clientService.createClient({ name: newClientName, region: newClientRegion || undefined });
       if (response.success) {
         showToast('客户端创建成功', 'success');
         setNewClientName('');
+        setNewClientRegion('');
         setShowCreateModal(false);
         loadClients();
       } else {
@@ -148,11 +149,6 @@ export default function Clients() {
     } finally {
       setLogsLoading(false);
     }
-  };
-
-  const handleCopyToken = async (token: string) => {
-    const success = await copyToClipboard(token);
-    showToast(success ? 'Token 已复制' : '复制失败', success ? 'success' : 'error');
   };
 
   const handleAllocateQuota = (client: Client) => {
@@ -314,7 +310,7 @@ export default function Clients() {
                 <TableHead>状态</TableHead>
                 <TableHead>公网 IP</TableHead>
                 <TableHead>名称</TableHead>
-                <TableHead>Token</TableHead>
+                <TableHead>地区</TableHead>
                 <TableHead>流量统计</TableHead>
                 <TableHead>流量限制</TableHead>
                 <TableHead>创建时间</TableHead>
@@ -378,20 +374,17 @@ export default function Clients() {
                       </div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs bg-muted text-muted-foreground px-2.5 py-1.5 rounded-lg font-mono">
-                          {client.token.slice(0, 16)}...
-                        </code>
-                        <button
-                          onClick={() => handleCopyToken(client.token)}
-                          className="p-1.5 text-muted-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors"
-                          title="复制 Token"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                      {client.region ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-50 text-blue-700">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
                           </svg>
-                        </button>
-                      </div>
+                          {client.region}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <div className="flex flex-col gap-1">
@@ -549,12 +542,24 @@ export default function Clients() {
                     onKeyDown={(e) => e.key === 'Enter' && handleCreateClient()}
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">地区 <span className="text-muted-foreground font-normal">(可选)</span></label>
+                  <input
+                    type="text"
+                    value={newClientRegion}
+                    onChange={(e) => setNewClientRegion(e.target.value)}
+                    placeholder="例如：北京、上海、广州"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateClient()}
+                  />
+                </div>
               </div>
               <div className="mt-6 flex gap-3">
                 <button
                   onClick={() => {
                     setShowCreateModal(false);
                     setNewClientName('');
+                    setNewClientRegion('');
                   }}
                   className="flex-1 px-4 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
                 >

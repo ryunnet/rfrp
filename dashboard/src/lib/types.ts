@@ -46,6 +46,7 @@ export interface Client {
   token: string;
   is_online: boolean;
   publicIp: string | null;
+  region: string | null;
   userId: number | null;
   totalBytesSent: number;
   totalBytesReceived: number;

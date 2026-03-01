@@ -16,6 +16,7 @@ use super::ApiResponse;
 pub struct CreateClientRequest {
     pub name: String,
     pub token: Option<String>,
+    pub region: Option<String>,
     pub traffic_reset_cycle: Option<String>,
     pub traffic_quota_gb: Option<f64>,
 }
@@ -82,6 +83,7 @@ pub async fn create_client(
         token: Set(token.clone()),
         is_online: NotSet,
         public_ip: Set(None),
+        region: Set(req.region),
         user_id: Set(Some(auth_user.id)),
         total_bytes_sent: Set(0),
         total_bytes_received: Set(0),
@@ -143,6 +145,7 @@ pub async fn delete_client(
 #[derive(Deserialize)]
 pub struct UpdateClientRequest {
     pub name: Option<String>,
+    pub region: Option<String>,
     pub traffic_quota_gb: Option<f64>,
     pub traffic_reset_cycle: Option<String>,
     pub is_traffic_exceeded: Option<bool>,
@@ -174,6 +177,9 @@ pub async fn update_client(
 
     if let Some(name) = req.name {
         client_active.name = Set(name);
+    }
+    if let Some(region) = req.region {
+        client_active.region = Set(Some(region));
     }
     if req.traffic_quota_gb.is_some() || req.traffic_quota_gb.is_none() {
         client_active.traffic_quota_gb = Set(req.traffic_quota_gb);

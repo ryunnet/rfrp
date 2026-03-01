@@ -114,7 +114,7 @@ export const clientService = {
     return response.data;
   },
 
-  async createClient(data: { name: string; token?: string }): Promise<ApiResponse<Client>> {
+  async createClient(data: { name: string; token?: string; region?: string }): Promise<ApiResponse<Client>> {
     const response = await api.post<ApiResponse<Client>>('/clients', data);
     return response.data;
   },
