@@ -35,6 +35,8 @@ mod m20260228_000002_add_enable_registration_config;
 mod m20260228_000003_add_node_limits;
 mod m20260301_000001_add_proxy_group_id;
 mod m20260301_000002_add_client_region;
+mod m20260301_000003_add_user_quotas;
+mod m20260301_000004_add_subscription_quotas;
 
 pub struct Migrator;
 
@@ -73,6 +75,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260228_000003_add_node_limits::Migration),
             Box::new(m20260301_000001_add_proxy_group_id::Migration),
             Box::new(m20260301_000002_add_client_region::Migration),
+            Box::new(m20260301_000003_add_user_quotas::Migration),
+            Box::new(m20260301_000004_add_subscription_quotas::Migration),
         ]
     }
 }

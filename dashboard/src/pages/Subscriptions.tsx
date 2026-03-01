@@ -43,6 +43,8 @@ export default function Subscriptions() {
     durationValue: '1',
     trafficQuotaGb: '',
     maxPortCount: '',
+    maxNodeCount: '',
+    maxClientCount: '',
     price: '',
     description: '',
     isActive: true,
@@ -74,6 +76,8 @@ export default function Subscriptions() {
       durationValue: '1',
       trafficQuotaGb: '',
       maxPortCount: '',
+      maxNodeCount: '',
+      maxClientCount: '',
       price: '',
       description: '',
       isActive: true,
@@ -93,6 +97,8 @@ export default function Subscriptions() {
         duration_value: parseInt(formData.durationValue) || 1,
         traffic_quota_gb: parseFloat(formData.trafficQuotaGb),
         max_port_count: formData.maxPortCount ? parseInt(formData.maxPortCount) : undefined,
+        max_node_count: formData.maxNodeCount ? parseInt(formData.maxNodeCount) : undefined,
+        max_client_count: formData.maxClientCount ? parseInt(formData.maxClientCount) : undefined,
         price: formData.price ? parseFloat(formData.price) : undefined,
         description: formData.description || undefined,
         is_active: formData.isActive,
@@ -124,6 +130,8 @@ export default function Subscriptions() {
         duration_value: parseInt(formData.durationValue) || 1,
         traffic_quota_gb: parseFloat(formData.trafficQuotaGb),
         max_port_count: formData.maxPortCount ? parseInt(formData.maxPortCount) : undefined,
+        max_node_count: formData.maxNodeCount ? parseInt(formData.maxNodeCount) : undefined,
+        max_client_count: formData.maxClientCount ? parseInt(formData.maxClientCount) : undefined,
         price: formData.price ? parseFloat(formData.price) : undefined,
         description: formData.description || undefined,
         is_active: formData.isActive,
@@ -192,6 +200,8 @@ export default function Subscriptions() {
       durationValue: subscription.durationValue.toString(),
       trafficQuotaGb: subscription.trafficQuotaGb.toString(),
       maxPortCount: subscription.maxPortCount?.toString() || '',
+      maxNodeCount: subscription.maxNodeCount?.toString() || '',
+      maxClientCount: subscription.maxClientCount?.toString() || '',
       price: subscription.price?.toString() || '',
       description: subscription.description || '',
       isActive: subscription.isActive,
@@ -236,6 +246,8 @@ export default function Subscriptions() {
                 <TableHead>周期</TableHead>
                 <TableHead>流量配额</TableHead>
                 <TableHead>端口数量</TableHead>
+                <TableHead>节点数量</TableHead>
+                <TableHead>客户端数量</TableHead>
                 <TableHead>价格</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>创建时间</TableHead>
@@ -259,6 +271,12 @@ export default function Subscriptions() {
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm text-foreground">
                     {subscription.maxPortCount || '无限制'}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-foreground">
+                    {subscription.maxNodeCount || '无限制'}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-foreground">
+                    {subscription.maxClientCount || '无限制'}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm text-foreground">
                     {subscription.price ? `¥${subscription.price}` : '-'}
@@ -379,6 +397,28 @@ export default function Subscriptions() {
                     type="number"
                     value={formData.maxPortCount}
                     onChange={(e) => setFormData({ ...formData, maxPortCount: e.target.value })}
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
+                    placeholder="留空表示无限制"
+                    min="1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">节点数量限制</label>
+                  <input
+                    type="number"
+                    value={formData.maxNodeCount}
+                    onChange={(e) => setFormData({ ...formData, maxNodeCount: e.target.value })}
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
+                    placeholder="留空表示无限制"
+                    min="1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">客户端数量限制</label>
+                  <input
+                    type="number"
+                    value={formData.maxClientCount}
+                    onChange={(e) => setFormData({ ...formData, maxClientCount: e.target.value })}
                     className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                     placeholder="留空表示无限制"
                     min="1"

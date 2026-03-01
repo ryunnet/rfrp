@@ -29,7 +29,7 @@ export default function Users() {
   const [quotaSaving, setQuotaSaving] = useState(false);
   const [quotaChangeGb, setQuotaChangeGb] = useState('');
   const [portLimitSaving, setPortLimitSaving] = useState(false);
-  const [portLimitData, setPortLimitData] = useState({ maxPortCount: '', allowedPortRange: '' });
+  const [portLimitData, setPortLimitData] = useState({ maxPortCount: '', allowedPortRange: '', maxNodeCount: '', maxClientCount: '' });
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'info'; confirmText: string; onConfirm: () => void }>({ open: false, title: '', message: '', variant: 'danger', confirmText: '确定', onConfirm: () => {} });
   const [formData, setFormData] = useState({
     username: '',
@@ -266,6 +266,8 @@ export default function Users() {
     setPortLimitData({
       maxPortCount: user.maxPortCount?.toString() || '',
       allowedPortRange: user.allowedPortRange || '',
+      maxNodeCount: user.maxNodeCount?.toString() || '',
+      maxClientCount: user.maxClientCount?.toString() || '',
     });
     setShowPortLimitModal(true);
   };
@@ -278,19 +280,21 @@ export default function Users() {
       const response = await userService.updateUser(selectedUser.id, {
         max_port_count: portLimitData.maxPortCount ? parseInt(portLimitData.maxPortCount) : null,
         allowed_port_range: portLimitData.allowedPortRange || null,
+        max_node_count: portLimitData.maxNodeCount ? parseInt(portLimitData.maxNodeCount) : null,
+        max_client_count: portLimitData.maxClientCount ? parseInt(portLimitData.maxClientCount) : null,
       });
 
       if (response.success) {
-        showToast('端口限制更新成功', 'success');
+        showToast('配额设置更新成功', 'success');
         setShowPortLimitModal(false);
         setSelectedUser(null);
-        setPortLimitData({ maxPortCount: '', allowedPortRange: '' });
+        setPortLimitData({ maxPortCount: '', allowedPortRange: '', maxNodeCount: '', maxClientCount: '' });
         loadUsers();
       } else {
         showToast(response.message || '更新失败', 'error');
       }
     } catch (error) {
-      console.error('更新端口限制失败:', error);
+      console.error('更新配额设置失败:', error);
       showToast('更新失败', 'error');
     } finally {
       setPortLimitSaving(false);
@@ -467,7 +471,7 @@ export default function Users() {
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
                           </svg>
-                          端口限制
+                          端口/配额设置
                         </button>
                         <button
                           onClick={() => handleManageNodes(user)}
@@ -821,7 +825,7 @@ export default function Users() {
         </div>
       )}
 
-      {/* 端口限制管理模态框 */}
+      {/* 端口/配额设置管理模态框 */}
       {showPortLimitModal && selectedUser && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
           <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
@@ -833,40 +837,36 @@ export default function Users() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-foreground">端口限制管理</h3>
+                  <h3 className="text-lg font-bold text-foreground">配额设置</h3>
                   <p className="text-sm text-muted-foreground">{selectedUser.username}</p>
                 </div>
               </div>
 
-              {/* 当前端口使用情况 */}
+              {/* 当前使用情况 */}
               <div className="mb-6 p-4 bg-muted rounded-xl border border-border">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">当前端口数量</span>
                     <span className="text-sm font-semibold text-foreground">
-                      {selectedUser.currentPortCount || 0} 个
+                      {selectedUser.currentPortCount || 0}{selectedUser.maxPortCount ? ` / ${selectedUser.maxPortCount}` : ''} 个
                     </span>
                   </div>
-                  {selectedUser.maxPortCount && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">端口数量限制</span>
-                      <span className="text-sm font-semibold text-primary">
-                        {selectedUser.maxPortCount} 个
-                      </span>
-                    </div>
-                  )}
-                  {selectedUser.allowedPortRange && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">允许的端口范围</span>
-                      <span className="text-sm font-mono text-primary">
-                        {selectedUser.allowedPortRange}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">当前节点数量</span>
+                    <span className="text-sm font-semibold text-foreground">
+                      {selectedUser.node_count || 0}{selectedUser.maxNodeCount ? ` / ${selectedUser.maxNodeCount}` : ''} 个
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">当前客户端数量</span>
+                    <span className="text-sm font-semibold text-foreground">
+                      {selectedUser.currentClientCount || 0}{selectedUser.maxClientCount ? ` / ${selectedUser.maxClientCount}` : ''} 个
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* 端口限制配置 */}
+              {/* 配额配置 */}
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
@@ -881,6 +881,36 @@ export default function Users() {
                     className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
                   />
                   <p className="mt-1 text-xs text-muted-foreground">限制用户可以创建的代理（端口）数量</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    最大节点数量
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={portLimitData.maxNodeCount}
+                    onChange={(e) => setPortLimitData({ ...portLimitData, maxNodeCount: e.target.value })}
+                    placeholder="留空表示无限制"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">限制用户可以绑定的节点数量</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    最大客户端数量
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={portLimitData.maxClientCount}
+                    onChange={(e) => setPortLimitData({ ...portLimitData, maxClientCount: e.target.value })}
+                    placeholder="留空表示无限制"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">限制用户可以创建的客户端数量</p>
                 </div>
 
                 <div>
@@ -906,7 +936,7 @@ export default function Users() {
                   onClick={() => {
                     setShowPortLimitModal(false);
                     setSelectedUser(null);
-                    setPortLimitData({ maxPortCount: '', allowedPortRange: '' });
+                    setPortLimitData({ maxPortCount: '', allowedPortRange: '', maxNodeCount: '', maxClientCount: '' });
                   }}
                   className="flex-1 px-4 py-2.5 bg-muted text-foreground font-medium rounded-xl hover:bg-accent transition-colors"
                   disabled={portLimitSaving}

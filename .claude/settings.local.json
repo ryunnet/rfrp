@@ -19,7 +19,8 @@
       "Bash(copy \"c:\\\\Projects\\\\rfrp\\\\rfrps\\\\src\\\\entity\\\\traffic_daily.rs\" \"c:\\\\Projects\\\\rfrp\\\\rfrp-controller\\\\src\\\\entity\\\\traffic_daily.rs\")",
       "Bash(copy \"c:\\\\Projects\\\\rfrp\\\\rfrps\\\\src\\\\entity\\\\system_config.rs\" \"c:\\\\Projects\\\\rfrp\\\\rfrp-controller\\\\src\\\\entity\\\\system_config.rs\")",
       "Bash(dir c:Projectsrfrprfrpssrc)",
-      "Bash(bun run build)"
+      "Bash(bun run build)",
+      "WebFetch(domain:docs.rs)"
     ]
   }
 }

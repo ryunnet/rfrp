@@ -82,6 +82,8 @@ export default function Login() {
           isTrafficExceeded: false,
           maxPortCount: null,
           allowedPortRange: null,
+          maxNodeCount: null,
+          maxClientCount: null,
         });
         navigate('/');
       } else {

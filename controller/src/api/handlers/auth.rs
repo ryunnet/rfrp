@@ -240,6 +240,8 @@ pub async fn register(
         traffic_quota_gb: Set(None),
         max_port_count: Set(None),
         allowed_port_range: Set(None),
+        max_node_count: Set(None),
+        max_client_count: Set(None),
         created_at: Set(now),
         updated_at: Set(now),
     };

@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, PaginatorTrait, QueryFilter, Set};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -75,6 +75,40 @@ pub async fn create_client(
         None => return (StatusCode::UNAUTHORIZED, ApiResponse::<crate::entity::client::Model>::error("未认证".to_string())),
     };
 
+    let db = get_connection().await;
+
+    // 检查客户端数量限制
+    if let Ok(Some(user_model)) = crate::entity::User::find_by_id(auth_user.id).one(db).await {
+        let (_, _, _, final_max_client_count) = match crate::subscription_quota::get_user_final_quota(
+            auth_user.id,
+            user_model.traffic_quota_gb,
+            user_model.max_port_count,
+            user_model.max_node_count,
+            user_model.max_client_count,
+            db,
+        ).await {
+            Ok(q) => q,
+            Err(_) => (user_model.traffic_quota_gb, user_model.max_port_count, user_model.max_node_count, user_model.max_client_count),
+        };
+
+        if let Some(max_count) = final_max_client_count {
+            let current_count = match Client::find()
+                .filter(crate::entity::client::Column::UserId.eq(auth_user.id))
+                .count(db)
+                .await
+            {
+                Ok(c) => c,
+                Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<crate::entity::client::Model>::error(format!("查询客户端数量失败: {}", e))),
+            };
+            if current_count >= max_count as u64 {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    ApiResponse::<crate::entity::client::Model>::error(format!("已达到最大客户端数量限制: {}/{}", current_count, max_count)),
+                );
+            }
+        }
+    }
+
     let token = req.token.unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = Utc::now().naive_utc();
     let new_client = crate::entity::client::ActiveModel {
@@ -94,7 +128,6 @@ pub async fn create_client(
         created_at: Set(now),
         updated_at: Set(now),
     };
-    let db = get_connection().await;
     match new_client.insert(db).await {
         Ok(client) => (StatusCode::OK, ApiResponse::success(client)),
         Err(e) => {

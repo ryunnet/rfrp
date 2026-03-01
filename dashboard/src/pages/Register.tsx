@@ -96,6 +96,8 @@ export default function Register() {
           isTrafficExceeded: false,
           maxPortCount: null,
           allowedPortRange: null,
+          maxNodeCount: null,
+          maxClientCount: null,
         });
         navigate('/');
       } else {

@@ -21,7 +21,10 @@ export interface User {
   isTrafficExceeded: boolean;
   maxPortCount: number | null;
   allowedPortRange: string | null;
+  maxNodeCount: number | null;
+  maxClientCount: number | null;
   currentPortCount?: number;
+  currentClientCount?: number;
 }
 
 export interface UserWithNodeCount extends User {
@@ -230,6 +233,8 @@ export interface Subscription {
   durationValue: number;
   trafficQuotaGb: number;
   maxPortCount: number | null;
+  maxNodeCount: number | null;
+  maxClientCount: number | null;
   price: number | null;
   description: string | null;
   isActive: boolean;

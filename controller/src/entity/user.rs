@@ -25,6 +25,10 @@ pub struct Model {
     pub max_port_count: Option<i32>,
     #[serde(rename = "allowedPortRange")]
     pub allowed_port_range: Option<String>,
+    #[serde(rename = "maxNodeCount")]
+    pub max_node_count: Option<i32>,
+    #[serde(rename = "maxClientCount")]
+    pub max_client_count: Option<i32>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

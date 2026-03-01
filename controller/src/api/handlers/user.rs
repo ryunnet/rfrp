@@ -44,6 +44,12 @@ pub struct UserWithNodeCount {
     pub allowed_port_range: Option<String>,
     #[serde(rename = "currentPortCount")]
     pub current_port_count: u64,
+    #[serde(rename = "maxNodeCount")]
+    pub max_node_count: Option<i32>,
+    #[serde(rename = "maxClientCount")]
+    pub max_client_count: Option<i32>,
+    #[serde(rename = "currentClientCount")]
+    pub current_client_count: u64,
 }
 
 #[derive(Deserialize)]
@@ -65,6 +71,8 @@ pub struct UpdateUserRequest {
     pub is_traffic_exceeded: Option<bool>,
     pub max_port_count: Option<i32>,
     pub allowed_port_range: Option<String>,
+    pub max_node_count: Option<i32>,
+    pub max_client_count: Option<i32>,
 }
 
 /// GET /api/users - Get all users (admin only)
@@ -90,14 +98,16 @@ pub async fn list_users(Extension(auth_user_opt): Extension<Option<AuthUser>>) -
                 };
 
                 // 获取最终配额（套餐配额 + 用户直接配额）
-                let (final_traffic_quota_gb, final_max_port_count) = match crate::subscription_quota::get_user_final_quota(
+                let (final_traffic_quota_gb, final_max_port_count, final_max_node_count, final_max_client_count) = match crate::subscription_quota::get_user_final_quota(
                     user.id,
                     user.traffic_quota_gb,
                     user.max_port_count,
+                    user.max_node_count,
+                    user.max_client_count,
                     db,
                 ).await {
                     Ok(quota) => quota,
-                    Err(_) => (user.traffic_quota_gb, user.max_port_count),
+                    Err(_) => (user.traffic_quota_gb, user.max_port_count, user.max_node_count, user.max_client_count),
                 };
 
                 // 使用最终配额计算剩余配额
@@ -110,6 +120,15 @@ pub async fn list_users(Extension(auth_user_opt): Extension<Option<AuthUser>>) -
                 };
 
                 let current_port_count = crate::port_limiter::get_user_port_count(user.id, db).await.unwrap_or(0);
+
+                let current_client_count = match crate::entity::Client::find()
+                    .filter(crate::entity::client::Column::UserId.eq(user.id))
+                    .count(db)
+                    .await
+                {
+                    Ok(count) => count,
+                    Err(_) => 0,
+                };
 
                 users_with_count.push(UserWithNodeCount {
                     id: user.id,
@@ -128,6 +147,9 @@ pub async fn list_users(Extension(auth_user_opt): Extension<Option<AuthUser>>) -
                     max_port_count: final_max_port_count,
                     allowed_port_range: user.allowed_port_range.clone(),
                     current_port_count,
+                    max_node_count: final_max_node_count,
+                    max_client_count: final_max_client_count,
+                    current_client_count,
                 });
             }
 
@@ -198,6 +220,8 @@ pub async fn create_user(
         is_traffic_exceeded: Set(false),
         max_port_count: Set(None),
         allowed_port_range: Set(None),
+        max_node_count: Set(None),
+        max_client_count: Set(None),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -349,6 +373,14 @@ pub async fn update_user(
         }
     }
 
+    // Update node/client limits if provided
+    if let Some(max_count) = req.max_node_count {
+        user.max_node_count = Set(Some(max_count));
+    }
+    if let Some(max_count) = req.max_client_count {
+        user.max_client_count = Set(Some(max_count));
+    }
+
     user.updated_at = Set(Utc::now().naive_utc());
 
     match user.update(db).await {
@@ -431,8 +463,8 @@ pub async fn assign_node_to_user(
     let db = get_connection().await;
 
     // Check if user exists
-    match User::find_by_id(user_id).one(db).await {
-        Ok(Some(_)) => {}
+    let user_model = match User::find_by_id(user_id).one(db).await {
+        Ok(Some(u)) => u,
         Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
@@ -470,6 +502,36 @@ pub async fn assign_node_to_user(
             StatusCode::BAD_REQUEST,
             ApiResponse::<&str>::error("共享节点无需分配，所有用户均可使用".to_string()),
         );
+    }
+
+    // Check node count limit
+    let (_, _, final_max_node_count, _) = match crate::subscription_quota::get_user_final_quota(
+        user_id,
+        user_model.traffic_quota_gb,
+        user_model.max_port_count,
+        user_model.max_node_count,
+        user_model.max_client_count,
+        db,
+    ).await {
+        Ok(q) => q,
+        Err(_) => (user_model.traffic_quota_gb, user_model.max_port_count, user_model.max_node_count, user_model.max_client_count),
+    };
+
+    if let Some(max_count) = final_max_node_count {
+        let current_count = match UserNode::find()
+            .filter(crate::entity::user_node::Column::UserId.eq(user_id))
+            .count(db)
+            .await
+        {
+            Ok(c) => c,
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, ApiResponse::<&str>::error(format!("Failed to count nodes: {}", e))),
+        };
+        if current_count >= max_count as u64 {
+            return (
+                StatusCode::BAD_REQUEST,
+                ApiResponse::<&str>::error(format!("已达到最大节点数量限制: {}/{}", current_count, max_count)),
+            );
+        }
     }
 
     // Check if already assigned
@@ -701,14 +763,16 @@ pub async fn get_user_quota_info(
     }
 
     // 获取最终配额（套餐配额 + 用户直接配额）
-    let (final_traffic_quota_gb, _) = match crate::subscription_quota::get_user_final_quota(
+    let (final_traffic_quota_gb, _, _, _) = match crate::subscription_quota::get_user_final_quota(
         user_id,
         user.traffic_quota_gb,
         user.max_port_count,
+        user.max_node_count,
+        user.max_client_count,
         db,
     ).await {
         Ok(quota) => quota,
-        Err(_) => (user.traffic_quota_gb, user.max_port_count),
+        Err(_) => (user.traffic_quota_gb, user.max_port_count, user.max_node_count, user.max_client_count),
     };
 
     let total_quota_gb = final_traffic_quota_gb;

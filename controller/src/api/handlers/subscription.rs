@@ -22,6 +22,8 @@ pub struct CreateSubscriptionRequest {
     pub duration_value: Option<i32>,
     pub traffic_quota_gb: f64,
     pub max_port_count: Option<i32>,
+    pub max_node_count: Option<i32>,
+    pub max_client_count: Option<i32>,
     pub price: Option<f64>,
     pub description: Option<String>,
     pub is_active: Option<bool>,
@@ -34,6 +36,8 @@ pub struct UpdateSubscriptionRequest {
     pub duration_value: Option<i32>,
     pub traffic_quota_gb: Option<f64>,
     pub max_port_count: Option<i32>,
+    pub max_node_count: Option<i32>,
+    pub max_client_count: Option<i32>,
     pub price: Option<f64>,
     pub description: Option<String>,
     pub is_active: Option<bool>,
@@ -167,6 +171,8 @@ pub async fn create_subscription(
         duration_value: Set(req.duration_value.unwrap_or(1)),
         traffic_quota_gb: Set(req.traffic_quota_gb),
         max_port_count: Set(req.max_port_count),
+        max_node_count: Set(req.max_node_count),
+        max_client_count: Set(req.max_client_count),
         price: Set(req.price),
         description: Set(req.description),
         is_active: Set(req.is_active.unwrap_or(true)),
@@ -246,6 +252,12 @@ pub async fn update_subscription(
     }
     if let Some(max_port_count) = req.max_port_count {
         subscription.max_port_count = Set(Some(max_port_count));
+    }
+    if let Some(max_node_count) = req.max_node_count {
+        subscription.max_node_count = Set(Some(max_node_count));
+    }
+    if let Some(max_client_count) = req.max_client_count {
+        subscription.max_client_count = Set(Some(max_client_count));
     }
     if let Some(price) = req.price {
         subscription.price = Set(Some(price));

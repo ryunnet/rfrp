@@ -534,6 +534,8 @@ async fn initialize_admin_user() {
                 is_traffic_exceeded: Set(false),
                 max_port_count: Set(None),
                 allowed_port_range: Set(None),
+                max_node_count: Set(None),
+                max_client_count: Set(None),
                 created_at: Set(now),
                 updated_at: Set(now),
             };

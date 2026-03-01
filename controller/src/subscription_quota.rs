@@ -10,6 +10,10 @@ pub struct UserSubscriptionQuota {
     pub total_traffic_quota_gb: f64,
     /// 总端口数量限制
     pub total_max_port_count: Option<i32>,
+    /// 总节点数量限制
+    pub total_max_node_count: Option<i32>,
+    /// 总客户端数量限制
+    pub total_max_client_count: Option<i32>,
 }
 
 /// 获取用户所有激活套餐的累加配额
@@ -17,6 +21,8 @@ pub struct UserSubscriptionQuota {
 /// 计算逻辑：
 /// - 流量配额：累加所有激活套餐的 traffic_quota_gb
 /// - 端口数量：累加所有激活套餐的 max_port_count（如果套餐设置了端口限制）
+/// - 节点数量：累加所有激活套餐的 max_node_count（如果套餐设置了节点限制）
+/// - 客户端数量：累加所有激活套餐的 max_client_count（如果套餐设置了客户端限制）
 pub async fn get_user_subscription_quota(
     user_id: i64,
     db: &DatabaseConnection,
@@ -31,6 +37,8 @@ pub async fn get_user_subscription_quota(
 
     let mut total_traffic_quota_gb = 0.0;
     let mut total_port_count: Option<i32> = None;
+    let mut total_node_count: Option<i32> = None;
+    let mut total_client_count: Option<i32> = None;
 
     for (user_sub, subscription_opt) in user_subscriptions {
         // 累加流量配额
@@ -41,12 +49,20 @@ pub async fn get_user_subscription_quota(
             if let Some(port_count) = subscription.max_port_count {
                 total_port_count = Some(total_port_count.unwrap_or(0) + port_count);
             }
+            if let Some(node_count) = subscription.max_node_count {
+                total_node_count = Some(total_node_count.unwrap_or(0) + node_count);
+            }
+            if let Some(client_count) = subscription.max_client_count {
+                total_client_count = Some(total_client_count.unwrap_or(0) + client_count);
+            }
         }
     }
 
     Ok(UserSubscriptionQuota {
         total_traffic_quota_gb,
         total_max_port_count: total_port_count,
+        total_max_node_count: total_node_count,
+        total_max_client_count: total_client_count,
     })
 }
 
@@ -60,8 +76,10 @@ pub async fn get_user_final_quota(
     user_id: i64,
     user_traffic_quota_gb: Option<f64>,
     user_max_port_count: Option<i32>,
+    user_max_node_count: Option<i32>,
+    user_max_client_count: Option<i32>,
     db: &DatabaseConnection,
-) -> Result<(Option<f64>, Option<i32>)> {
+) -> Result<(Option<f64>, Option<i32>, Option<i32>, Option<i32>)> {
     // 获取套餐配额
     let subscription_quota = get_user_subscription_quota(user_id, db).await?;
 
@@ -75,7 +93,13 @@ pub async fn get_user_final_quota(
     // 端口配额：优先使用套餐配额，如果套餐没有设置则使用用户直接配额
     let final_port_count = subscription_quota.total_max_port_count.or(user_max_port_count);
 
-    Ok((final_traffic_quota, final_port_count))
+    // 节点配额：优先使用套餐配额，如果套餐没有设置则使用用户直接配额
+    let final_node_count = subscription_quota.total_max_node_count.or(user_max_node_count);
+
+    // 客户端配额：优先使用套餐配额，如果套餐没有设置则使用用户直接配额
+    let final_client_count = subscription_quota.total_max_client_count.or(user_max_client_count);
+
+    Ok((final_traffic_quota, final_port_count, final_node_count, final_client_count))
 }
 
 #[cfg(test)]

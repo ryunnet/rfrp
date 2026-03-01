@@ -86,10 +86,12 @@ pub async fn check_user_traffic_limit(user_id: i64, db: &DatabaseConnection) -> 
     }
 
     // 获取最终配额（套餐配额 + 用户直接配额）
-    let (final_traffic_quota_gb, _) = crate::subscription_quota::get_user_final_quota(
+    let (final_traffic_quota_gb, _, _, _) = crate::subscription_quota::get_user_final_quota(
         user_id,
         user.traffic_quota_gb,
         user.max_port_count,
+        user.max_node_count,
+        user.max_client_count,
         db,
     ).await?;
 
@@ -193,10 +195,12 @@ pub async fn check_user_quota_allocation(user_id: i64, additional_quota_gb: f64,
     };
 
     // 获取最终配额（套餐配额 + 用户直接配额）
-    let (final_traffic_quota_gb, _) = crate::subscription_quota::get_user_final_quota(
+    let (final_traffic_quota_gb, _, _, _) = crate::subscription_quota::get_user_final_quota(
         user_id,
         user.traffic_quota_gb,
         user.max_port_count,
+        user.max_node_count,
+        user.max_client_count,
         db,
     ).await?;
 

@@ -63,6 +63,8 @@ export const userService = {
       is_traffic_exceeded?: boolean;
       max_port_count?: number | null;
       allowed_port_range?: string | null;
+      max_node_count?: number | null;
+      max_client_count?: number | null;
     }
   ): Promise<ApiResponse<any>> {
     const response = await api.put<ApiResponse<any>>(`/users/${id}`, data);
@@ -394,6 +396,8 @@ export const subscriptionService = {
     duration_value?: number;
     traffic_quota_gb: number;
     max_port_count?: number;
+    max_node_count?: number;
+    max_client_count?: number;
     price?: number;
     description?: string;
     is_active?: boolean;
@@ -410,6 +414,8 @@ export const subscriptionService = {
       duration_value?: number;
       traffic_quota_gb?: number;
       max_port_count?: number;
+      max_node_count?: number;
+      max_client_count?: number;
       price?: number;
       description?: string;
       is_active?: boolean;
