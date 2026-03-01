@@ -321,6 +321,10 @@ pub async fn create_user_subscription(
         traffic_quota_gb: Set(subscription.traffic_quota_gb),
         traffic_used_gb: Set(0.0),
         is_active: Set(true),
+        max_port_count_snapshot: Set(subscription.max_port_count),
+        max_node_count_snapshot: Set(subscription.max_node_count),
+        max_client_count_snapshot: Set(subscription.max_client_count),
+        quota_merged: Set(true),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -336,13 +340,16 @@ pub async fn create_user_subscription(
         }
     };
 
-    // 将订阅流量加到用户的流量配额
-    if let Ok(Some(user)) = User::find_by_id(req.user_id).one(db).await {
-        let mut user: crate::entity::user::ActiveModel = user.into();
-        let current_quota = user.traffic_quota_gb.clone().unwrap().unwrap_or(0.0);
-        user.traffic_quota_gb = Set(Some(current_quota + subscription.traffic_quota_gb));
-        user.updated_at = Set(now);
-        let _ = user.update(db).await;
+    // 将套餐配额合并到用户字段（流量、端口、节点、客户端）
+    if let Err(e) = crate::subscription_quota::merge_subscription_quota_to_user(
+        req.user_id,
+        subscription.traffic_quota_gb,
+        subscription.max_port_count,
+        subscription.max_node_count,
+        subscription.max_client_count,
+        db,
+    ).await {
+        tracing::error!("合并订阅配额到用户失败: {}", e);
     }
 
     (StatusCode::CREATED, ApiResponse::success(created_subscription))
@@ -373,7 +380,7 @@ pub async fn update_user_subscription(
 
     let db = get_connection().await;
 
-    let user_subscription = match UserSubscription::find_by_id(id).one(db).await {
+    let user_subscription_model = match UserSubscription::find_by_id(id).one(db).await {
         Ok(Some(us)) => us,
         Ok(None) => {
             return (
@@ -389,10 +396,35 @@ pub async fn update_user_subscription(
         }
     };
 
-    let mut user_subscription: crate::entity::user_subscription::ActiveModel = user_subscription.into();
+    // 保存原始状态用于配额回退/合并判断
+    let was_active = user_subscription_model.is_active;
+    let was_merged = user_subscription_model.quota_merged;
+    let sub_user_id = user_subscription_model.user_id;
+    let sub_traffic = user_subscription_model.traffic_quota_gb;
+    let sub_port = user_subscription_model.max_port_count_snapshot;
+    let sub_node = user_subscription_model.max_node_count_snapshot;
+    let sub_client = user_subscription_model.max_client_count_snapshot;
+
+    let mut user_subscription: crate::entity::user_subscription::ActiveModel = user_subscription_model.into();
 
     if let Some(is_active) = req.is_active {
         user_subscription.is_active = Set(is_active);
+
+        // 停用时回退配额，重新激活时合并配额
+        if was_active && !is_active && was_merged {
+            if let Err(e) = crate::subscription_quota::rollback_subscription_quota_from_user(
+                sub_user_id, sub_traffic, sub_port, sub_node, sub_client, db,
+            ).await {
+                tracing::error!("回滚订阅配额失败: {}", e);
+            }
+        } else if !was_active && is_active {
+            if let Err(e) = crate::subscription_quota::merge_subscription_quota_to_user(
+                sub_user_id, sub_traffic, sub_port, sub_node, sub_client, db,
+            ).await {
+                tracing::error!("重新合并订阅配额失败: {}", e);
+            }
+            user_subscription.quota_merged = Set(true);
+        }
     }
     if let Some(traffic_used_gb) = req.traffic_used_gb {
         user_subscription.traffic_used_gb = Set(traffic_used_gb);
@@ -432,6 +464,36 @@ pub async fn delete_user_subscription(
     }
 
     let db = get_connection().await;
+
+    // 查出记录，如果是激活且已合并状态则先回退配额
+    let user_sub = match UserSubscription::find_by_id(id).one(db).await {
+        Ok(Some(us)) => us,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                ApiResponse::error("用户订阅不存在".to_string()),
+            )
+        }
+        Err(err) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ApiResponse::error(format!("查询用户订阅失败: {}", err)),
+            )
+        }
+    };
+
+    if user_sub.is_active && user_sub.quota_merged {
+        if let Err(e) = crate::subscription_quota::rollback_subscription_quota_from_user(
+            user_sub.user_id,
+            user_sub.traffic_quota_gb,
+            user_sub.max_port_count_snapshot,
+            user_sub.max_node_count_snapshot,
+            user_sub.max_client_count_snapshot,
+            db,
+        ).await {
+            tracing::error!("删除订阅时回滚配额失败: {}", e);
+        }
+    }
 
     match UserSubscription::delete_by_id(id).exec(db).await {
         Ok(_) => (StatusCode::OK, ApiResponse::success(())),

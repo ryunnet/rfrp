@@ -20,6 +20,14 @@ pub struct Model {
     pub traffic_used_gb: f64,
     #[serde(rename = "isActive")]
     pub is_active: bool,
+    #[serde(rename = "maxPortCountSnapshot")]
+    pub max_port_count_snapshot: Option<i32>,
+    #[serde(rename = "maxNodeCountSnapshot")]
+    pub max_node_count_snapshot: Option<i32>,
+    #[serde(rename = "maxClientCountSnapshot")]
+    pub max_client_count_snapshot: Option<i32>,
+    #[serde(rename = "quotaMerged")]
+    pub quota_merged: bool,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime,
     #[serde(rename = "updatedAt")]

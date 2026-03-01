@@ -404,6 +404,9 @@ async fn run_controller(log_dir: Option<String>) -> Result<()> {
     // 启动客户端健康监控
     start_client_health_monitor(client_stream_manager.clone());
 
+    // 启动订阅过期检查
+    start_subscription_expiry_monitor();
+
     // 等待终止信号
     info!("✅ 所有服务已启动，等待终止信号...");
 
@@ -488,6 +491,30 @@ fn start_client_health_monitor(client_stream_manager: Arc<client_stream_manager:
                     active.is_online = Set(is_online);
                     active.updated_at = Set(Utc::now().naive_utc());
                     let _ = active.update(db).await;
+                }
+            }
+        }
+    });
+}
+
+/// 启动订阅过期检查后台任务
+fn start_subscription_expiry_monitor() {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+
+        loop {
+            interval.tick().await;
+
+            let db = get_connection().await;
+
+            match subscription_quota::expire_subscriptions(db).await {
+                Ok(expired) => {
+                    for (sub_id, user_id) in &expired {
+                        info!("订阅 #{} (用户 #{}) 已过期，配额已回退", sub_id, user_id);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("检查过期订阅失败: {}", e);
                 }
             }
         }

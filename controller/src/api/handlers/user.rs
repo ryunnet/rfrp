@@ -59,6 +59,9 @@ pub struct CreateUserRequest {
     pub is_admin: Option<bool>,
     pub traffic_quota_gb: Option<f64>,
     pub traffic_reset_cycle: Option<String>,
+    pub max_port_count: Option<i32>,
+    pub max_node_count: Option<i32>,
+    pub max_client_count: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -214,14 +217,14 @@ pub async fn create_user(
         is_admin: Set(req.is_admin.unwrap_or(false)),
         total_bytes_sent: Set(0),
         total_bytes_received: Set(0),
-        traffic_quota_gb: Set(req.traffic_quota_gb),
+        traffic_quota_gb: Set(Some(req.traffic_quota_gb.unwrap_or(0.0))),
         traffic_reset_cycle: Set(req.traffic_reset_cycle.unwrap_or_else(|| "none".to_string())),
         last_reset_at: Set(None),
         is_traffic_exceeded: Set(false),
-        max_port_count: Set(None),
+        max_port_count: Set(Some(req.max_port_count.unwrap_or(0))),
         allowed_port_range: Set(None),
-        max_node_count: Set(None),
-        max_client_count: Set(None),
+        max_node_count: Set(Some(req.max_node_count.unwrap_or(0))),
+        max_client_count: Set(Some(req.max_client_count.unwrap_or(0))),
         created_at: Set(now),
         updated_at: Set(now),
     };
