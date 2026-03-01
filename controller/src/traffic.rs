@@ -74,59 +74,67 @@ impl TrafficManager {
                 continue;
             }
 
-            // 1. 更新代理流量，同时收集 node_id
-            if let Ok(Some(proxy)) = Proxy::find_by_id(proxy_id).one(db).await {
-                // 收集节点流量
-                if let Some(nid) = proxy.node_id {
-                    let entry = node_traffic.entry(nid).or_insert((0, 0));
-                    entry.0 += bytes_sent;
-                    entry.1 += bytes_received;
-                }
-
-                let mut proxy_active: proxy::ActiveModel = proxy.into();
-                proxy_active.total_bytes_sent = Set(proxy_active.total_bytes_sent.unwrap() + bytes_sent);
-                proxy_active.total_bytes_received = Set(proxy_active.total_bytes_received.unwrap() + bytes_received);
-                proxy_active.updated_at = Set(now);
-                if let Err(e) = proxy_active.update(db).await {
-                    error!("更新代理流量失败: {}", e);
-                }
-            }
-
-            // 2. 更新每日流量统计（使用 upsert 避免竞态条件）
-            let daily = traffic_daily::ActiveModel {
-                id: NotSet,
-                proxy_id: Set(proxy_id),
-                client_id: Set(client_id),
-                bytes_sent: Set(bytes_sent),
-                bytes_received: Set(bytes_received),
-                date: Set(today.clone()),
-                created_at: Set(now),
-                updated_at: Set(now),
+            // 1. 更新代理流量，同时收集 node_id（代理已删除则跳过，避免外键约束失败）
+            let Ok(Some(proxy)) = Proxy::find_by_id(proxy_id).one(db).await else {
+                debug!("代理 #{} 已不存在，跳过流量记录", proxy_id);
+                continue;
             };
-            let on_conflict = OnConflict::columns([
-                traffic_daily::Column::ProxyId,
-                traffic_daily::Column::Date,
-            ])
-            .value(
-                traffic_daily::Column::BytesSent,
-                Expr::col(traffic_daily::Column::BytesSent).add(bytes_sent),
-            )
-            .value(
-                traffic_daily::Column::BytesReceived,
-                Expr::col(traffic_daily::Column::BytesReceived).add(bytes_received),
-            )
-            .value(traffic_daily::Column::UpdatedAt, now)
-            .to_owned();
-            if let Err(e) = TrafficDaily::insert(daily)
-                .on_conflict(on_conflict)
-                .exec(db)
-                .await
-            {
-                error!("插入/更新每日流量统计失败: {}", e);
+
+            // 收集节点流量
+            if let Some(nid) = proxy.node_id {
+                let entry = node_traffic.entry(nid).or_insert((0, 0));
+                entry.0 += bytes_sent;
+                entry.1 += bytes_received;
             }
 
-            // 3. 更新客户端流量
-            if let Ok(Some(client)) = Client::find_by_id(client_id).one(db).await {
+            let mut proxy_active: proxy::ActiveModel = proxy.into();
+            proxy_active.total_bytes_sent = Set(proxy_active.total_bytes_sent.unwrap() + bytes_sent);
+            proxy_active.total_bytes_received = Set(proxy_active.total_bytes_received.unwrap() + bytes_received);
+            proxy_active.updated_at = Set(now);
+            if let Err(e) = proxy_active.update(db).await {
+                error!("更新代理流量失败: {}", e);
+            }
+
+            // 2. 查询客户端（用于每日统计和客户端流量更新）
+            let client_opt = Client::find_by_id(client_id).one(db).await.ok().flatten();
+
+            // 3. 更新每日流量统计（仅在客户端也存在时插入，避免外键约束失败）
+            if client_opt.is_some() {
+                let daily = traffic_daily::ActiveModel {
+                    id: NotSet,
+                    proxy_id: Set(proxy_id),
+                    client_id: Set(client_id),
+                    bytes_sent: Set(bytes_sent),
+                    bytes_received: Set(bytes_received),
+                    date: Set(today.clone()),
+                    created_at: Set(now),
+                    updated_at: Set(now),
+                };
+                let on_conflict = OnConflict::columns([
+                    traffic_daily::Column::ProxyId,
+                    traffic_daily::Column::Date,
+                ])
+                .value(
+                    traffic_daily::Column::BytesSent,
+                    Expr::col(traffic_daily::Column::BytesSent).add(bytes_sent),
+                )
+                .value(
+                    traffic_daily::Column::BytesReceived,
+                    Expr::col(traffic_daily::Column::BytesReceived).add(bytes_received),
+                )
+                .value(traffic_daily::Column::UpdatedAt, now)
+                .to_owned();
+                if let Err(e) = TrafficDaily::insert(daily)
+                    .on_conflict(on_conflict)
+                    .exec(db)
+                    .await
+                {
+                    error!("插入/更新每日流量统计失败: {}", e);
+                }
+            }
+
+            // 4. 更新客户端流量
+            if let Some(client) = client_opt {
                 let client_user_id = client.user_id;
                 let needs_reset = crate::traffic_limiter::should_reset_client_traffic(&client);
 
