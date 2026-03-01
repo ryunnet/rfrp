@@ -55,6 +55,8 @@ message ControllerToAgentMessage {
     UpdateProtocolCommand update_protocol = 15;
     // Controller 主动推送速度限制变更
     UpdateSpeedLimitCommand update_speed_limit = 16;
+    // Controller 主动下发软件更新指令
+    SoftwareUpdateCommand software_update = 17;
   }
 }
 
@@ -83,6 +85,7 @@ message ControllerToClientMessage {
     ErrorNotification error = 4;
     // Controller 主动下发的指令
     GetClientLogsDirectCommand get_logs = 10;
+    SoftwareUpdateCommand software_update = 11;
   }
 }
 
@@ -98,6 +101,7 @@ message AgentClientResponse {
   string request_id = 1;
   oneof result {
     ClientLogsResponse client_logs = 2;
+    SoftwareUpdateResponse software_update = 3;
   }
 }
 
@@ -107,6 +111,7 @@ message NodeRegisterRequest {
   string token = 1;
   uint32 tunnel_port = 2;
   string tunnel_protocol = 3;
+  string version = 4;  // 节点软件版本
 }
 
 message NodeRegisterResponse {
@@ -234,6 +239,17 @@ message UpdateSpeedLimitCommand {
   int64 speed_limit = 2;  // bytes/sec, 0 = unlimited
 }
 
+// Controller 主动下发软件更新指令
+message SoftwareUpdateCommand {
+  string request_id = 1;
+}
+
+message SoftwareUpdateResponse {
+  bool success = 1;
+  optional string error = 2;
+  optional string new_version = 3;
+}
+
 // ===== Agent Server 对指令的响应 =====
 
 message AgentServerResponse {
@@ -243,6 +259,7 @@ message AgentServerResponse {
     ServerStatus server_status = 3;
     ClientLogsResponse client_logs = 4;
     NodeLogsResponse node_logs = 5;
+    SoftwareUpdateResponse software_update = 6;
   }
 }
 
@@ -280,6 +297,7 @@ message NodeLogsResponse {
 
 message ClientAuthRequest {
   string token = 1;
+  string version = 2;  // 客户端软件版本
 }
 
 message ClientAuthResponse {

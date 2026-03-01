@@ -157,6 +157,7 @@ impl AgentGrpcClient {
                 token: token.to_string(),
                 tunnel_port: tunnel_port as u32,
                 tunnel_protocol: tunnel_protocol.to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
             })),
         };
         tx.send(register_msg).await
@@ -267,6 +268,7 @@ impl AgentGrpcClient {
                 token: token.to_string(),
                 tunnel_port: tunnel_port as u32,
                 tunnel_protocol: tunnel_protocol.to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
             })),
         };
         tx.send(register_msg).await
@@ -423,6 +425,12 @@ impl AgentGrpcClient {
                     }).await;
                 }
 
+                ControllerPayload::SoftwareUpdate(cmd) => {
+                    let _ = cmd_tx.send(ControllerCommand::SoftwareUpdate {
+                        request_id: cmd.request_id,
+                    }).await;
+                }
+
                 _ => {
                     warn!("收到未知的 Controller 消息类型");
                 }
@@ -510,6 +518,9 @@ pub enum ControllerCommand {
     UpdateSpeedLimit {
         request_id: String,
         speed_limit: i64,
+    },
+    SoftwareUpdate {
+        request_id: String,
     },
 }
 
@@ -672,6 +683,30 @@ pub async fn handle_controller_commands(
                     };
                     let _ = grpc.send_response(resp).await;
                 }
+
+                ControllerCommand::SoftwareUpdate { request_id } => {
+                    info!("收到远程软件更新指令，开始更新...");
+                    let update_result = tokio::task::spawn_blocking(perform_node_self_update).await;
+                    let (success, error_msg, new_ver) = match update_result {
+                        Ok(Ok(v)) => (true, None, Some(v)),
+                        Ok(Err(e)) => (false, Some(e.to_string()), None),
+                        Err(e) => (false, Some(e.to_string()), None),
+                    };
+                    let resp = oxiproxy::AgentServerResponse {
+                        request_id,
+                        result: Some(AgentResult::SoftwareUpdate(oxiproxy::SoftwareUpdateResponse {
+                            success,
+                            error: error_msg,
+                            new_version: new_ver,
+                        })),
+                    };
+                    let _ = grpc.send_response(resp).await;
+                    if success {
+                        info!("软件更新成功，3秒后重启...");
+                        tokio::time::sleep(Duration::from_secs(3)).await;
+                        std::process::exit(0);
+                    }
+                }
             }
         });
     }
@@ -737,4 +772,24 @@ async fn read_node_logs(lines: u32) -> Result<Vec<LogEntry>> {
         level: "INFO".to_string(),
         message: "日志系统正在初始化，暂无日志记录".to_string(),
     }])
+}
+
+/// 执行节点自更新（阻塞操作，需在 spawn_blocking 中调用）
+fn perform_node_self_update() -> anyhow::Result<String> {
+    let status = self_update::backends::github::Update::configure()
+        .repo_owner("oxiproxy")
+        .repo_name("oxiproxy")
+        .bin_name("node")
+        .identifier("node")
+        .bin_path_in_archive("{bin}{bin_ext}")
+        .show_download_progress(false)
+        .current_version(env!("CARGO_PKG_VERSION"))
+        .no_confirm(true)
+        .build()?
+        .update()?;
+
+    match status {
+        self_update::Status::UpToDate(v) => Ok(v),
+        self_update::Status::Updated(v) => Ok(v),
+    }
 }

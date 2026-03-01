@@ -26,6 +26,7 @@ pub struct Model {
     pub traffic_quota_gb: Option<f64>,
     #[serde(rename = "userId")]
     pub user_id: Option<i64>,
+    pub version: Option<String>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

@@ -208,6 +208,41 @@ impl NodeManager {
             _ => Err(anyhow!("收到意外的响应类型")),
         }
     }
+
+    /// 向节点发送软件更新指令
+    pub async fn send_software_update(&self, node_id: i64) -> Result<oxiproxy::SoftwareUpdateResponse> {
+        let cmd = ControllerPayload::SoftwareUpdate(oxiproxy::SoftwareUpdateCommand {
+            request_id: String::new(),
+        });
+
+        // 使用自定义超时（120秒，等待下载）
+        let (request_id, rx, tx_clone) = {
+            let streams = self.streams.read().await;
+            let stream = streams.get(&node_id)
+                .ok_or_else(|| anyhow!("节点 #{} 未连接", node_id))?;
+
+            let (request_id, rx) = stream.pending.register().await;
+            (request_id, rx, stream.tx.clone())
+        };
+
+        let final_payload = replace_request_id(cmd, &request_id);
+        let msg = oxiproxy::ControllerToAgentMessage {
+            payload: Some(final_payload),
+        };
+
+        tx_clone.send(Ok(msg)).await
+            .map_err(|_| anyhow!("发送命令到节点 #{} 失败", node_id))?;
+
+        let resp = PendingRequests::wait(rx, Duration::from_secs(120)).await?;
+
+        match resp.result {
+            Some(AgentResult::SoftwareUpdate(update_resp)) => Ok(update_resp),
+            Some(AgentResult::CommandAck(ack)) if !ack.success => {
+                Err(anyhow!("软件更新失败: {}", ack.error.unwrap_or_default()))
+            }
+            _ => Err(anyhow!("收到意外的响应类型")),
+        }
+    }
 }
 
 /// 替换 payload 中的 request_id
@@ -240,6 +275,10 @@ fn replace_request_id(payload: ControllerPayload, request_id: &str) -> Controlle
         ControllerPayload::UpdateSpeedLimit(mut cmd) => {
             cmd.request_id = request_id.to_string();
             ControllerPayload::UpdateSpeedLimit(cmd)
+        }
+        ControllerPayload::SoftwareUpdate(mut cmd) => {
+            cmd.request_id = request_id.to_string();
+            ControllerPayload::SoftwareUpdate(cmd)
         }
         other => other,
     }

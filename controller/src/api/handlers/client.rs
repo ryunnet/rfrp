@@ -119,6 +119,7 @@ pub async fn create_client(
         public_ip: Set(None),
         region: Set(req.region),
         user_id: Set(Some(auth_user.id)),
+        version: Set(None),
         total_bytes_sent: Set(0),
         total_bytes_received: Set(0),
         traffic_quota_gb: Set(req.traffic_quota_gb),

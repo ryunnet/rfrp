@@ -45,9 +45,24 @@ export default function Clients() {
   });
   const [grpcTlsEnabled, setGrpcTlsEnabled] = useState(false);
 
+  // 版本更新相关状态
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [updatingClientId, setUpdatingClientId] = useState<number | null>(null);
+  const [batchUpdating, setBatchUpdating] = useState(false);
+
   useEffect(() => {
     loadClients();
     loadUserQuotaInfo();
+
+    // 获取最新版本信息（仅管理员）
+    const authUser = JSON.parse(localStorage.getItem('user') || '{}');
+    if (authUser.is_admin) {
+      systemService.getLatestVersion().then(res => {
+        if (res.success && res.data) {
+          setLatestVersion(res.data.latestVersion);
+        }
+      }).catch(() => {});
+    }
   }, []);
 
   const loadClients = async () => {
@@ -269,6 +284,61 @@ export default function Clients() {
     }
   };
 
+  const handleClientUpdate = async (clientId: number) => {
+    setUpdatingClientId(clientId);
+    try {
+      const response = await clientService.triggerUpdate(clientId);
+      if (response.success && response.data?.success) {
+        showToast(`客户端已更新到 v${response.data.newVersion}，正在重启...`, 'success');
+        setTimeout(() => loadClients(), 10000);
+      } else {
+        showToast(response.data?.error || response.message || '更新失败', 'error');
+      }
+    } catch {
+      showToast('请求失败', 'error');
+    } finally {
+      setUpdatingClientId(null);
+    }
+  };
+
+  const handleBatchUpdate = () => {
+    const updatableCount = clients.filter(c => c.is_online && c.version && c.version !== latestVersion).length;
+    if (updatableCount === 0) {
+      showToast('没有需要更新的在线客户端', 'error');
+      return;
+    }
+    setConfirmDialog({
+      open: true,
+      title: '批量更新客户端',
+      message: `确定要更新所有在线客户端 (${updatableCount} 个) 到最新版本 v${latestVersion} 吗？更新后客户端将自动重启。`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setBatchUpdating(true);
+        try {
+          const response = await clientService.batchUpdate();
+          if (response.success && response.data?.results) {
+            const results = response.data.results;
+            const successCount = results.filter(r => r.success).length;
+            const failCount = results.filter(r => !r.success).length;
+            if (failCount === 0) {
+              showToast(`全部 ${successCount} 个客户端更新成功，正在重启...`, 'success');
+            } else {
+              const failNames = results.filter(r => !r.success).map(r => r.name || `#${r.id}`).join(', ');
+              showToast(`${successCount} 个成功, ${failCount} 个失败 (${failNames})`, 'error');
+            }
+            setTimeout(() => loadClients(), 10000);
+          } else {
+            showToast(response.message || '批量更新失败', 'error');
+          }
+        } catch {
+          showToast('批量更新请求失败', 'error');
+        } finally {
+          setBatchUpdating(false);
+        }
+      },
+    });
+  };
+
   const handleShowCommand = async (client: Client) => {
     setCommandClient(client);
     setShowCommandModal(true);
@@ -288,20 +358,46 @@ export default function Clients() {
           <h2 className="text-2xl font-bold text-foreground">客户端管理</h2>
           <p className="mt-1 text-sm text-muted-foreground">管理所有客户端连接</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 text-primary-foreground text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-sm transition-all duration-200 hover:opacity-90"
-          style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          新建客户端
-        </button>
+        <div className="flex items-center gap-2">
+          {latestVersion && clients.some(c => c.is_online && c.version && c.version !== latestVersion) && (
+            <button
+              onClick={handleBatchUpdate}
+              disabled={batchUpdating}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-400/40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {batchUpdating ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  批量更新中...
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                  一键更新全部
+                </>
+              )}
+            </button>
+          )}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-primary-foreground text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-sm transition-all duration-200 hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            新建客户端
+          </button>
+        </div>
       </div>
 
       {loading ? (
-        <TableSkeleton rows={5} cols={8} />
+        <TableSkeleton rows={5} cols={9} />
       ) : (
         <TableContainer>
           <Table>
@@ -313,6 +409,7 @@ export default function Clients() {
                 <TableHead>地区</TableHead>
                 <TableHead>流量统计</TableHead>
                 <TableHead>流量限制</TableHead>
+                <TableHead>版本</TableHead>
                 <TableHead>创建时间</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
@@ -441,6 +538,52 @@ export default function Clients() {
                           </div>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {!client.version ? (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      ) : client.version === latestVersion ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-green-50 text-green-700">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          v{client.version}
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 text-amber-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                            </svg>
+                            v{client.version}
+                          </span>
+                          {client.is_online && latestVersion && (
+                            <button
+                              onClick={() => handleClientUpdate(client.id)}
+                              disabled={updatingClientId === client.id}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={`更新到 v${latestVersion}`}
+                            >
+                              {updatingClientId === client.id ? (
+                                <>
+                                  <svg className="animate-spin w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  更新中...
+                                </>
+                              ) : (
+                                <>
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                  </svg>
+                                  更新
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                       {formatDate(client.created_at)}

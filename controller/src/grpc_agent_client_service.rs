@@ -61,6 +61,7 @@ impl AgentClientService for AgentClientServiceImpl {
                     return;
                 }
             };
+            let client_version = if auth_req.version.is_empty() { None } else { Some(auth_req.version.clone()) };
 
             // 2. 验证 token
             let db = get_connection().await;
@@ -129,6 +130,7 @@ impl AgentClientService for AgentClientServiceImpl {
             // 更新客户端为在线状态
             let mut client_active: client::ActiveModel = client_model.into();
             client_active.is_online = Set(true);
+            client_active.version = Set(client_version);
             if let Some(ref ip) = client_ip {
                 client_active.public_ip = Set(Some(ip.clone()));
             }

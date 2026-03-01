@@ -10,6 +10,7 @@ pub mod node;
 pub mod client_config;
 pub mod subscription;
 pub mod user_subscription;
+pub mod version;
 
 // Re-export common handler modules
 pub use auth::*;
@@ -24,6 +25,7 @@ pub use node::*;
 pub use client_config::*;
 pub use subscription::*;
 pub use user_subscription::*;
+pub use version::*;
 
 use serde::Serialize;
 

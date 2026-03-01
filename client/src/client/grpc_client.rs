@@ -72,6 +72,7 @@ pub async fn connect_and_run(
     let auth_msg = oxiproxy::AgentClientMessage {
         payload: Some(ClientPayload::Auth(oxiproxy::ClientAuthRequest {
             token: token.to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
         })),
     };
     tx.send(auth_msg)
@@ -197,6 +198,36 @@ async fn message_loop(
                 }
             }
 
+            ControllerPayload::SoftwareUpdate(cmd) => {
+                info!("收到远程软件更新指令，开始更新...");
+                let update_result = tokio::task::spawn_blocking(perform_client_self_update).await;
+                let (success, error_msg, new_ver) = match update_result {
+                    Ok(Ok(v)) => (true, None, Some(v)),
+                    Ok(Err(e)) => (false, Some(e.to_string()), None),
+                    Err(e) => (false, Some(e.to_string()), None),
+                };
+
+                let resp_msg = oxiproxy::AgentClientMessage {
+                    payload: Some(ClientPayload::Response(oxiproxy::AgentClientResponse {
+                        request_id: cmd.request_id,
+                        result: Some(oxiproxy::agent_client_response::Result::SoftwareUpdate(
+                            oxiproxy::SoftwareUpdateResponse {
+                                success,
+                                error: error_msg,
+                                new_version: new_ver,
+                            },
+                        )),
+                    })),
+                };
+
+                let _ = response_tx.send(resp_msg).await;
+                if success {
+                    info!("软件更新成功，3秒后重启...");
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    std::process::exit(0);
+                }
+            }
+
             _ => {
                 warn!("收到未知的 Controller 消息类型");
             }
@@ -271,4 +302,24 @@ fn convert_server_groups(
             }
         })
         .collect()
+}
+
+/// 执行客户端自更新（阻塞操作，需在 spawn_blocking 中调用）
+fn perform_client_self_update() -> anyhow::Result<String> {
+    let status = self_update::backends::github::Update::configure()
+        .repo_owner("oxiproxy")
+        .repo_name("oxiproxy")
+        .bin_name("client")
+        .identifier("client")
+        .bin_path_in_archive("{bin}{bin_ext}")
+        .show_download_progress(false)
+        .current_version(env!("CARGO_PKG_VERSION"))
+        .no_confirm(true)
+        .build()?
+        .update()?;
+
+    match status {
+        self_update::Status::UpToDate(v) => Ok(v),
+        self_update::Status::Updated(v) => Ok(v),
+    }
 }

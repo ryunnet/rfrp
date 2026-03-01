@@ -51,12 +51,24 @@ export default function Nodes() {
   });
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
   const [testingId, setTestingId] = useState<number | null>(null);
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [updatingNodeId, setUpdatingNodeId] = useState<number | null>(null);
+  const [batchUpdating, setBatchUpdating] = useState(false);
 
   useEffect(() => {
     // 获取当前用户信息
     const authUser = JSON.parse(localStorage.getItem('user') || '{}');
     setIsAdmin(authUser.is_admin || false);
     loadNodes();
+
+    // Fetch latest version (admin only)
+    if (authUser.is_admin) {
+      systemService.getLatestVersion().then(res => {
+        if (res.success && res.data) {
+          setLatestVersion(res.data.latestVersion);
+        }
+      }).catch(() => {});
+    }
   }, []);
 
   const loadNodes = async () => {
@@ -194,6 +206,61 @@ export default function Nodes() {
     } finally {
       setTestingId(null);
     }
+  };
+
+  const handleNodeUpdate = async (nodeId: number) => {
+    setUpdatingNodeId(nodeId);
+    try {
+      const response = await nodeService.triggerUpdate(nodeId);
+      if (response.success && response.data?.success) {
+        showToast(`节点已更新到 v${response.data.newVersion}，正在重启...`, 'success');
+        setTimeout(() => loadNodes(), 10000);
+      } else {
+        showToast(response.data?.error || response.message || '更新失败', 'error');
+      }
+    } catch {
+      showToast('请求失败', 'error');
+    } finally {
+      setUpdatingNodeId(null);
+    }
+  };
+
+  const handleBatchUpdate = () => {
+    const updatableCount = nodes.filter(n => n.isOnline && n.version && n.version !== latestVersion).length;
+    if (updatableCount === 0) {
+      showToast('没有需要更新的在线节点', 'error');
+      return;
+    }
+    setConfirmDialog({
+      open: true,
+      title: '批量更新节点',
+      message: `确定要更新所有在线节点 (${updatableCount} 个) 到最新版本 v${latestVersion} 吗？更新后节点将自动重启。`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setBatchUpdating(true);
+        try {
+          const response = await nodeService.batchUpdate();
+          if (response.success && response.data?.results) {
+            const results = response.data.results;
+            const successCount = results.filter(r => r.success).length;
+            const failCount = results.filter(r => !r.success).length;
+            if (failCount === 0) {
+              showToast(`全部 ${successCount} 个节点更新成功，正在重启...`, 'success');
+            } else {
+              const failNames = results.filter(r => !r.success).map(r => r.name || `#${r.id}`).join(', ');
+              showToast(`${successCount} 个成功, ${failCount} 个失败 (${failNames})`, 'error');
+            }
+            setTimeout(() => loadNodes(), 10000);
+          } else {
+            showToast(response.message || '批量更新失败', 'error');
+          }
+        } catch {
+          showToast('批量更新请求失败', 'error');
+        } finally {
+          setBatchUpdating(false);
+        }
+      },
+    });
   };
 
   const openEditModal = (node: Node) => {
@@ -410,16 +477,42 @@ export default function Nodes() {
           </p>
         </div>
         {isAdmin && (
-          <button
-            onClick={() => { resetForm(); setShowCreateModal(true); }}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-primary-foreground text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-sm transition-all duration-200 hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            添加节点
-          </button>
+          <div className="flex items-center gap-2">
+            {latestVersion && nodes.some(n => n.isOnline && n.version && n.version !== latestVersion) && (
+              <button
+                onClick={handleBatchUpdate}
+                disabled={batchUpdating}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-400/40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {batchUpdating ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    批量更新中...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    一键更新全部
+                  </>
+                )}
+              </button>
+            )}
+            <button
+              onClick={() => { resetForm(); setShowCreateModal(true); }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-primary-foreground text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-sm transition-all duration-200 hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%), hsl(189 94% 43%))' }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              添加节点
+            </button>
+          </div>
         )}
       </div>
 
@@ -437,6 +530,7 @@ export default function Nodes() {
                 <TableHead>隧道地址</TableHead>
                 <TableHead>协议</TableHead>
                 <TableHead>状态</TableHead>
+                <TableHead>版本</TableHead>
                 <TableHead>创建时间</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
@@ -444,7 +538,7 @@ export default function Nodes() {
             <TableBody>
               {nodes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="px-6 py-16 text-center">
+                  <TableCell colSpan={10} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-muted-foreground">
@@ -533,6 +627,45 @@ export default function Nodes() {
                         <span className="w-1.5 h-1.5 rounded-full" style={{ background: node.isOnline ? 'hsl(142 71% 45%)' : 'hsl(0 84.2% 60.2%)' }}></span>
                         {node.isOnline ? '在线' : '离线'}
                       </span>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {!node.version ? (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      ) : node.version === latestVersion ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg" style={{ background: 'hsl(142 71% 45% / 0.12)', color: 'hsl(142 71% 45%)' }}>
+                          v{node.version}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 text-amber-700">
+                            v{node.version}
+                          </span>
+                          {isAdmin && node.isOnline && (
+                            <button
+                              onClick={() => handleNodeUpdate(node.id)}
+                              disabled={updatingNodeId === node.id}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {updatingNodeId === node.id ? (
+                                <>
+                                  <svg className="animate-spin w-3 h-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  更新中...
+                                </>
+                              ) : (
+                                <>
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                  </svg>
+                                  更新
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                       {formatDate(node.created_at)}

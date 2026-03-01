@@ -106,6 +106,7 @@ impl AgentServerService for AgentServerServiceImpl {
             active.tunnel_port = Set(register_req.tunnel_port as i32);
             active.is_online = Set(true);
             active.updated_at = Set(Utc::now().naive_utc());
+            active.version = Set(if register_req.version.is_empty() { None } else { Some(register_req.version.clone()) });
 
             // 更新公网IP和地理位置
             if let Some(geo) = geo_info {

@@ -43,6 +43,7 @@ pub struct Model {
     pub is_traffic_exceeded: bool,
     #[serde(rename = "speedLimit")]
     pub speed_limit: Option<i64>,
+    pub version: Option<String>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

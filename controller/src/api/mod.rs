@@ -84,10 +84,12 @@ pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
             // 仪表板路由
             .route("/dashboard/stats/{user_id}", get(handlers::get_user_dashboard_stats))
             .route("/clients", get(handlers::list_clients).post(handlers::create_client))
+            .route("/clients/batch-update", post(handlers::batch_update_clients))
             .route("/clients/{id}", get(handlers::get_client).delete(handlers::delete_client))
             .route("/clients/{id}/logs", get(handlers::get_client_logs))
             .route("/clients/{id}/traffic", get(handlers::get_client_traffic))
             .route("/clients/{id}/allocate-quota", post(handlers::allocate_client_quota))
+            .route("/clients/{id}/update", post(handlers::trigger_client_update))
             .route("/proxies", get(handlers::list_proxies).post(handlers::create_proxy))
             .route("/proxies/batch", post(handlers::batch_create_proxies))
             .route("/proxies/group/{group_id}", put(handlers::update_proxy_group).delete(handlers::delete_proxy_group))
@@ -102,6 +104,7 @@ pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
             .route("/system/configs/update", post(handlers::update_config))
             .route("/system/configs/batch", post(handlers::batch_update_configs))
             .route("/system/restart", post(handlers::restart_system))
+            .route("/system/latest-version", get(handlers::get_latest_version))
             // 管理员路由（需要管理员权限）
             .route("/users", get(handlers::list_users).post(handlers::create_user))
             .route("/users/{id}", put(handlers::update_user).delete(handlers::delete_user))
@@ -111,10 +114,12 @@ pub fn start_web_server(app_state: AppState) -> tokio::task::JoinHandle<()> {
             .route("/users/{id}/quota-info", get(handlers::get_user_quota_info))
             // 节点管理路由（管理员权限）
             .route("/nodes", get(handlers::list_nodes).post(handlers::create_node))
+            .route("/nodes/batch-update", post(handlers::batch_update_nodes))
             .route("/nodes/{id}", get(handlers::get_node).put(handlers::update_node).delete(handlers::delete_node))
             .route("/nodes/{id}/test", post(handlers::test_node_connection))
             .route("/nodes/{id}/status", get(handlers::get_node_status))
             .route("/nodes/{id}/logs", get(handlers::get_node_logs))
+            .route("/nodes/{id}/update", post(handlers::trigger_node_update))
             // 订阅管理路由
             .route("/subscriptions", get(handlers::list_subscriptions).post(handlers::create_subscription))
             .route("/subscriptions/active", get(handlers::list_active_subscriptions))

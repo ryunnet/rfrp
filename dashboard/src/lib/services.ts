@@ -13,6 +13,8 @@ import type {
   Node,
   Subscription,
   UserSubscription,
+  LatestVersionInfo,
+  BatchUpdateResult,
 } from './types';
 
 // ============ 认证服务 ============
@@ -157,6 +159,16 @@ export const clientService = {
     const response = await api.get<ApiResponse<ClientTrafficInfo>>(`/clients/${id}/traffic`);
     return response.data;
   },
+
+  async triggerUpdate(id: number): Promise<ApiResponse<{ success: boolean; error?: string; newVersion?: string }>> {
+    const response = await api.post<ApiResponse<any>>(`/clients/${id}/update`);
+    return response.data;
+  },
+
+  async batchUpdate(): Promise<ApiResponse<{ results: BatchUpdateResult[] }>> {
+    const response = await api.post<ApiResponse<any>>('/clients/batch-update');
+    return response.data;
+  },
 };
 
 // ============ 代理服务 ============
@@ -280,6 +292,11 @@ export const systemService = {
     return response.data;
   },
 
+  async getLatestVersion(): Promise<ApiResponse<LatestVersionInfo>> {
+    const response = await api.get<ApiResponse<LatestVersionInfo>>('/system/latest-version');
+    return response.data;
+  },
+
   async getGrpcTlsStatus(): Promise<{ enabled: boolean; domain: string }> {
     const response = await api.get('/system/configs');
     const data = response.data as ApiResponse<{ configs: Array<{ key: string; value: any }> }>;
@@ -369,6 +386,16 @@ export const nodeService = {
 
   async getNodeLogs(id: number, lines: number = 100): Promise<ApiResponse<{ node_id: number; node_name: string; logs: LogEntry[] }>> {
     const response = await api.get<ApiResponse<{ node_id: number; node_name: string; logs: LogEntry[] }>>(`/nodes/${id}/logs?lines=${lines}`);
+    return response.data;
+  },
+
+  async triggerUpdate(id: number): Promise<ApiResponse<{ success: boolean; error?: string; newVersion?: string }>> {
+    const response = await api.post<ApiResponse<any>>(`/nodes/${id}/update`);
+    return response.data;
+  },
+
+  async batchUpdate(): Promise<ApiResponse<{ results: BatchUpdateResult[] }>> {
+    const response = await api.post<ApiResponse<any>>('/nodes/batch-update');
     return response.data;
   },
 };

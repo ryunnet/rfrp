@@ -51,6 +51,7 @@ export interface Client {
   publicIp: string | null;
   region: string | null;
   userId: number | null;
+  version: string | null;
   totalBytesSent: number;
   totalBytesReceived: number;
   trafficQuotaGb: number | null;
@@ -198,6 +199,7 @@ export interface Node {
   lastResetAt: string | null;
   isTrafficExceeded: boolean;
   speedLimit: number | null;
+  version: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -223,6 +225,23 @@ export interface LogEntry {
   timestamp: string;
   level: string;
   message: string;
+}
+
+// 最新版本信息
+export interface LatestVersionInfo {
+  latestVersion: string;
+  publishedAt: string;
+  htmlUrl: string;
+  controllerVersion: string;
+}
+
+// 批量更新结果
+export interface BatchUpdateResult {
+  id?: number;
+  name?: string;
+  success: boolean;
+  error?: string;
+  newVersion?: string;
 }
 
 // 订阅套餐类型
