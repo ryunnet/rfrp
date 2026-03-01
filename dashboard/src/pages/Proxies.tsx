@@ -299,6 +299,12 @@ export default function Proxies() {
     return node?.name || String(nodeId);
   };
 
+  const getNodeIp = (nodeId: number | null) => {
+    if (!nodeId) return null;
+    const node = nodes.find((n) => n.id === nodeId);
+    return node?.tunnelAddr || node?.publicIp || null;
+  };
+
   // 解析端口字符串，支持范围和逗号分隔
   // 格式: "8000-8010" 或 "8000,8001,8002" 或 "8000-8002,8005,8010-8012"
   const parsePortString = (portStr: string): { ports: number[]; error: string } => {
@@ -432,6 +438,11 @@ export default function Proxies() {
       }
 
       return true;
+    }).sort((a, b) => {
+      // 在线节点排在前面
+      if (a.isOnline && !b.isOnline) return -1;
+      if (!a.isOnline && b.isOnline) return 1;
+      return 0;
     });
   };
 
@@ -688,7 +699,12 @@ export default function Proxies() {
                           <span className="text-sm text-muted-foreground">{getClientName(proxy.client_id)}</span>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          <span className="text-sm text-muted-foreground">{getNodeName(proxy.nodeId)}</span>
+                          <div className="flex flex-col">
+                            <span className="text-sm text-muted-foreground">{getNodeName(proxy.nodeId)}</span>
+                            {getNodeIp(proxy.nodeId) && (
+                              <span className="text-xs text-muted-foreground/70 font-mono">{getNodeIp(proxy.nodeId)}</span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg" style={{
@@ -701,7 +717,7 @@ export default function Proxies() {
                         <TableCell className="whitespace-nowrap">
                           <div className="flex items-center gap-2 text-sm">
                             <span className="px-2 py-1 bg-muted text-primary rounded-lg font-mono text-xs">
-                              :{proxy.remotePort}
+                              {getNodeIp(proxy.nodeId) ? `${getNodeIp(proxy.nodeId)}:${proxy.remotePort}` : `:${proxy.remotePort}`}
                             </span>
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-muted-foreground">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
@@ -799,7 +815,12 @@ export default function Proxies() {
                           <span className="text-sm text-muted-foreground">{getClientName(group.client_id)}</span>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          <span className="text-sm text-muted-foreground">{getNodeName(group.nodeId)}</span>
+                          <div className="flex flex-col">
+                            <span className="text-sm text-muted-foreground">{getNodeName(group.nodeId)}</span>
+                            {getNodeIp(group.nodeId) && (
+                              <span className="text-xs text-muted-foreground/70 font-mono">{getNodeIp(group.nodeId)}</span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg" style={{
@@ -812,7 +833,7 @@ export default function Proxies() {
                         <TableCell className="whitespace-nowrap">
                           <div className="flex items-center gap-2 text-sm">
                             <span className="px-2 py-1 bg-muted text-primary rounded-lg font-mono text-xs">
-                              {formatPortRange(group.proxies)}
+                              {getNodeIp(group.nodeId) ? `${getNodeIp(group.nodeId)}:[${formatPortRange(group.proxies)}]` : formatPortRange(group.proxies)}
                             </span>
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-muted-foreground">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
@@ -1135,17 +1156,22 @@ export default function Proxies() {
                             <button
                               key={node.id}
                               type="button"
-                              onClick={() => setFormData({ ...formData, node_id: node.id.toString() })}
+                              disabled={!node.isOnline}
+                              onClick={() => node.isOnline && setFormData({ ...formData, node_id: node.id.toString() })}
                               className={`relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
-                                formData.node_id === node.id.toString()
-                                  ? 'border-primary bg-muted shadow-sm'
-                                  : 'border-border hover:border-primary/50 hover:bg-accent'
+                                !node.isOnline
+                                  ? 'border-border bg-muted/50 opacity-50 cursor-not-allowed'
+                                  : formData.node_id === node.id.toString()
+                                    ? 'border-primary bg-muted shadow-sm'
+                                    : 'border-border hover:border-primary/50 hover:bg-accent'
                               }`}
                             >
                               <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-primary-foreground font-semibold text-sm shadow-sm ${
-                                formData.node_id === node.id.toString()
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'bg-muted-foreground'
+                                !node.isOnline
+                                  ? 'bg-muted-foreground/50'
+                                  : formData.node_id === node.id.toString()
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'bg-muted-foreground'
                               }`}>
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
@@ -1154,10 +1180,15 @@ export default function Proxies() {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="font-semibold text-foreground text-sm truncate">{node.name}</span>
-                                  {node.isOnline && (
+                                  {node.isOnline ? (
                                     <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
                                       <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
                                       在线
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs font-medium rounded">
+                                      <span className="w-1.5 h-1.5 bg-red-400 rounded-full"></span>
+                                      离线
                                     </span>
                                   )}
                                   <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${
@@ -1195,7 +1226,7 @@ export default function Proxies() {
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 mt-0.5 flex-shrink-0">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                         </svg>
-                        <span>共享节点对所有用户可用，独享节点仅限分配的用户使用</span>
+                        <span>共享节点对所有用户可用，独享节点仅限分配的用户使用。离线节点无法创建代理。</span>
                       </p>
                     </>
                   )}

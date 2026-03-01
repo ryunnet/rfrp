@@ -54,24 +54,33 @@ pub async fn query_geo_ip(ip: &str) -> Result<GeoIpInfo> {
         return Err(anyhow!("IP 地理位置查询失败"));
     }
 
-    // 构建地区字符串：国家-省份-城市
-    let mut region_parts = Vec::new();
+    // 构建地区字符串：国家-省份-城市（自动去重）
+    let country = api_response.country.filter(|s| !s.is_empty());
+    let region = api_response.region.filter(|s| !s.is_empty());
+    let city = api_response.city.filter(|s| !s.is_empty());
 
-    if let Some(country) = api_response.country {
-        if !country.is_empty() {
-            region_parts.push(country);
+    let mut region_parts: Vec<String> = Vec::new();
+
+    if let Some(ref country) = country {
+        region_parts.push(country.clone());
+    }
+
+    if let Some(ref region) = region {
+        // 中文本地化下 region 可能包含国名前缀（如 "中国广东省"），去掉重复
+        let stripped = country
+            .as_deref()
+            .and_then(|c| region.strip_prefix(c))
+            .unwrap_or(region.as_str());
+        if !stripped.is_empty() {
+            region_parts.push(stripped.to_string());
         }
     }
 
-    if let Some(region) = api_response.region {
-        if !region.is_empty() {
-            region_parts.push(region);
-        }
-    }
-
-    if let Some(city) = api_response.city {
-        if !city.is_empty() {
-            region_parts.push(city);
+    if let Some(ref city) = city {
+        // 避免城市与省份末尾重复（如 region="东京", city="东京"）
+        let duplicate = region_parts.last().map_or(false, |last| last.ends_with(city.as_str()));
+        if !duplicate {
+            region_parts.push(city.clone());
         }
     }
 
