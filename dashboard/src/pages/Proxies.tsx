@@ -583,6 +583,7 @@ export default function Proxies() {
         name: formData.name || undefined,
         type: formData.type || undefined,
         localIP: formData.localIP || undefined,
+        localPort: formData.localPort ? parseInt(formData.localPort) : undefined,
       });
       if (response.success) {
         showToast('代理组更新成功', 'success');
@@ -946,7 +947,20 @@ export default function Proxies() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell></TableCell>
+                          <TableCell className="whitespace-nowrap text-right">
+                            <button
+                              onClick={() => handleEdit(proxy)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-primary hover:bg-accent rounded-lg transition-colors"
+                            >
+                              编辑
+                            </button>
+                            <button
+                              onClick={() => handleDelete(proxy.id)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              删除
+                            </button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </Fragment>
@@ -1263,7 +1277,21 @@ export default function Proxies() {
                     />
                   </div>
                 </div>
-                {!editingGroupId && (
+                {editingGroupId ? (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">客户端本地端口</label>
+                  <input
+                    type="text"
+                    value={formData.localPort}
+                    onChange={(e) => setFormData({ ...formData, localPort: e.target.value })}
+                    placeholder="如: 80"
+                    className="w-full px-4 py-3 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-muted/50 hover:bg-card"
+                  />
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    修改后所有子代理的本地端口将统一更新
+                  </p>
+                </div>
+                ) : (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1.5">客户端本地端口 *</label>

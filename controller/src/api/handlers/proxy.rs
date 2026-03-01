@@ -1001,6 +1001,8 @@ pub struct UpdateGroupRequest {
     pub proxy_type: Option<String>,
     #[serde(rename = "localIP")]
     pub local_ip: Option<String>,
+    #[serde(rename = "localPort")]
+    pub local_port: Option<u16>,
 }
 
 pub async fn update_proxy_group(
@@ -1054,6 +1056,13 @@ pub async fn update_proxy_group(
                 config_changed = true;
             }
             active.local_ip = Set(local_ip.clone());
+            changed = true;
+        }
+        if let Some(local_port) = req.local_port {
+            if local_port != proxy.local_port {
+                config_changed = true;
+            }
+            active.local_port = Set(local_port);
             changed = true;
         }
 

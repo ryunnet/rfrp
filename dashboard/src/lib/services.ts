@@ -229,6 +229,7 @@ export const proxyService = {
     name?: string;
     type?: string;
     localIP?: string;
+    localPort?: number;
   }): Promise<ApiResponse<string>> {
     const response = await api.put<ApiResponse<string>>(`/proxies/group/${groupId}`, data);
     return response.data;
