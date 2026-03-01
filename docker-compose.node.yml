@@ -7,7 +7,7 @@ services:
   # 2. 在 .env 中填写实际的 CONTROLLER_URL 和 NODE_TOKEN
   # 3. 运行: docker compose up -d
   node:
-    image: docker.yunnet.top/all/oxiproxy:latest
+    image: ghcr.io/oxiproxy/oxiproxy:latest
     container_name: oxiproxy-node
     restart: unless-stopped
     network_mode: host

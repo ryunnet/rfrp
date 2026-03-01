@@ -79,7 +79,7 @@ mkdir -p /opt/oxiproxy-client && cd /opt/oxiproxy-client
 cat > docker-compose.yml << 'EOF'
 services:
   client:
-    image: docker.yunnet.top/all/oxiproxy:latest
+    image: ghcr.io/oxiproxy/oxiproxy:latest
     container_name: oxiproxy-client
     restart: unless-stopped
     network_mode: host
@@ -219,7 +219,7 @@ docker run -d --name oxiproxy-controller --restart unless-stopped \
   -p 3000:3000/tcp -p 3100:3100/tcp \
   -v $(pwd)/data:/app/data \
   -e TZ=Asia/Shanghai -e RUST_LOG=info,tokio_kcp=off \
-  docker.yunnet.top/all/oxiproxy:latest /app/controller
+  ghcr.io/oxiproxy/oxiproxy:latest /app/controller
 
 docker logs -f oxiproxy-controller  # 获取 admin 初始密码
 ```
@@ -233,7 +233,7 @@ docker logs -f oxiproxy-controller  # 获取 admin 初始密码
 docker run -d --name oxiproxy-node --restart unless-stopped \
   -p 7000:7000/udp \
   -e TZ=Asia/Shanghai -e RUST_LOG=info,tokio_kcp=off \
-  docker.yunnet.top/all/oxiproxy:latest \
+  ghcr.io/oxiproxy/oxiproxy:latest \
   /app/node --controller-url http://your-controller-ip:3100 --token your-node-token --bind-port 7000
 ```
 
@@ -246,7 +246,7 @@ docker run -d --name oxiproxy-node --restart unless-stopped \
 docker run -d --name oxiproxy-client --restart unless-stopped \
   --network host \
   -e TZ=Asia/Shanghai -e RUST_LOG=info,tokio_kcp=off \
-  docker.yunnet.top/all/oxiproxy:latest \
+  ghcr.io/oxiproxy/oxiproxy:latest \
   /app/client --controller-url http://your-controller-ip:3100 --token your-client-token
 ```
 

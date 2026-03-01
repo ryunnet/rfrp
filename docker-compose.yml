@@ -19,7 +19,7 @@ services:
   # ==================== OxiProxy Controller ====================
   # 中央控制器，提供 Web 管理界面和 gRPC 服务
   controller:
-    image: docker.yunnet.top/all/oxiproxy:latest
+    image: ghcr.io/oxiproxy/oxiproxy:latest
     container_name: oxiproxy-controller
     restart: unless-stopped
 
@@ -64,7 +64,7 @@ services:
   # 节点服务，提供隧道服务
   # 如果 Node 部署在其他服务器上，可以注释掉此服务
   node:
-    image: docker.yunnet.top/all/oxiproxy:latest
+    image: ghcr.io/oxiproxy/oxiproxy:latest
     container_name: oxiproxy-node
     restart: unless-stopped
 
@@ -105,7 +105,7 @@ services:
   # 客户端服务，通常部署在内网机器上
   # 如果 Client 部署在其他服务器上，可以注释掉此服务
   # client:
-  #   image: docker.yunnet.top/all/oxiproxy:latest
+  #   image: ghcr.io/oxiproxy/oxiproxy:latest
   #   container_name: oxiproxy-client
   #   restart: unless-stopped
   #   network_mode: host

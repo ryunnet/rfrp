@@ -2,7 +2,7 @@ services:
   # ==================== OxiProxy Controller ====================
   # 中央控制器，提供 Web 管理界面和 gRPC 服务
   controller:
-    image: docker.yunnet.top/all/oxiproxy:latest
+    image: ghcr.io/oxiproxy/oxiproxy:latest
     container_name: oxiproxy-controller
     restart: unless-stopped
 
