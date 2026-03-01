@@ -1,6 +1,6 @@
-# RFRP Dashboard
+# OxiProxy Dashboard
 
-RFRP 反向代理服务的 Web 管理面板，基于 React + TypeScript + Vite 构建。
+OxiProxy 反向代理服务的 Web 管理面板，基于 React + TypeScript + Vite 构建。
 
 ## 功能特性
 

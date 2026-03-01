@@ -38,7 +38,7 @@ pub async fn run_client(
             .init();
     }
 
-    info!("RFRP 客户端启动");
+    info!("OxiProxy 客户端启动");
     info!("控制器地址: {}", controller_url);
 
     // Controller 模式：通过 gRPC 双向流接收代理列表推送

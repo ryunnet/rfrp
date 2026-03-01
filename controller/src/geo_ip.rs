@@ -1,6 +1,6 @@
 //! IP 地理位置查询服务
 //!
-//! 使用免费的 IP 地理位置 API 查询 IP 地址的地理位置信息
+//! 使用 ip.sb 免费 API 查询 IP 地址的地理位置信息
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -13,23 +13,19 @@ pub struct GeoIpInfo {
     pub region: String,
 }
 
-/// 从 ipwhois.app 查询地理位置信息
+/// 从 ip.sb 查询地理位置信息
 #[derive(Debug, Deserialize)]
-struct IpWhoisResponse {
+struct IpSbResponse {
     ip: Option<String>,
-    success: Option<bool>,
     country: Option<String>,
     region: Option<String>,
     city: Option<String>,
 }
 
 /// 查询 IP 地址的地理位置信息
-/// 使用 ipwhois.app 免费服务（每月 10k 次请求，支持中文）
+/// 使用 ip.sb 免费服务（国内 IP 准确度高）
 pub async fn query_geo_ip(ip: &str) -> Result<GeoIpInfo> {
-    let url = format!(
-        "https://ipwhois.app/json/{}?lang=zh-CN&objects=ip,success,country,region,city",
-        ip
-    );
+    let url = format!("https://api.ip.sb/geoip/{}", ip);
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
@@ -37,6 +33,7 @@ pub async fn query_geo_ip(ip: &str) -> Result<GeoIpInfo> {
 
     let response = client
         .get(&url)
+        .header("User-Agent", "Mozilla/5.0")
         .send()
         .await
         .map_err(|e| anyhow!("请求 IP 地理位置 API 失败: {}", e))?;
@@ -45,14 +42,10 @@ pub async fn query_geo_ip(ip: &str) -> Result<GeoIpInfo> {
         return Err(anyhow!("IP 地理位置 API 返回错误状态: {}", response.status()));
     }
 
-    let api_response: IpWhoisResponse = response
+    let api_response: IpSbResponse = response
         .json()
         .await
         .map_err(|e| anyhow!("解析 IP 地理位置响应失败: {}", e))?;
-
-    if api_response.success == Some(false) {
-        return Err(anyhow!("IP 地理位置查询失败"));
-    }
 
     // 构建地区字符串：国家-省份-城市（自动去重）
     let country = api_response.country.filter(|s| !s.is_empty());
@@ -66,7 +59,7 @@ pub async fn query_geo_ip(ip: &str) -> Result<GeoIpInfo> {
     }
 
     if let Some(ref region) = region {
-        // 中文本地化下 region 可能包含国名前缀（如 "中国广东省"），去掉重复
+        // 避免省份与国家重复
         let stripped = country
             .as_deref()
             .and_then(|c| region.strip_prefix(c))
@@ -77,7 +70,7 @@ pub async fn query_geo_ip(ip: &str) -> Result<GeoIpInfo> {
     }
 
     if let Some(ref city) = city {
-        // 避免城市与省份末尾重复（如 region="东京", city="东京"）
+        // 避免城市与省份重复（如 region="Tokyo", city="Tokyo"）
         let duplicate = region_parts.last().map_or(false, |last| last.ends_with(city.as_str()));
         if !duplicate {
             region_parts.push(city.clone());

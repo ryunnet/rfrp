@@ -166,7 +166,7 @@ impl QuicConnector {
 #[async_trait]
 impl TunnelConnector for QuicConnector {
     async fn connect(&self, addr: SocketAddr) -> Result<Box<dyn TunnelConnection>> {
-        let conn = self.endpoint.connect(addr, "rfrp")?.await?;
+        let conn = self.endpoint.connect(addr, "oxiproxy")?.await?;
         Ok(Box::new(QuicConnection::new(conn)))
     }
 }

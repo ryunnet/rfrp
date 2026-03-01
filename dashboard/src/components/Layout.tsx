@@ -133,7 +133,7 @@ export default function Layout({ children }: LayoutProps) {
                 </svg>
               </div>
               <div>
-                <span className="font-bold text-xl text-foreground">RFRP</span>
+                <span className="font-bold text-xl text-foreground">OxiProxy</span>
                 <p className="text-xs text-muted-foreground font-medium">内网穿透</p>
               </div>
             </div>

@@ -77,8 +77,8 @@ FROM alpine:latest
 
 # 安装运行时依赖
 RUN apk add --no-cache libgcc ca-certificates && \
-    addgroup -g 1000 rfrp && \
-    adduser -D -u 1000 -G rfrp rfrp
+    addgroup -g 1000 oxiproxy && \
+    adduser -D -u 1000 -G oxiproxy oxiproxy
 
 WORKDIR /app
 
@@ -90,10 +90,10 @@ COPY --from=rust-builder /build/dist /app/dist
 
 # 创建数据目录并设置权限
 RUN mkdir -p /app/data && \
-    chown -R rfrp:rfrp /app
+    chown -R oxiproxy:oxiproxy /app
 
 # 切换到非特权用户
-USER rfrp
+USER oxiproxy
 
 # 暴露端口
 EXPOSE 7000 3000 3100

@@ -10,7 +10,7 @@ use tokio::sync::{mpsc, RwLock};
 use tracing::{debug, error, info};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-use common::grpc::rfrp;
+use common::grpc::oxiproxy;
 use common::grpc::pending_requests::PendingRequests;
 use common::KcpConfig;
 use common::protocol::control::LogEntry;
@@ -20,8 +20,8 @@ use crate::migration::get_connection;
 
 /// 单个客户端的流连接
 struct ClientStream {
-    tx: mpsc::Sender<Result<rfrp::ControllerToClientMessage, tonic::Status>>,
-    pending: PendingRequests<rfrp::AgentClientResponse>,
+    tx: mpsc::Sender<Result<oxiproxy::ControllerToClientMessage, tonic::Status>>,
+    pending: PendingRequests<oxiproxy::AgentClientResponse>,
 }
 
 /// 管理已连接的 Agent Client 流
@@ -42,7 +42,7 @@ impl ClientStreamManager {
     pub async fn register(
         &self,
         client_id: i64,
-        tx: mpsc::Sender<Result<rfrp::ControllerToClientMessage, tonic::Status>>,
+        tx: mpsc::Sender<Result<oxiproxy::ControllerToClientMessage, tonic::Status>>,
     ) {
         info!("Agent Client #{} 已连接", client_id);
         let stream = ClientStream {
@@ -75,8 +75,8 @@ impl ClientStreamManager {
 
         let streams = self.streams.read().await;
         if let Some(stream) = streams.get(&client_id) {
-            let msg = rfrp::ControllerToClientMessage {
-                payload: Some(rfrp::controller_to_client_message::Payload::ProxyUpdate(update)),
+            let msg = oxiproxy::ControllerToClientMessage {
+                payload: Some(oxiproxy::controller_to_client_message::Payload::ProxyUpdate(update)),
             };
             if let Err(e) = stream.tx.send(Ok(msg)).await {
                 error!("推送代理更新到 Client #{} 失败: {}", client_id, e);
@@ -139,7 +139,7 @@ impl ClientStreamManager {
     }
 
     /// 完成一个待处理的请求（由 AgentClientResponse 触发）
-    pub async fn complete_pending_request(&self, client_id: i64, response: &rfrp::AgentClientResponse) {
+    pub async fn complete_pending_request(&self, client_id: i64, response: &oxiproxy::AgentClientResponse) {
         let streams = self.streams.read().await;
         if let Some(stream) = streams.get(&client_id) {
             stream.pending.complete(&response.request_id, response.clone()).await;
@@ -157,9 +157,9 @@ impl ClientStreamManager {
             (request_id, rx, stream.tx.clone())
         };
 
-        let msg = rfrp::ControllerToClientMessage {
-            payload: Some(rfrp::controller_to_client_message::Payload::GetLogs(
-                rfrp::GetClientLogsDirectCommand {
+        let msg = oxiproxy::ControllerToClientMessage {
+            payload: Some(oxiproxy::controller_to_client_message::Payload::GetLogs(
+                oxiproxy::GetClientLogsDirectCommand {
                     request_id: request_id.clone(),
                     count: count as u32,
                 },
@@ -172,7 +172,7 @@ impl ClientStreamManager {
         let resp = PendingRequests::wait(rx, Duration::from_secs(10)).await?;
 
         match resp.result {
-            Some(rfrp::agent_client_response::Result::ClientLogs(logs)) => {
+            Some(oxiproxy::agent_client_response::Result::ClientLogs(logs)) => {
                 Ok(logs.logs.into_iter().map(|l| LogEntry {
                     timestamp: l.timestamp,
                     level: l.level,
@@ -184,7 +184,7 @@ impl ClientStreamManager {
     }
 
     /// 构建代理列表更新消息
-    pub async fn build_proxy_list_update(&self, client_id: i64) -> anyhow::Result<rfrp::ProxyListUpdate> {
+    pub async fn build_proxy_list_update(&self, client_id: i64) -> anyhow::Result<oxiproxy::ProxyListUpdate> {
         let db = get_connection().await;
 
         // 查询客户端
@@ -201,7 +201,7 @@ impl ClientStreamManager {
             .await?;
 
         // 按 node_id 分组（只使用 proxy.node_id）
-        let mut node_proxy_map: HashMap<i64, Vec<rfrp::ProxyInfo>> = HashMap::new();
+        let mut node_proxy_map: HashMap<i64, Vec<oxiproxy::ProxyInfo>> = HashMap::new();
         for p in &proxies {
             let nid = match p.node_id {
                 Some(id) => id,
@@ -211,7 +211,7 @@ impl ClientStreamManager {
             node_proxy_map
                 .entry(nid)
                 .or_default()
-                .push(rfrp::ProxyInfo {
+                .push(oxiproxy::ProxyInfo {
                     proxy_id: p.id,
                     name: p.name.clone(),
                     proxy_type: p.proxy_type.clone(),
@@ -239,14 +239,14 @@ impl ClientStreamManager {
                 let kcp = n.kcp_config
                     .as_deref()
                     .and_then(|s| serde_json::from_str::<KcpConfig>(s).ok())
-                    .map(|k| rfrp::GrpcKcpConfig {
+                    .map(|k| oxiproxy::GrpcKcpConfig {
                         nodelay: k.nodelay,
                         interval: k.interval,
                         resend: k.resend,
                         nc: k.nc,
                     });
 
-                server_groups.push(rfrp::ServerProxyGroup {
+                server_groups.push(oxiproxy::ServerProxyGroup {
                     node_id: n.id,
                     server_addr: n.tunnel_addr,
                     server_port: n.tunnel_port as u32,
@@ -257,7 +257,7 @@ impl ClientStreamManager {
             }
         }
 
-        Ok(rfrp::ProxyListUpdate {
+        Ok(oxiproxy::ProxyListUpdate {
             client_id: client_model.id,
             client_name: client_model.name,
             server_groups,

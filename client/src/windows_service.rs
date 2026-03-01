@@ -1,6 +1,6 @@
 //! Windows 服务支持
 //!
-//! 提供将 RFRP Client 安装为 Windows 服务的功能
+//! 提供将 OxiProxy Client 安装为 Windows 服务的功能
 
 use anyhow::{anyhow, Result};
 use std::ffi::OsString;
@@ -15,9 +15,9 @@ use windows_service::{
     service_dispatcher,
 };
 
-const SERVICE_NAME: &str = "RfrpClient";
-const SERVICE_DISPLAY_NAME: &str = "RFRP Client";
-const SERVICE_DESCRIPTION: &str = "RFRP 反向代理客户端服务";
+const SERVICE_NAME: &str = "OxiProxyClient";
+const SERVICE_DISPLAY_NAME: &str = "OxiProxy Client";
+const SERVICE_DESCRIPTION: &str = "OxiProxy 反向代理客户端服务";
 
 define_windows_service!(ffi_service_main, service_main);
 

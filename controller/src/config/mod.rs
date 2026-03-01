@@ -55,7 +55,7 @@ fn default_jwt_expiration() -> i64 {
 }
 
 fn default_db_path() -> String {
-    "./data/rfrp.db".to_string()
+    "./data/oxiproxy.db".to_string()
 }
 
 impl Config {

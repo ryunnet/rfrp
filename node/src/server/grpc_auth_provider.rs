@@ -9,8 +9,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use tracing::debug;
 
-use common::grpc::rfrp;
-use common::grpc::rfrp::agent_server_message::Payload as AgentPayload;
+use common::grpc::oxiproxy;
+use common::grpc::oxiproxy::agent_server_message::Payload as AgentPayload;
 use common::grpc::pending_requests::PendingRequests;
 use common::protocol::auth::{
     ClientAuthProvider, TrafficLimitResponse, ValidateTokenResponse,
@@ -42,8 +42,8 @@ impl ClientAuthProvider for GrpcAuthProvider {
         let (request_id, rx) = self.pending.register().await;
         debug!("gRPC 验证 token (request_id={})", request_id);
 
-        let msg = rfrp::AgentServerMessage {
-            payload: Some(AgentPayload::ValidateToken(rfrp::ValidateTokenRequest {
+        let msg = oxiproxy::AgentServerMessage {
+            payload: Some(AgentPayload::ValidateToken(oxiproxy::ValidateTokenRequest {
                 request_id: request_id.clone(),
                 token: token.to_string(),
             })),
@@ -71,8 +71,8 @@ impl ClientAuthProvider for GrpcAuthProvider {
         let (request_id, rx) = self.pending.register().await;
         debug!("gRPC 上报客户端 #{} 状态: online={}", client_id, online);
 
-        let msg = rfrp::AgentServerMessage {
-            payload: Some(AgentPayload::ClientOnline(rfrp::ClientOnlineRequest {
+        let msg = oxiproxy::AgentServerMessage {
+            payload: Some(AgentPayload::ClientOnline(oxiproxy::ClientOnlineRequest {
                 request_id: request_id.clone(),
                 client_id,
                 online,
@@ -91,8 +91,8 @@ impl ClientAuthProvider for GrpcAuthProvider {
         let (request_id, rx) = self.pending.register().await;
         debug!("gRPC 检查客户端 #{} 流量限制", client_id);
 
-        let msg = rfrp::AgentServerMessage {
-            payload: Some(AgentPayload::CheckTrafficLimit(rfrp::CheckTrafficLimitRequest {
+        let msg = oxiproxy::AgentServerMessage {
+            payload: Some(AgentPayload::CheckTrafficLimit(oxiproxy::CheckTrafficLimitRequest {
                 request_id: request_id.clone(),
                 client_id,
             })),
@@ -118,8 +118,8 @@ impl ClientAuthProvider for GrpcAuthProvider {
         let (request_id, rx) = self.pending.register().await;
         debug!("gRPC 获取客户端 #{} 代理配置 (node_id={})", client_id, self.node_id);
 
-        let msg = rfrp::AgentServerMessage {
-            payload: Some(AgentPayload::GetClientProxies(rfrp::GetClientProxiesRequest {
+        let msg = oxiproxy::AgentServerMessage {
+            payload: Some(AgentPayload::GetClientProxies(oxiproxy::GetClientProxiesRequest {
                 request_id: request_id.clone(),
                 client_id,
                 node_id: self.node_id,

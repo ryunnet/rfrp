@@ -1,5 +1,5 @@
 syntax = "proto3";
-package rfrp;
+package oxiproxy;
 
 // ===== 公共消息 =====
 

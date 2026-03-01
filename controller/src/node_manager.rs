@@ -11,9 +11,9 @@ use sea_orm::{EntityTrait, ColumnTrait, QueryFilter};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{info, warn};
 
-use common::grpc::rfrp;
-use common::grpc::rfrp::controller_to_agent_message::Payload as ControllerPayload;
-use common::grpc::rfrp::agent_server_response::Result as AgentResult;
+use common::grpc::oxiproxy;
+use common::grpc::oxiproxy::controller_to_agent_message::Payload as ControllerPayload;
+use common::grpc::oxiproxy::agent_server_response::Result as AgentResult;
 use common::grpc::pending_requests::PendingRequests;
 use common::protocol::control::{
     ConnectedClient, LogEntry, ProxyControl, ServerStatus,
@@ -24,8 +24,8 @@ use crate::migration::get_connection;
 
 /// 单个节点的 gRPC 流连接
 struct NodeStream {
-    tx: mpsc::Sender<Result<rfrp::ControllerToAgentMessage, tonic::Status>>,
-    pending: PendingRequests<rfrp::AgentServerResponse>,
+    tx: mpsc::Sender<Result<oxiproxy::ControllerToAgentMessage, tonic::Status>>,
+    pending: PendingRequests<oxiproxy::AgentServerResponse>,
 }
 
 /// 多节点管理器
@@ -53,7 +53,7 @@ impl NodeManager {
     pub async fn register_node_stream(
         &self,
         node_id: i64,
-        tx: mpsc::Sender<Result<rfrp::ControllerToAgentMessage, tonic::Status>>,
+        tx: mpsc::Sender<Result<oxiproxy::ControllerToAgentMessage, tonic::Status>>,
     ) {
         let stream = NodeStream {
             tx,
@@ -70,7 +70,7 @@ impl NodeManager {
     }
 
     /// 完成一个待处理的请求（由 AgentServerResponse 触发）
-    pub async fn complete_pending_request(&self, node_id: i64, response: &rfrp::AgentServerResponse) {
+    pub async fn complete_pending_request(&self, node_id: i64, response: &oxiproxy::AgentServerResponse) {
         let streams = self.streams.read().await;
         if let Some(stream) = streams.get(&node_id) {
             stream.pending.complete(&response.request_id, response.clone()).await;
@@ -82,7 +82,7 @@ impl NodeManager {
         &self,
         node_id: i64,
         payload: ControllerPayload,
-    ) -> Result<rfrp::AgentServerResponse> {
+    ) -> Result<oxiproxy::AgentServerResponse> {
         let (request_id, rx, tx_clone) = {
             let streams = self.streams.read().await;
             let stream = streams.get(&node_id)
@@ -95,7 +95,7 @@ impl NodeManager {
         // 替换 payload 中的 request_id
         let final_payload = replace_request_id(payload, &request_id);
 
-        let msg = rfrp::ControllerToAgentMessage {
+        let msg = oxiproxy::ControllerToAgentMessage {
             payload: Some(final_payload),
         };
 
@@ -149,7 +149,7 @@ impl NodeManager {
 
     /// 获取节点日志
     pub async fn get_node_logs(&self, node_id: i64, lines: u32) -> Result<Vec<LogEntry>> {
-        let cmd = ControllerPayload::GetNodeLogs(rfrp::GetNodeLogsCommand {
+        let cmd = ControllerPayload::GetNodeLogs(oxiproxy::GetNodeLogsCommand {
             request_id: String::new(),
             lines,
         });
@@ -170,7 +170,7 @@ impl NodeManager {
 
     /// 向节点推送协议变更命令
     pub async fn send_update_protocol(&self, node_id: i64, protocol: &str) -> Result<()> {
-        let cmd = ControllerPayload::UpdateProtocol(rfrp::UpdateProtocolCommand {
+        let cmd = ControllerPayload::UpdateProtocol(oxiproxy::UpdateProtocolCommand {
             request_id: String::new(),
             tunnel_protocol: protocol.to_string(),
         });
@@ -190,7 +190,7 @@ impl NodeManager {
     }
 
     pub async fn send_update_speed_limit(&self, node_id: i64, speed_limit: i64) -> Result<()> {
-        let cmd = ControllerPayload::UpdateSpeedLimit(rfrp::UpdateSpeedLimitCommand {
+        let cmd = ControllerPayload::UpdateSpeedLimit(oxiproxy::UpdateSpeedLimitCommand {
             request_id: String::new(),
             speed_limit,
         });
@@ -251,7 +251,7 @@ impl ProxyControl for NodeManager {
         let node_id = self.resolve_node_for_client(client_id).await?
             .ok_or_else(|| anyhow!("客户端 {} 未关联任何节点", client_id))?;
 
-        let cmd = ControllerPayload::StartProxy(rfrp::StartProxyCommand {
+        let cmd = ControllerPayload::StartProxy(oxiproxy::StartProxyCommand {
             request_id: String::new(),
             client_id: client_id.to_string(),
             proxy_id,
@@ -275,7 +275,7 @@ impl ProxyControl for NodeManager {
         let node_id = self.resolve_node_for_client(client_id).await?
             .ok_or_else(|| anyhow!("客户端 {} 未关联任何节点", client_id))?;
 
-        let cmd = ControllerPayload::StopProxy(rfrp::StopProxyCommand {
+        let cmd = ControllerPayload::StopProxy(oxiproxy::StopProxyCommand {
             request_id: String::new(),
             client_id: client_id.to_string(),
             proxy_id,
@@ -300,7 +300,7 @@ impl ProxyControl for NodeManager {
         let mut all_clients = Vec::new();
 
         for node_id in node_ids {
-            let cmd = ControllerPayload::GetStatus(rfrp::GetStatusCommand {
+            let cmd = ControllerPayload::GetStatus(oxiproxy::GetStatusCommand {
                 request_id: String::new(),
             });
 
@@ -329,7 +329,7 @@ impl ProxyControl for NodeManager {
         let node_id = self.resolve_node_for_client(client_id).await?
             .ok_or_else(|| anyhow!("客户端 {} 未关联任何节点", client_id))?;
 
-        let cmd = ControllerPayload::GetClientLogs(rfrp::GetClientLogsCommand {
+        let cmd = ControllerPayload::GetClientLogs(oxiproxy::GetClientLogsCommand {
             request_id: String::new(),
             client_id: client_id.to_string(),
             count: count as u32,
@@ -358,7 +358,7 @@ impl ProxyControl for NodeManager {
         let mut total_proxy_count = 0;
 
         for node_id in node_ids {
-            let cmd = ControllerPayload::GetStatus(rfrp::GetStatusCommand {
+            let cmd = ControllerPayload::GetStatus(oxiproxy::GetStatusCommand {
                 request_id: String::new(),
             });
 

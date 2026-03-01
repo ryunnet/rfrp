@@ -1,6 +1,6 @@
 <div align="center">
 
-# RFRP
+# OxiProxy
 
 **基于 Rust 的高性能反向代理工具**
 
@@ -29,9 +29,9 @@
 <details>
 <summary><b>功能详情</b></summary>
 
-**服务端 (rfrps)**：QUIC 协议、SQLite 持久化、Web 管理界面、JWT 认证、流量统计、用户权限管理、在线状态监控
+**服务端 (oxiproxy-server)**：QUIC 协议、SQLite 持久化、Web 管理界面、JWT 认证、流量统计、用户权限管理、在线状态监控
 
-**客户端 (rfrpc)**：自动重连、TCP/UDP 代理、多隧道并发、心跳保活
+**客户端 (oxiproxy-client)**：自动重连、TCP/UDP 代理、多隧道并发、心跳保活
 
 **Web 界面**：仪表盘、客户端管理、隧道管理、流量统计、用户管理、多语言 (中文/English)
 
@@ -43,13 +43,13 @@
 
 ```bash
 # Docker Compose 一键部署（推荐）
-mkdir -p /opt/rfrp && cd /opt/rfrp
-curl -O https://raw.githubusercontent.com/rfrp/rfrp/master/docker-compose.yml
-curl -O https://raw.githubusercontent.com/rfrp/rfrp/master/rfrps.toml
+mkdir -p /opt/oxiproxy && cd /opt/oxiproxy
+curl -O https://raw.githubusercontent.com/oxiproxy/oxiproxy/master/docker-compose.yml
+curl -O https://raw.githubusercontent.com/oxiproxy/oxiproxy/master/oxiproxy-server.toml
 mkdir -p data && docker-compose up -d
 
 # 查看日志获取 admin 初始密码
-docker-compose logs rfrps
+docker-compose logs oxiproxy-server
 ```
 
 ### 2. 访问 Web 管理界面
@@ -66,14 +66,14 @@ docker-compose logs rfrps
 #### Docker 方式（推荐）
 
 ```bash
-mkdir -p /opt/rfrpc && cd /opt/rfrpc
+mkdir -p /opt/oxiproxy-client && cd /opt/oxiproxy-client
 
 cat > docker-compose.yml << EOF
 version: '3.8'
 services:
-  rfrpc:
-    image: harbor.yunnet.top/rfrp:latest
-    container_name: rfrpc
+  oxiproxy-client:
+    image: harbor.yunnet.top/oxiproxy:latest
+    container_name: oxiproxy-client
     restart: unless-stopped
     command: ["/app/client", "--controller-url", "http://your-server-ip:3100", "--token", "your-client-token"]
 EOF
@@ -98,10 +98,10 @@ docker-compose up -d
 .\client.exe --install-service --controller-url http://your-server-ip:3100 --token your-client-token
 
 # 启动服务
-sc start RfrpClient
+sc start OxiProxyClient
 
 # 停止服务
-sc stop RfrpClient
+sc stop OxiProxyClient
 
 # 卸载服务
 .\client.exe --uninstall-service
@@ -118,7 +118,7 @@ sc stop RfrpClient
 
 ## 📦 安装教程
 
-RFRP 提供三种安装方式：
+OxiProxy 提供三种安装方式：
 
 | 方式 | 适用场景 | 难度 |
 |------|---------|------|
@@ -152,14 +152,14 @@ sudo usermod -aG docker $USER && newgrp docker
 #### 部署服务端
 
 ```bash
-mkdir -p /opt/rfrp && cd /opt/rfrp
+mkdir -p /opt/oxiproxy && cd /opt/oxiproxy
 
 # 下载配置文件
-curl -O https://raw.githubusercontent.com/rfrp/rfrp/master/docker-compose.yml
-curl -O https://raw.githubusercontent.com/rfrp/rfrp/master/rfrps.toml
+curl -O https://raw.githubusercontent.com/oxiproxy/oxiproxy/master/docker-compose.yml
+curl -O https://raw.githubusercontent.com/oxiproxy/oxiproxy/master/oxiproxy-server.toml
 
 mkdir -p data && docker-compose up -d
-docker-compose logs rfrps  # 获取 admin 初始密码
+docker-compose logs oxiproxy-server  # 获取 admin 初始密码
 ```
 
 > **重要**: 首次启动后查看日志获取 admin 密码，访问 `http://your-server-ip:3000` 登录并修改密码。
@@ -202,18 +202,18 @@ docker-compose pull && docker-compose up -d  # 更新
 <summary><b>服务端部署</b></summary>
 
 ```bash
-mkdir -p /opt/rfrp/data && cd /opt/rfrp
-cat > rfrps.toml << EOF
+mkdir -p /opt/oxiproxy/data && cd /opt/oxiproxy
+cat > oxiproxy-server.toml << EOF
 bind_port = 7000
 EOF
 
-docker run -d --name rfrps --restart unless-stopped \
+docker run -d --name oxiproxy-server --restart unless-stopped \
   -p 7000:7000/udp -p 3000:3000/tcp \
-  -v $(pwd)/data:/app/data -v $(pwd)/rfrps.toml:/app/rfrps.toml:ro \
+  -v $(pwd)/data:/app/data -v $(pwd)/oxiproxy-server.toml:/app/oxiproxy-server.toml:ro \
   -e TZ=Asia/Shanghai -e RUST_LOG=info \
-  harbor.yunnet.top/rfrp:latest /app/rfrps
+  harbor.yunnet.top/oxiproxy:latest /app/oxiproxy-server
 
-docker logs -f rfrps  # 获取 admin 初始密码
+docker logs -f oxiproxy-server  # 获取 admin 初始密码
 ```
 
 </details>
@@ -222,17 +222,17 @@ docker logs -f rfrps  # 获取 admin 初始密码
 <summary><b>客户端部署</b></summary>
 
 ```bash
-mkdir -p /opt/rfrpc && cd /opt/rfrpc
-cat > rfrpc.toml << EOF
+mkdir -p /opt/oxiproxy-client && cd /opt/oxiproxy-client
+cat > oxiproxy-client.toml << EOF
 server_addr = "your-server-ip"
 server_port = 7000
 token = "your-client-token"
 EOF
 
-docker run -d --name rfrpc --restart unless-stopped \
-  -v $(pwd)/rfrpc.toml:/app/rfrpc.toml:ro \
+docker run -d --name oxiproxy-client --restart unless-stopped \
+  -v $(pwd)/oxiproxy-client.toml:/app/oxiproxy-client.toml:ro \
   -e TZ=Asia/Shanghai -e RUST_LOG=info \
-  harbor.yunnet.top/rfrp:latest /app/rfrpc
+  harbor.yunnet.top/oxiproxy:latest /app/oxiproxy-client
 ```
 
 </details>
@@ -244,20 +244,20 @@ docker run -d --name rfrpc --restart unless-stopped \
 <details>
 <summary><b>预编译二进制文件</b></summary>
 
-从 [Releases](https://github.com/rfrp/rfrp/releases) 下载对应平台的文件：
+从 [Releases](https://github.com/oxiproxy/oxiproxy/releases) 下载对应平台的文件：
 
 | 平台 | 下载 |
 |------|------|
-| Linux amd64 | `rfrps-linux-amd64.tar.gz` |
-| Linux arm64 | `rfrps-linux-arm64.tar.gz` |
-| Windows | `rfrps-windows-amd64.zip` |
-| macOS Intel | `rfrps-darwin-amd64.tar.gz` |
-| macOS Apple Silicon | `rfrps-darwin-arm64.tar.gz` |
+| Linux amd64 | `oxiproxy-server-linux-amd64.tar.gz` |
+| Linux arm64 | `oxiproxy-server-linux-arm64.tar.gz` |
+| Windows | `oxiproxy-server-windows-amd64.zip` |
+| macOS Intel | `oxiproxy-server-darwin-amd64.tar.gz` |
+| macOS Apple Silicon | `oxiproxy-server-darwin-arm64.tar.gz` |
 
 ```bash
-tar -xzf rfrps-linux-amd64.tar.gz
-chmod +x rfrps rfrpc
-sudo mv rfrps rfrpc /usr/local/bin/
+tar -xzf oxiproxy-server-linux-amd64.tar.gz
+chmod +x oxiproxy-server oxiproxy-client
+sudo mv oxiproxy-server oxiproxy-client /usr/local/bin/
 ```
 
 </details>
@@ -268,10 +268,10 @@ sudo mv rfrps rfrpc /usr/local/bin/
 **环境要求**: Rust 1.85+, Bun 1.0+, SQLite 3, Git
 
 ```bash
-git clone https://github.com/rfrp/rfrp.git && cd rfrp
+git clone https://github.com/oxiproxy/oxiproxy.git && cd oxiproxy
 cargo build --release
 cd web && bun install && bun run build
-# 可执行文件: target/release/rfrps, target/release/rfrpc
+# 可执行文件: target/release/oxiproxy-server, target/release/oxiproxy-client
 ```
 
 </details>
@@ -280,15 +280,15 @@ cd web && bun install && bun run build
 <summary><b>配置为 systemd 服务 (Linux)</b></summary>
 
 ```bash
-sudo tee /etc/systemd/system/rfrps.service > /dev/null << EOF
+sudo tee /etc/systemd/system/oxiproxy-server.service > /dev/null << EOF
 [Unit]
-Description=RFRP Server
+Description=OxiProxy Server
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/rfrp
-ExecStart=/usr/local/bin/rfrps
+WorkingDirectory=/opt/oxiproxy
+ExecStart=/usr/local/bin/oxiproxy-server
 Restart=always
 
 [Install]
@@ -296,14 +296,14 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now rfrps
+sudo systemctl enable --now oxiproxy-server
 ```
 
 </details>
 
 ## ⚙️ 配置说明
 
-### 服务端配置 (rfrps.toml)
+### 服务端配置 (oxiproxy-server.toml)
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
@@ -375,7 +375,7 @@ sudo systemctl enable --now rfrps
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         RFRP 三层架构                            │
+│                         OxiProxy 三层架构                            │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  Dashboard (React) ──HTTP/REST──> Controller (Axum)             │
@@ -435,8 +435,8 @@ sudo systemctl enable --now rfrps
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/rfrp.git
-cd rfrp
+git clone https://github.com/oxiproxy/oxiproxy.git
+cd oxiproxy
 
 # 构建所有组件
 cargo build --release
@@ -493,7 +493,7 @@ git push origin v1.0.0
 
 ## 📊 流量统计
 
-RFRP 提供详细的流量统计功能：
+OxiProxy 提供详细的流量统计功能：
 
 - **客户端流量**：记录每个客户端的发送/接收字节数
 - **隧道流量**：记录每个隧道的流量使用情况
@@ -514,23 +514,23 @@ RFRP 提供详细的流量统计功能：
 **Q: 服务端启动后无法访问 Web 界面？**
 - 检查防火墙是否开放 3000 端口
 - 检查容器是否正常运行：`docker-compose ps`
-- 查看日志排查错误：`docker-compose logs rfrps`
+- 查看日志排查错误：`docker-compose logs oxiproxy-server`
 
 **Q: 客户端无法连接到 Controller？**
 - 确认 Controller 的 gRPC 端口（默认 3100）可访问
 - 检查客户端的 controller-url 和 token 是否正确
-- 查看客户端日志：`docker-compose logs rfrpc` 或查看守护进程日志
+- 查看客户端日志：`docker-compose logs oxiproxy-client` 或查看守护进程日志
 - 确认 Controller 健康状态：访问 `http://server-ip:3000`
 
 **Q: Windows 服务安装失败？**
 - 确保以管理员权限运行命令提示符或 PowerShell
-- 检查是否已存在同名服务：`sc query RfrpClient`
+- 检查是否已存在同名服务：`sc query OxiProxyClient`
 - 查看 Windows 事件查看器中的应用程序日志
 
 **Q: Unix 守护进程无法启动？**
 - 检查 PID 文件路径是否有写入权限
 - 检查日志文件路径是否有写入权限
-- 查看日志文件：`tail -f /var/log/rfrp-client.log`
+- 查看日志文件：`tail -f /var/log/oxiproxy-client.log`
 
 **Q: 忘记 admin 密码怎么办？**
 ```bash
@@ -538,11 +538,11 @@ RFRP 提供详细的流量统计功能：
 docker-compose down
 
 # 删除数据库 (会清空所有数据!)
-rm -rf data/rfrp.db
+rm -rf data/oxiproxy.db
 
 # 重新启动，会生成新的 admin 密码
 docker-compose up -d
-docker-compose logs -f rfrps
+docker-compose logs -f oxiproxy-server
 ```
 
 **Q: 如何更新到最新版本？**
@@ -554,7 +554,7 @@ docker-compose pull
 docker-compose up -d
 
 # 查看版本
-docker-compose logs rfrps | grep version
+docker-compose logs oxiproxy-server | grep version
 ```
 
 **Q: Docker 容器占用空间过大？**
@@ -572,10 +572,10 @@ docker system prune -a
 **Q: 如何备份数据？**
 ```bash
 # 备份数据库和配置
-tar -czf rfrp-backup-$(date +%Y%m%d).tar.gz data/ rfrps.toml
+tar -czf oxiproxy-backup-$(date +%Y%m%d).tar.gz data/ oxiproxy-server.toml
 
 # 恢复数据
-tar -xzf rfrp-backup-20260125.tar.gz
+tar -xzf oxiproxy-backup-20260125.tar.gz
 ```
 
 ## 📊 性能优化
@@ -617,7 +617,7 @@ server {
 5. **定期备份数据**：设置定时任务自动备份
 ```bash
 # 添加到 crontab
-0 2 * * * cd /opt/rfrp && tar -czf backup/rfrp-$(date +\%Y\%m\%d).tar.gz data/
+0 2 * * * cd /opt/oxiproxy && tar -czf backup/oxiproxy-$(date +\%Y\%m\%d).tar.gz data/
 ```
 
 ## 🗺️ 路线图
@@ -657,7 +657,7 @@ server {
 ## 📮 联系方式
 
 - 作者: Your Name
-- 项目链接: [https://github.com/yourusername/rfrp](https://github.com/yourusername/rfrp)
+- 项目链接: [https://github.com/oxiproxy/oxiproxy](https://github.com/oxiproxy/oxiproxy)
 
 ---
 

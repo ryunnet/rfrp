@@ -11,9 +11,9 @@ use tracing::{debug, error, info, warn};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use chrono::Utc;
 
-use common::grpc::rfrp;
-use common::grpc::rfrp::agent_client_message::Payload as ClientPayload;
-use common::grpc::rfrp::controller_to_client_message::Payload as ControllerPayload;
+use common::grpc::oxiproxy;
+use common::grpc::oxiproxy::agent_client_message::Payload as ClientPayload;
+use common::grpc::oxiproxy::controller_to_client_message::Payload as ControllerPayload;
 use common::grpc::AgentClientService;
 
 use crate::client_stream_manager::ClientStreamManager;
@@ -24,7 +24,7 @@ pub struct AgentClientServiceImpl {
     pub client_stream_manager: Arc<ClientStreamManager>,
 }
 
-type ResponseStream = Pin<Box<dyn Stream<Item = Result<rfrp::ControllerToClientMessage, Status>> + Send>>;
+type ResponseStream = Pin<Box<dyn Stream<Item = Result<oxiproxy::ControllerToClientMessage, Status>> + Send>>;
 
 #[tonic::async_trait]
 impl AgentClientService for AgentClientServiceImpl {
@@ -32,11 +32,11 @@ impl AgentClientService for AgentClientServiceImpl {
 
     async fn agent_client_channel(
         &self,
-        request: Request<Streaming<rfrp::AgentClientMessage>>,
+        request: Request<Streaming<oxiproxy::AgentClientMessage>>,
     ) -> Result<Response<Self::AgentClientChannelStream>, Status> {
         let client_ip = crate::geo_ip::extract_client_ip_from_request(&request);
         let mut in_stream = request.into_inner();
-        let (tx, rx) = mpsc::channel::<Result<rfrp::ControllerToClientMessage, Status>>(256);
+        let (tx, rx) = mpsc::channel::<Result<oxiproxy::ControllerToClientMessage, Status>>(256);
 
         let client_stream_manager = self.client_stream_manager.clone();
 
@@ -71,8 +71,8 @@ impl AgentClientService for AgentClientServiceImpl {
             {
                 Ok(Some(c)) => c,
                 Ok(None) => {
-                    let resp = rfrp::ControllerToClientMessage {
-                        payload: Some(ControllerPayload::AuthResponse(rfrp::ClientAuthResponse {
+                    let resp = oxiproxy::ControllerToClientMessage {
+                        payload: Some(ControllerPayload::AuthResponse(oxiproxy::ClientAuthResponse {
                             success: false,
                             error_message: Some("无效的 token".to_string()),
                             client_id: 0,
@@ -83,8 +83,8 @@ impl AgentClientService for AgentClientServiceImpl {
                     return;
                 }
                 Err(e) => {
-                    let resp = rfrp::ControllerToClientMessage {
-                        payload: Some(ControllerPayload::AuthResponse(rfrp::ClientAuthResponse {
+                    let resp = oxiproxy::ControllerToClientMessage {
+                        payload: Some(ControllerPayload::AuthResponse(oxiproxy::ClientAuthResponse {
                             success: false,
                             error_message: Some(format!("数据库错误: {}", e)),
                             client_id: 0,
@@ -98,8 +98,8 @@ impl AgentClientService for AgentClientServiceImpl {
 
             // 检查流量限制
             if client_model.is_traffic_exceeded {
-                let resp = rfrp::ControllerToClientMessage {
-                    payload: Some(ControllerPayload::Error(rfrp::ErrorNotification {
+                let resp = oxiproxy::ControllerToClientMessage {
+                    payload: Some(ControllerPayload::Error(oxiproxy::ErrorNotification {
                         code: "traffic_exceeded".to_string(),
                         message: format!("客户端 '{}' 流量已超限", client_model.name),
                     })),
@@ -112,8 +112,8 @@ impl AgentClientService for AgentClientServiceImpl {
             let client_name = client_model.name.clone();
 
             // 发送认证成功响应
-            let auth_resp = rfrp::ControllerToClientMessage {
-                payload: Some(ControllerPayload::AuthResponse(rfrp::ClientAuthResponse {
+            let auth_resp = oxiproxy::ControllerToClientMessage {
+                payload: Some(ControllerPayload::AuthResponse(oxiproxy::ClientAuthResponse {
                     success: true,
                     error_message: None,
                     client_id,
@@ -140,7 +140,7 @@ impl AgentClientService for AgentClientServiceImpl {
             // 3. 立即推送当前代理列表
             match client_stream_manager.build_proxy_list_update(client_id).await {
                 Ok(update) => {
-                    let msg = rfrp::ControllerToClientMessage {
+                    let msg = oxiproxy::ControllerToClientMessage {
                         payload: Some(ControllerPayload::ProxyUpdate(update)),
                     };
                     if tx.send(Ok(msg)).await.is_err() {
@@ -172,8 +172,8 @@ impl AgentClientService for AgentClientServiceImpl {
 
                 match payload {
                     ClientPayload::Heartbeat(hb) => {
-                        let resp = rfrp::ControllerToClientMessage {
-                            payload: Some(ControllerPayload::HeartbeatResponse(rfrp::Heartbeat {
+                        let resp = oxiproxy::ControllerToClientMessage {
+                            payload: Some(ControllerPayload::HeartbeatResponse(oxiproxy::Heartbeat {
                                 timestamp: hb.timestamp,
                             })),
                         };

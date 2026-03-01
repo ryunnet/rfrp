@@ -12,7 +12,7 @@ use daemonize::Daemonize;
 use std::fs::File;
 
 #[derive(Parser)]
-#[command(name = "client", version, about = "RFRP Client - 反向代理客户端")]
+#[command(name = "client", version, about = "OxiProxy Client - 反向代理客户端")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -43,12 +43,12 @@ enum Command {
     Stop {
         /// PID 文件路径
         #[cfg(unix)]
-        #[arg(long, default_value = "/var/run/rfrp-client.pid")]
+        #[arg(long, default_value = "/var/run/oxiproxy-client.pid")]
         pid_file: String,
 
         /// PID 文件路径
         #[cfg(windows)]
-        #[arg(long, default_value = "rfrp-client.pid")]
+        #[arg(long, default_value = "oxiproxy-client.pid")]
         pid_file: String,
     },
 
@@ -68,7 +68,7 @@ enum Command {
 
         /// PID 文件路径
         #[cfg(unix)]
-        #[arg(long, default_value = "/var/run/rfrp-client.pid")]
+        #[arg(long, default_value = "/var/run/oxiproxy-client.pid")]
         pid_file: String,
 
         /// 日志目录路径（按天自动分割）
@@ -78,7 +78,7 @@ enum Command {
 
         /// PID 文件路径
         #[cfg(windows)]
-        #[arg(long, default_value = "rfrp-client.pid")]
+        #[arg(long, default_value = "oxiproxy-client.pid")]
         pid_file: String,
 
         /// 日志目录路径（按天自动分割）
@@ -391,8 +391,8 @@ fn update_binary() -> anyhow::Result<()> {
     println!("正在检查更新...");
 
     let status = self_update::backends::github::Update::configure()
-        .repo_owner("ryunnet")
-        .repo_name("rfrp")
+        .repo_owner("oxiproxy")
+        .repo_name("oxiproxy")
         .bin_name("client")
         .identifier("client")
         .bin_path_in_archive("{{ bin }}{{ bin_ext }}")

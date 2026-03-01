@@ -1,5 +1,5 @@
 services:
-  # ==================== RFRP Node (Agent Server) ====================
+  # ==================== OxiProxy Node (Agent Server) ====================
   # 节点服务，运行在公网服务器上，提供隧道服务
   #
   # 使用前请先配置：
@@ -7,8 +7,8 @@ services:
   # 2. 在 .env 中填写实际的 CONTROLLER_URL 和 NODE_TOKEN
   # 3. 运行: docker compose up -d
   node:
-    image: docker.yunnet.top/all/rfrp:latest
-    container_name: rfrp-node
+    image: docker.yunnet.top/all/oxiproxy:latest
+    container_name: oxiproxy-node
     restart: unless-stopped
     network_mode: host
 
@@ -39,9 +39,9 @@ services:
 
     # 网络配置（可选）
     # networks:
-    #   - rfrp-network
+    #   - oxiproxy-network
 
 # 网络配置（可选）
 # networks:
-#   rfrp-network:
+#   oxiproxy-network:
 #     driver: bridge

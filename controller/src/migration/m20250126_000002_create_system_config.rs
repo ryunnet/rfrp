@@ -78,7 +78,7 @@ impl MigrationTrait for Migration {
             ])
             .values_panic([
                 "system_name".into(),
-                "\"RFRP\"".into(),
+                "\"OxiProxy\"".into(),
                 "系统名称".into(),
                 "string".into(),
             ])

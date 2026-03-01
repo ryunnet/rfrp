@@ -324,7 +324,7 @@ export default function Settings() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground">系统配置</h2>
-          <p className="mt-1 text-sm text-muted-foreground">管理 RFRP Controller 的运行参数</p>
+          <p className="mt-1 text-sm text-muted-foreground">管理 OxiProxy Controller 的运行参数</p>
         </div>
         <div className="flex gap-3">
           {isAdmin && (

@@ -51,7 +51,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <h2 className="text-2xl font-bold">欢迎回来，{user?.username}</h2>
-                <p className="mt-1 text-white/80 text-sm">这是您的 RFRP 服务概览</p>
+                <p className="mt-1 text-white/80 text-sm">这是您的 OxiProxy 服务概览</p>
               </div>
             </div>
           </div>

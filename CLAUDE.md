@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-RFRP 是一个基于 Rust 2021 Edition（workspace resolver = "3"）的高性能反向代理工具（内网穿透解决方案），采用三层架构：
+OxiProxy 是一个基于 Rust 2021 Edition（workspace resolver = "3"）的高性能反向代理工具（内网穿透解决方案），采用三层架构：
 
 - **Controller**：中央控制器，提供 Web 管理界面、RESTful API 和 gRPC 服务
 - **Node**：节点服务器，提供 QUIC/KCP 隧道服务，通过 gRPC 连接到 Controller
@@ -66,7 +66,7 @@ Controller 配置按以下优先级加载：
 1. 环境变量（`JWT_SECRET` 等）
 2. 数据库 `SystemConfig` 表
 3. TOML 配置文件
-4. 默认值（web_port=3000, internal_port=3100, db_path=data/rfrp.db）
+4. 默认值（web_port=3000, internal_port=3100, db_path=data/oxiproxy.db）
 
 首次启动时 admin 密码自动生成并保存到 `data/admin_password.txt`。
 
@@ -172,11 +172,11 @@ bun run lint
   - `grpc_client.rs` - 连接到 Controller，接收 ProxyListUpdate
   - `connection_manager.rs` - 隧道连接协调（desired vs actual 状态协调）
   - `log_collector.rs` - 内存日志收集（自定义 tracing layer）
-- `windows_service.rs` - Windows Service 注册/管理（服务名: RfrpClient）
+- `windows_service.rs` - Windows Service 注册/管理（服务名: OxiProxyClient）
 
 ### Common (common/src/)
 
-- `proto/rfrp.proto` - gRPC 协议定义（两个 service：AgentServerService, AgentClientService）
+- `proto/oxiproxy.proto` - gRPC 协议定义（两个 service：AgentServerService, AgentClientService）
 - `build.rs` - tonic-build 自动编译 proto 文件（`cargo build` 时自动触发）
 - `tunnel/` - 隧道协议抽象层
   - `traits.rs` - 统一的 TunnelSendStream/RecvStream/Connection/Connector/Listener trait
@@ -251,7 +251,7 @@ Controller 启动两个后台任务（每 30 秒）：
 
 ### gRPC 协议修改
 
-1. 修改 `common/proto/rfrp.proto`
+1. 修改 `common/proto/oxiproxy.proto`
 2. 运行 `cargo build` 自动重新生成代码（通过 `common/build.rs` 中的 tonic-build）
 3. 更新 Controller、Node 和 Client 中的实现
 
@@ -264,7 +264,7 @@ Controller 启动两个后台任务（每 30 秒）：
 ### 平台特定功能
 
 - **Unix**：Node 和 Client 支持 `--daemon` 模式（daemonize crate），含 `--pid-file` 和 `--log-file` 参数
-- **Windows**：Client 支持 `--install-service` / `--uninstall-service`（windows-service crate），服务名 `RfrpClient`
+- **Windows**：Client 支持 `--install-service` / `--uninstall-service`（windows-service crate），服务名 `OxiProxyClient`
 
 ## 端口配置
 
@@ -276,7 +276,7 @@ Controller 启动两个后台任务（每 30 秒）：
 ## 环境变量
 
 - `RUST_LOG` - 日志级别（默认：info）
-- `DATABASE_URL` - SQLite 数据库路径（默认：data/rfrp.db）
+- `DATABASE_URL` - SQLite 数据库路径（默认：data/oxiproxy.db）
 - `JWT_SECRET` - JWT 签名密钥（可选，自动生成）
 
 ## Docker

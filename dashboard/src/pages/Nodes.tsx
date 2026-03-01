@@ -362,7 +362,7 @@ export default function Nodes() {
     if (platform === 'windows') {
       return `node.exe daemon --controller-url ${protocol}://${url} --token ${token} --bind-port 7000`;
     } else {
-      return `./node daemon --controller-url ${protocol}://${url} --token ${token} --bind-port 7000 --pid-file /var/run/rfrp-node.pid --log-dir ./logs`;
+      return `./node daemon --controller-url ${protocol}://${url} --token ${token} --bind-port 7000 --pid-file /var/run/oxiproxy-node.pid --log-dir ./logs`;
     }
   };
 
@@ -868,7 +868,7 @@ export default function Nodes() {
                 <div className="bg-muted rounded-xl p-4 border border-border">
                   <p className="text-sm text-foreground mb-3">从 GitHub Releases 下载对应平台的节点程序：</p>
                   <a
-                    href="https://github.com/ryunnet/rfrp/releases/latest"
+                    href="https://github.com/oxiproxy/oxiproxy/releases/latest"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 font-medium"

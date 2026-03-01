@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: docker.yunnet.top
-  IMAGE_NAME: rfrp
+  IMAGE_NAME: oxiproxy
 
 jobs:
   build:

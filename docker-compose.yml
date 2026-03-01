@@ -1,6 +1,6 @@
-# ==================== RFRP Docker Compose 配置 ====================
+# ==================== OxiProxy Docker Compose 配置 ====================
 #
-# 本文件提供完整的 RFRP 部署示例（Controller + Node）
+# 本文件提供完整的 OxiProxy 部署示例（Controller + Node）
 #
 # 如需单独部署，请使用以下文件：
 # - docker-compose.controller.yml  # 仅部署 Controller
@@ -16,11 +16,11 @@
 # ================================================================
 
 services:
-  # ==================== RFRP Controller ====================
+  # ==================== OxiProxy Controller ====================
   # 中央控制器，提供 Web 管理界面和 gRPC 服务
   controller:
-    image: docker.yunnet.top/all/rfrp:latest
-    container_name: rfrp-controller
+    image: docker.yunnet.top/all/oxiproxy:latest
+    container_name: oxiproxy-controller
     restart: unless-stopped
 
     # 端口映射
@@ -58,14 +58,14 @@ services:
       start_period: 30s
 
     networks:
-      - rfrp-network
+      - oxiproxy-network
 
-  # ==================== RFRP Node (可选) ====================
+  # ==================== OxiProxy Node (可选) ====================
   # 节点服务，提供隧道服务
   # 如果 Node 部署在其他服务器上，可以注释掉此服务
   node:
-    image: docker.yunnet.top/all/rfrp:latest
-    container_name: rfrp-node
+    image: docker.yunnet.top/all/oxiproxy:latest
+    container_name: oxiproxy-node
     restart: unless-stopped
 
     # 端口映射
@@ -99,14 +99,14 @@ services:
         condition: service_healthy
 
     networks:
-      - rfrp-network
+      - oxiproxy-network
 
-  # ==================== RFRP Client (可选) ====================
+  # ==================== OxiProxy Client (可选) ====================
   # 客户端服务，通常部署在内网机器上
   # 如果 Client 部署在其他服务器上，可以注释掉此服务
   # client:
-  #   image: docker.yunnet.top/all/rfrp:latest
-  #   container_name: rfrp-client
+  #   image: docker.yunnet.top/all/oxiproxy:latest
+  #   container_name: oxiproxy-client
   #   restart: unless-stopped
   #   network_mode: host
   #
@@ -127,5 +127,5 @@ services:
 
 # 网络配置
 networks:
-  rfrp-network:
+  oxiproxy-network:
     driver: bridge

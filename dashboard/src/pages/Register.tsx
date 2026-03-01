@@ -140,7 +140,7 @@ export default function Register() {
               <circle cx="43" cy="32" r="1.2" fill="#818cf8" opacity="0.4"/>
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">RFRP</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">OxiProxy</h1>
           <p className="text-white/40 text-sm mt-1">高性能内网穿透服务</p>
         </div>
 
@@ -296,7 +296,7 @@ export default function Register() {
 
         {/* 版权 */}
         <p className="text-center text-xs text-white/15 mt-8 login-stagger-6">
-          &copy; {new Date().getFullYear()} RFRP. All rights reserved.
+          &copy; {new Date().getFullYear()} OxiProxy. All rights reserved.
         </p>
       </div>
     </div>

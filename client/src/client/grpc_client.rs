@@ -10,9 +10,9 @@ use tonic::transport::{Channel, ClientTlsConfig};
 use tracing::{error, info, warn, debug};
 
 use common::config::KcpConfig;
-use common::grpc::rfrp;
-use common::grpc::rfrp::agent_client_message::Payload as ClientPayload;
-use common::grpc::rfrp::controller_to_client_message::Payload as ControllerPayload;
+use common::grpc::oxiproxy;
+use common::grpc::oxiproxy::agent_client_message::Payload as ClientPayload;
+use common::grpc::oxiproxy::controller_to_client_message::Payload as ControllerPayload;
 use common::grpc::AgentClientServiceClient;
 use common::protocol::client_config::{
     ProxyInfo as ClientProxyInfo, ServerProxyGroup as ClientServerProxyGroup,
@@ -65,12 +65,12 @@ pub async fn connect_and_run(
     let mut client = AgentClientServiceClient::new(channel);
 
     // 创建双向流
-    let (tx, rx) = mpsc::channel::<rfrp::AgentClientMessage>(64);
+    let (tx, rx) = mpsc::channel::<oxiproxy::AgentClientMessage>(64);
     let (update_tx, update_rx) = mpsc::channel::<Vec<ClientServerProxyGroup>>(16);
 
     // 发送认证请求作为首条消息
-    let auth_msg = rfrp::AgentClientMessage {
-        payload: Some(ClientPayload::Auth(rfrp::ClientAuthRequest {
+    let auth_msg = oxiproxy::AgentClientMessage {
+        payload: Some(ClientPayload::Auth(oxiproxy::ClientAuthRequest {
             token: token.to_string(),
         })),
     };
@@ -130,9 +130,9 @@ pub async fn connect_and_run(
 
 /// 消息接收循环
 async fn message_loop(
-    mut inbound: tonic::Streaming<rfrp::ControllerToClientMessage>,
+    mut inbound: tonic::Streaming<oxiproxy::ControllerToClientMessage>,
     update_tx: mpsc::Sender<Vec<ClientServerProxyGroup>>,
-    response_tx: mpsc::Sender<rfrp::AgentClientMessage>,
+    response_tx: mpsc::Sender<oxiproxy::AgentClientMessage>,
     log_collector: LogCollector,
 ) {
     while let Some(result) = inbound.next().await {
@@ -176,17 +176,17 @@ async fn message_loop(
                     log_collector.get_recent_logs(count)
                 };
 
-                let grpc_logs: Vec<rfrp::LogEntry> = logs.into_iter().map(|l| rfrp::LogEntry {
+                let grpc_logs: Vec<oxiproxy::LogEntry> = logs.into_iter().map(|l| oxiproxy::LogEntry {
                     timestamp: l.timestamp.to_rfc3339(),
                     level: l.level,
                     message: l.message,
                 }).collect();
 
-                let resp_msg = rfrp::AgentClientMessage {
-                    payload: Some(ClientPayload::Response(rfrp::AgentClientResponse {
+                let resp_msg = oxiproxy::AgentClientMessage {
+                    payload: Some(ClientPayload::Response(oxiproxy::AgentClientResponse {
                         request_id: cmd.request_id,
-                        result: Some(rfrp::agent_client_response::Result::ClientLogs(
-                            rfrp::ClientLogsResponse { logs: grpc_logs },
+                        result: Some(oxiproxy::agent_client_response::Result::ClientLogs(
+                            oxiproxy::ClientLogsResponse { logs: grpc_logs },
                         )),
                     })),
                 };
@@ -207,15 +207,15 @@ async fn message_loop(
 }
 
 /// 心跳循环
-async fn heartbeat_loop(sender: mpsc::Sender<rfrp::AgentClientMessage>) {
+async fn heartbeat_loop(sender: mpsc::Sender<oxiproxy::AgentClientMessage>) {
     let mut interval = tokio::time::interval(Duration::from_secs(15));
     interval.tick().await; // 跳过首次
 
     loop {
         interval.tick().await;
 
-        let msg = rfrp::AgentClientMessage {
-            payload: Some(ClientPayload::Heartbeat(rfrp::Heartbeat {
+        let msg = oxiproxy::AgentClientMessage {
+            payload: Some(ClientPayload::Heartbeat(oxiproxy::Heartbeat {
                 timestamp: chrono::Utc::now().timestamp(),
             })),
         };
@@ -229,7 +229,7 @@ async fn heartbeat_loop(sender: mpsc::Sender<rfrp::AgentClientMessage>) {
 
 /// 将 gRPC ServerProxyGroup 转换为 client_config::ServerProxyGroup
 fn convert_server_groups(
-    grpc_groups: Vec<rfrp::ServerProxyGroup>,
+    grpc_groups: Vec<oxiproxy::ServerProxyGroup>,
 ) -> Vec<ClientServerProxyGroup> {
     grpc_groups
         .into_iter()

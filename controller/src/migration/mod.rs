@@ -90,14 +90,14 @@ pub async fn get_connection() -> &'static DatabaseConnection {
 }
 
 pub async fn init_sqlite() -> DatabaseConnection {
-    let path = path::Path::new("data/rfrps.db");
+    let path = path::Path::new("data/oxiproxy.db");
     if !path.exists() {
         if let Some(parent) = path.parent() {
             create_dir_all(parent).unwrap();
         }
         fs::write(path, "").unwrap();
     }
-    let db = Database::connect("sqlite://data/rfrps.db")
+    let db = Database::connect("sqlite://data/oxiproxy.db")
         .await
         .expect("failed to connect sqlite");
 

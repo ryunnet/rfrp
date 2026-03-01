@@ -3,8 +3,8 @@ use tracing::{debug, error};
 use tokio::sync::mpsc;
 use std::time::Duration;
 
-use common::grpc::rfrp;
-use common::grpc::rfrp::agent_server_message::Payload as AgentPayload;
+use common::grpc::oxiproxy;
+use common::grpc::oxiproxy::agent_server_message::Payload as AgentPayload;
 
 use super::grpc_client::SharedGrpcSender;
 
@@ -61,11 +61,11 @@ impl TrafficManager {
         grpc_sender: &SharedGrpcSender,
         buffer: &mut HashMap<(i64, i64, Option<i64>), (i64, i64)>,
     ) {
-        let records: Vec<rfrp::TrafficRecord> = buffer
+        let records: Vec<oxiproxy::TrafficRecord> = buffer
             .drain()
             .filter(|(_, (sent, recv))| *sent > 0 || *recv > 0)
             .map(|((proxy_id, client_id, user_id), (bytes_sent, bytes_received))| {
-                rfrp::TrafficRecord {
+                oxiproxy::TrafficRecord {
                     proxy_id,
                     client_id: client_id.to_string(),
                     user_id,
@@ -80,8 +80,8 @@ impl TrafficManager {
         }
 
         let count = records.len();
-        let msg = rfrp::AgentServerMessage {
-            payload: Some(AgentPayload::TrafficReport(rfrp::TrafficReportRequest {
+        let msg = oxiproxy::AgentServerMessage {
+            payload: Some(AgentPayload::TrafficReport(oxiproxy::TrafficReportRequest {
                 records,
             })),
         };

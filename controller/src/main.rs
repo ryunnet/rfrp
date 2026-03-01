@@ -36,7 +36,7 @@ use common::protocol::control::ProxyControl;
 use common::protocol::auth::ClientAuthProvider;
 
 #[derive(Parser)]
-#[command(name = "controller", version, about = "RFRP Controller - 反向代理控制器")]
+#[command(name = "controller", version, about = "OxiProxy Controller - 反向代理控制器")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -51,12 +51,12 @@ enum Command {
     Stop {
         /// PID 文件路径
         #[cfg(unix)]
-        #[arg(long, default_value = "/var/run/rfrp-controller.pid")]
+        #[arg(long, default_value = "/var/run/oxiproxy-controller.pid")]
         pid_file: String,
 
         /// PID 文件路径
         #[cfg(windows)]
-        #[arg(long, default_value = "rfrp-controller.pid")]
+        #[arg(long, default_value = "oxiproxy-controller.pid")]
         pid_file: String,
     },
 
@@ -64,7 +64,7 @@ enum Command {
     Daemon {
         /// PID 文件路径
         #[cfg(unix)]
-        #[arg(long, default_value = "/var/run/rfrp-controller.pid")]
+        #[arg(long, default_value = "/var/run/oxiproxy-controller.pid")]
         pid_file: String,
 
         /// 日志目录路径（按天自动分割）
@@ -74,7 +74,7 @@ enum Command {
 
         /// PID 文件路径
         #[cfg(windows)]
-        #[arg(long, default_value = "rfrp-controller.pid")]
+        #[arg(long, default_value = "oxiproxy-controller.pid")]
         pid_file: String,
 
         /// 日志目录路径（按天自动分割）
@@ -290,8 +290,8 @@ fn update_binary() -> Result<()> {
     println!("正在检查更新...");
 
     let status = self_update::backends::github::Update::configure()
-        .repo_owner("ryunnet")
-        .repo_name("rfrp")
+        .repo_owner("oxiproxy")
+        .repo_name("oxiproxy")
         .bin_name("controller")
         .identifier("controller")
         .bin_path_in_archive("{{ bin }}{{ bin_ext }}")

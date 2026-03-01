@@ -1,5 +1,5 @@
 services:
-  # ==================== RFRP Client (Agent Client) ====================
+  # ==================== OxiProxy Client (Agent Client) ====================
   # 客户端服务，运行在内网机器上，连接本地服务并通过节点暴露到公网
   #
   # 使用前请先配置：
@@ -7,8 +7,8 @@ services:
   # 2. 在 .env 中填写实际的 CONTROLLER_URL 和 CLIENT_TOKEN
   # 3. 运行: docker compose up -d
   client:
-    image: docker.yunnet.top/all/rfrp:latest
-    container_name: rfrp-client
+    image: docker.yunnet.top/all/oxiproxy:latest
+    container_name: oxiproxy-client
     restart: unless-stopped
 
     # 网络模式
@@ -43,9 +43,9 @@ services:
 
     # 网络配置（仅在使用 bridge 模式时）
     # networks:
-    #   - rfrp-network
+    #   - oxiproxy-network
 
 # 网络配置（仅在使用 bridge 模式时）
 # networks:
-#   rfrp-network:
+#   oxiproxy-network:
 #     driver: bridge

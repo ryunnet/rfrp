@@ -312,7 +312,7 @@ impl ProxyServer {
         auth_provider: Arc<dyn common::protocol::auth::ClientAuthProvider>,
         speed_limiter: Arc<super::speed_limiter::SpeedLimiter>,
     ) -> Result<Self> {
-        let cert = rcgen::generate_simple_self_signed(&["rfrp".to_string()])?;
+        let cert = rcgen::generate_simple_self_signed(&["oxiproxy".to_string()])?;
         let listener_manager = Arc::new(ProxyListenerManager::new(traffic_manager.clone(), speed_limiter));
         let client_connections = Arc::new(RwLock::new(HashMap::new()));
         let tunnel_connections = Arc::new(RwLock::new(HashMap::new()));

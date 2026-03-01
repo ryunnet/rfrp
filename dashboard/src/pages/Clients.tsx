@@ -265,7 +265,7 @@ export default function Clients() {
     if (platform === 'windows') {
       return `client.exe install-service --controller-url ${protocol}://${url} --token ${token}`;
     } else {
-      return `./client daemon --controller-url ${protocol}://${url} --token ${token} --pid-file /var/run/rfrp-client.pid --log-dir ./logs`;
+      return `./client daemon --controller-url ${protocol}://${url} --token ${token} --pid-file /var/run/oxiproxy-client.pid --log-dir ./logs`;
     }
   };
 
@@ -883,7 +883,7 @@ export default function Clients() {
                 <div className="ml-9 space-y-2">
                   <p className="text-sm text-muted-foreground">从 GitHub Releases 下载对应平台的客户端程序：</p>
                   <a
-                    href="https://github.com/ryunnet/rfrp/releases/latest"
+                    href="https://github.com/oxiproxy/oxiproxy/releases/latest"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
@@ -895,9 +895,9 @@ export default function Clients() {
                   </a>
                   <div className="mt-2 p-3 bg-muted rounded-lg">
                     <p className="text-xs text-primary font-medium">
-                      {selectedPlatform === 'windows' && '下载文件: rfrp-client-windows-amd64.exe'}
-                      {selectedPlatform === 'linux' && '下载文件: rfrp-client-linux-amd64'}
-                      {selectedPlatform === 'macos' && '下载文件: rfrp-client-darwin-amd64 或 rfrp-client-darwin-arm64 (M系列芯片)'}
+                      {selectedPlatform === 'windows' && '下载文件: oxiproxy-client-windows-amd64.exe'}
+                      {selectedPlatform === 'linux' && '下载文件: oxiproxy-client-linux-amd64'}
+                      {selectedPlatform === 'macos' && '下载文件: oxiproxy-client-darwin-amd64 或 oxiproxy-client-darwin-arm64 (M系列芯片)'}
                     </p>
                   </div>
                   {selectedPlatform !== 'windows' && (
@@ -981,7 +981,7 @@ export default function Clients() {
                           client.exe uninstall-service  # 卸载服务
                         </code>
                         <code className="block text-xs bg-muted text-primary px-2 py-1 rounded font-mono">
-                          sc query RfrpClient  # 查看服务状态
+                          sc query OxiProxyClient  # 查看服务状态
                         </code>
                       </div>
                     </div>
@@ -991,13 +991,13 @@ export default function Clients() {
                       <div className="p-3 bg-muted rounded-lg">
                         <p className="text-xs text-primary font-medium mb-1">管理后台进程：</p>
                         <code className="block text-xs bg-muted text-primary px-2 py-1 rounded font-mono mb-1">
-                          cat /var/run/rfrp-client.pid  # 查看进程 ID
+                          cat /var/run/oxiproxy-client.pid  # 查看进程 ID
                         </code>
                         <code className="block text-xs bg-muted text-primary px-2 py-1 rounded font-mono mb-1">
-                          kill $(cat /var/run/rfrp-client.pid)  # 停止客户端
+                          kill $(cat /var/run/oxiproxy-client.pid)  # 停止客户端
                         </code>
                         <code className="block text-xs bg-muted text-primary px-2 py-1 rounded font-mono">
-                          tail -f /var/log/rfrp-client.log  # 查看日志
+                          tail -f /var/log/oxiproxy-client.log  # 查看日志
                         </code>
                       </div>
                     </div>

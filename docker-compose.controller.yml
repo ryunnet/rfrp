@@ -1,9 +1,9 @@
 services:
-  # ==================== RFRP Controller ====================
+  # ==================== OxiProxy Controller ====================
   # 中央控制器，提供 Web 管理界面和 gRPC 服务
   controller:
-    image: docker.yunnet.top/all/rfrp:latest
-    container_name: rfrp-controller
+    image: docker.yunnet.top/all/oxiproxy:latest
+    container_name: oxiproxy-controller
     restart: unless-stopped
 
     # 端口映射
@@ -34,8 +34,8 @@ services:
       # 日志级别: trace, debug, info, warn, error
       - RUST_LOG=info,tokio_kcp=off
 
-      # 数据库路径（可选，默认为 data/rfrp.db）
-      # - DATABASE_URL=sqlite:data/rfrp.db
+      # 数据库路径（可选，默认为 data/oxiproxy.db）
+      # - DATABASE_URL=sqlite:data/oxiproxy.db
 
     # 启动命令
     command: ["/app/controller"]
@@ -50,9 +50,9 @@ services:
 
     # 网络配置（可选）
     # networks:
-    #   - rfrp-network
+    #   - oxiproxy-network
 
 # 网络配置（可选）
 # networks:
-#   rfrp-network:
+#   oxiproxy-network:
 #     driver: bridge

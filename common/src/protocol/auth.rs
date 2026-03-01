@@ -39,7 +39,7 @@ pub struct TrafficLimitResponse {
 
 /// 客户端认证提供者接口
 ///
-/// 由 rfrps 中的本地 DB 实现（Phase 0），
+/// 由 Controller 中的本地 DB 实现（Phase 0），
 /// 或通过 HTTP 调用 Controller 实现（Phase 1）。
 #[async_trait]
 pub trait ClientAuthProvider: Send + Sync {

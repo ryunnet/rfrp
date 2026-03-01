@@ -141,9 +141,9 @@ pub async fn run_server_controller_mode(
             tokio::time::sleep(Duration::from_secs(5)).await;
 
             // 尝试发送一个心跳来检测连接是否存活
-            let test_msg = common::grpc::rfrp::AgentServerMessage {
-                payload: Some(common::grpc::rfrp::agent_server_message::Payload::Heartbeat(
-                    common::grpc::rfrp::Heartbeat {
+            let test_msg = common::grpc::oxiproxy::AgentServerMessage {
+                payload: Some(common::grpc::oxiproxy::agent_server_message::Payload::Heartbeat(
+                    common::grpc::oxiproxy::Heartbeat {
                         timestamp: chrono::Utc::now().timestamp(),
                     },
                 )),

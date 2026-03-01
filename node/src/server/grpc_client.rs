@@ -10,16 +10,16 @@ use tokio_stream::StreamExt;
 use tonic::transport::{Channel, ClientTlsConfig};
 use tracing::{error, info, warn};
 
-use common::grpc::rfrp;
-use common::grpc::rfrp::agent_server_message::Payload as AgentPayload;
-use common::grpc::rfrp::controller_to_agent_message::Payload as ControllerPayload;
-use common::grpc::rfrp::agent_server_response::Result as AgentResult;
+use common::grpc::oxiproxy;
+use common::grpc::oxiproxy::agent_server_message::Payload as AgentPayload;
+use common::grpc::oxiproxy::controller_to_agent_message::Payload as ControllerPayload;
+use common::grpc::oxiproxy::agent_server_response::Result as AgentResult;
 use common::grpc::AgentServerServiceClient;
 use common::grpc::pending_requests::PendingRequests;
 use common::protocol::control::{ProxyControl, LogEntry};
 
 /// gRPC 流发送器类型
-pub type GrpcSender = mpsc::Sender<rfrp::AgentServerMessage>;
+pub type GrpcSender = mpsc::Sender<oxiproxy::AgentServerMessage>;
 
 /// 可热替换的 gRPC 发送器（重连后更新内部 sender）
 #[derive(Clone)]
@@ -35,7 +35,7 @@ impl SharedGrpcSender {
     }
 
     /// 发送消息（使用当前 sender）
-    pub async fn send(&self, msg: rfrp::AgentServerMessage) -> Result<(), mpsc::error::SendError<rfrp::AgentServerMessage>> {
+    pub async fn send(&self, msg: oxiproxy::AgentServerMessage) -> Result<(), mpsc::error::SendError<oxiproxy::AgentServerMessage>> {
         let sender = self.inner.read().await;
         sender.send(msg).await
     }
@@ -91,11 +91,11 @@ pub struct AgentGrpcClient {
 /// Controller 响应的包装类型
 #[derive(Clone)]
 pub enum ControllerResponse {
-    ValidateToken(rfrp::ValidateTokenResponse),
-    ClientOnline(rfrp::ClientOnlineResponse),
-    TrafficLimit(rfrp::TrafficLimitResponse),
-    GetClientProxies(rfrp::GetClientProxiesResponse),
-    TrafficReport(rfrp::TrafficReportResponse),
+    ValidateToken(oxiproxy::ValidateTokenResponse),
+    ClientOnline(oxiproxy::ClientOnlineResponse),
+    TrafficLimit(oxiproxy::TrafficLimitResponse),
+    GetClientProxies(oxiproxy::GetClientProxiesResponse),
+    TrafficReport(oxiproxy::TrafficReportResponse),
 }
 
 impl AgentGrpcClient {
@@ -146,14 +146,14 @@ impl AgentGrpcClient {
         let mut client = AgentServerServiceClient::new(channel);
 
         // 创建双向流
-        let (tx, rx) = mpsc::channel::<rfrp::AgentServerMessage>(256);
+        let (tx, rx) = mpsc::channel::<oxiproxy::AgentServerMessage>(256);
         let (cmd_tx, cmd_rx) = mpsc::channel::<ControllerCommand>(64);
 
         let pending = PendingRequests::<ControllerResponse>::new();
 
         // 发送认证请求作为首条消息
-        let register_msg = rfrp::AgentServerMessage {
-            payload: Some(AgentPayload::Register(rfrp::NodeRegisterRequest {
+        let register_msg = oxiproxy::AgentServerMessage {
+            payload: Some(AgentPayload::Register(oxiproxy::NodeRegisterRequest {
                 token: token.to_string(),
                 tunnel_port: tunnel_port as u32,
                 tunnel_protocol: tunnel_protocol.to_string(),
@@ -256,14 +256,14 @@ impl AgentGrpcClient {
         let mut client = AgentServerServiceClient::new(channel);
 
         // 创建新的双向流
-        let (tx, rx) = mpsc::channel::<rfrp::AgentServerMessage>(256);
+        let (tx, rx) = mpsc::channel::<oxiproxy::AgentServerMessage>(256);
         let (cmd_tx, cmd_rx) = mpsc::channel::<ControllerCommand>(64);
 
         let pending = PendingRequests::<ControllerResponse>::new();
 
         // 发送认证请求
-        let register_msg = rfrp::AgentServerMessage {
-            payload: Some(AgentPayload::Register(rfrp::NodeRegisterRequest {
+        let register_msg = oxiproxy::AgentServerMessage {
+            payload: Some(AgentPayload::Register(oxiproxy::NodeRegisterRequest {
                 token: token.to_string(),
                 tunnel_port: tunnel_port as u32,
                 tunnel_protocol: tunnel_protocol.to_string(),
@@ -322,7 +322,7 @@ impl AgentGrpcClient {
 
     /// 消息接收循环
     async fn message_loop(
-        mut inbound: tonic::Streaming<rfrp::ControllerToAgentMessage>,
+        mut inbound: tonic::Streaming<oxiproxy::ControllerToAgentMessage>,
         pending: PendingRequests<ControllerResponse>,
         cmd_tx: mpsc::Sender<ControllerCommand>,
         _tx: GrpcSender,
@@ -440,8 +440,8 @@ impl AgentGrpcClient {
         loop {
             interval.tick().await;
 
-            let msg = rfrp::AgentServerMessage {
-                payload: Some(AgentPayload::Heartbeat(rfrp::Heartbeat {
+            let msg = oxiproxy::AgentServerMessage {
+                payload: Some(AgentPayload::Heartbeat(oxiproxy::Heartbeat {
                     timestamp: chrono::Utc::now().timestamp(),
                 })),
             };
@@ -469,8 +469,8 @@ impl AgentGrpcClient {
     }
 
     /// 发送命令响应到 Controller
-    pub async fn send_response(&self, response: rfrp::AgentServerResponse) -> Result<()> {
-        let msg = rfrp::AgentServerMessage {
+    pub async fn send_response(&self, response: oxiproxy::AgentServerResponse) -> Result<()> {
+        let msg = oxiproxy::AgentServerMessage {
             payload: Some(AgentPayload::Response(response)),
         };
         self.shared_sender.send(msg).await
@@ -532,10 +532,10 @@ pub async fn handle_controller_commands(
                 ControllerCommand::StartProxy { request_id, client_id, proxy_id } => {
                     let result = control.start_proxy(&client_id, proxy_id).await;
                     let ack = match result {
-                        Ok(()) => rfrp::CommandAck { success: true, error: None },
-                        Err(e) => rfrp::CommandAck { success: false, error: Some(e.to_string()) },
+                        Ok(()) => oxiproxy::CommandAck { success: true, error: None },
+                        Err(e) => oxiproxy::CommandAck { success: false, error: Some(e.to_string()) },
                     };
-                    let resp = rfrp::AgentServerResponse {
+                    let resp = oxiproxy::AgentServerResponse {
                         request_id,
                         result: Some(AgentResult::CommandAck(ack)),
                     };
@@ -545,10 +545,10 @@ pub async fn handle_controller_commands(
                 ControllerCommand::StopProxy { request_id, client_id, proxy_id } => {
                     let result = control.stop_proxy(&client_id, proxy_id).await;
                     let ack = match result {
-                        Ok(()) => rfrp::CommandAck { success: true, error: None },
-                        Err(e) => rfrp::CommandAck { success: false, error: Some(e.to_string()) },
+                        Ok(()) => oxiproxy::CommandAck { success: true, error: None },
+                        Err(e) => oxiproxy::CommandAck { success: false, error: Some(e.to_string()) },
                     };
-                    let resp = rfrp::AgentServerResponse {
+                    let resp = oxiproxy::AgentServerResponse {
                         request_id,
                         result: Some(AgentResult::CommandAck(ack)),
                     };
@@ -559,25 +559,25 @@ pub async fn handle_controller_commands(
                     let result = control.get_server_status().await;
                     let resp = match result {
                         Ok(status) => {
-                            let clients: Vec<rfrp::ConnectedClient> = status.connected_clients
+                            let clients: Vec<oxiproxy::ConnectedClient> = status.connected_clients
                                 .into_iter()
-                                .map(|c| rfrp::ConnectedClient {
+                                .map(|c| oxiproxy::ConnectedClient {
                                     client_id: c.client_id,
                                     remote_address: c.remote_address,
                                     protocol: c.protocol,
                                 })
                                 .collect();
-                            rfrp::AgentServerResponse {
+                            oxiproxy::AgentServerResponse {
                                 request_id,
-                                result: Some(AgentResult::ServerStatus(rfrp::ServerStatus {
+                                result: Some(AgentResult::ServerStatus(oxiproxy::ServerStatus {
                                     connected_clients: clients,
                                     active_proxy_count: status.active_proxy_count as u32,
                                 })),
                             }
                         }
-                        Err(e) => rfrp::AgentServerResponse {
+                        Err(e) => oxiproxy::AgentServerResponse {
                             request_id,
-                            result: Some(AgentResult::CommandAck(rfrp::CommandAck {
+                            result: Some(AgentResult::CommandAck(oxiproxy::CommandAck {
                                 success: false,
                                 error: Some(e.to_string()),
                             })),
@@ -590,24 +590,24 @@ pub async fn handle_controller_commands(
                     let result = control.fetch_client_logs(&client_id, count as u16).await;
                     let resp = match result {
                         Ok(logs) => {
-                            let entries: Vec<rfrp::LogEntry> = logs
+                            let entries: Vec<oxiproxy::LogEntry> = logs
                                 .into_iter()
-                                .map(|l| rfrp::LogEntry {
+                                .map(|l| oxiproxy::LogEntry {
                                     timestamp: l.timestamp,
                                     level: l.level,
                                     message: l.message,
                                 })
                                 .collect();
-                            rfrp::AgentServerResponse {
+                            oxiproxy::AgentServerResponse {
                                 request_id,
-                                result: Some(AgentResult::ClientLogs(rfrp::ClientLogsResponse {
+                                result: Some(AgentResult::ClientLogs(oxiproxy::ClientLogsResponse {
                                     logs: entries,
                                 })),
                             }
                         }
-                        Err(e) => rfrp::AgentServerResponse {
+                        Err(e) => oxiproxy::AgentServerResponse {
                             request_id,
-                            result: Some(AgentResult::CommandAck(rfrp::CommandAck {
+                            result: Some(AgentResult::CommandAck(oxiproxy::CommandAck {
                                 success: false,
                                 error: Some(e.to_string()),
                             })),
@@ -621,24 +621,24 @@ pub async fn handle_controller_commands(
                     let logs = read_node_logs(lines).await;
                     let resp = match logs {
                         Ok(entries) => {
-                            let log_entries: Vec<rfrp::LogEntry> = entries
+                            let log_entries: Vec<oxiproxy::LogEntry> = entries
                                 .into_iter()
-                                .map(|l| rfrp::LogEntry {
+                                .map(|l| oxiproxy::LogEntry {
                                     timestamp: l.timestamp,
                                     level: l.level,
                                     message: l.message,
                                 })
                                 .collect();
-                            rfrp::AgentServerResponse {
+                            oxiproxy::AgentServerResponse {
                                 request_id,
-                                result: Some(AgentResult::NodeLogs(rfrp::NodeLogsResponse {
+                                result: Some(AgentResult::NodeLogs(oxiproxy::NodeLogsResponse {
                                     logs: log_entries,
                                 })),
                             }
                         }
-                        Err(e) => rfrp::AgentServerResponse {
+                        Err(e) => oxiproxy::AgentServerResponse {
                             request_id,
-                            result: Some(AgentResult::CommandAck(rfrp::CommandAck {
+                            result: Some(AgentResult::CommandAck(oxiproxy::CommandAck {
                                 success: false,
                                 error: Some(e.to_string()),
                             })),
@@ -650,10 +650,10 @@ pub async fn handle_controller_commands(
                 ControllerCommand::UpdateProtocol { request_id, tunnel_protocol } => {
                     let result = tm.switch_protocol(&tunnel_protocol).await;
                     let ack = match result {
-                        Ok(()) => rfrp::CommandAck { success: true, error: None },
-                        Err(e) => rfrp::CommandAck { success: false, error: Some(e.to_string()) },
+                        Ok(()) => oxiproxy::CommandAck { success: true, error: None },
+                        Err(e) => oxiproxy::CommandAck { success: false, error: Some(e.to_string()) },
                     };
-                    let resp = rfrp::AgentServerResponse {
+                    let resp = oxiproxy::AgentServerResponse {
                         request_id,
                         result: Some(AgentResult::CommandAck(ack)),
                     };
@@ -663,9 +663,9 @@ pub async fn handle_controller_commands(
                 ControllerCommand::UpdateSpeedLimit { request_id, speed_limit } => {
                     sl.update_rate(speed_limit as u64);
                     info!("速度限制已更新: {} bytes/s", speed_limit);
-                    let resp = rfrp::AgentServerResponse {
+                    let resp = oxiproxy::AgentServerResponse {
                         request_id,
-                        result: Some(AgentResult::CommandAck(rfrp::CommandAck {
+                        result: Some(AgentResult::CommandAck(oxiproxy::CommandAck {
                             success: true,
                             error: None,
                         })),
@@ -692,8 +692,8 @@ async fn read_node_logs(lines: u32) -> Result<Vec<LogEntry>> {
     {
         use tokio::process::Command;
 
-        let log_file = std::env::var("RFRP_LOG_FILE")
-            .unwrap_or_else(|_| "/var/log/rfrp-agent.log".to_string());
+        let log_file = std::env::var("OXIPROXY_LOG_FILE")
+            .unwrap_or_else(|_| "/var/log/oxiproxy-agent.log".to_string());
 
         let output = Command::new("tail")
             .arg("-n")

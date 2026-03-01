@@ -11,9 +11,9 @@ use tracing::{error, info, warn};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use chrono::Utc;
 
-use common::grpc::rfrp;
-use common::grpc::rfrp::agent_server_message::Payload as AgentPayload;
-use common::grpc::rfrp::controller_to_agent_message::Payload as ControllerPayload;
+use common::grpc::oxiproxy;
+use common::grpc::oxiproxy::agent_server_message::Payload as AgentPayload;
+use common::grpc::oxiproxy::controller_to_agent_message::Payload as ControllerPayload;
 use common::grpc::AgentServerService;
 
 use crate::local_auth_provider::LocalControllerAuthProvider;
@@ -27,7 +27,7 @@ pub struct AgentServerServiceImpl {
     pub node_manager: Arc<NodeManager>,
 }
 
-type ResponseStream = Pin<Box<dyn Stream<Item = Result<rfrp::ControllerToAgentMessage, Status>> + Send>>;
+type ResponseStream = Pin<Box<dyn Stream<Item = Result<oxiproxy::ControllerToAgentMessage, Status>> + Send>>;
 
 #[tonic::async_trait]
 impl AgentServerService for AgentServerServiceImpl {
@@ -35,13 +35,13 @@ impl AgentServerService for AgentServerServiceImpl {
 
     async fn agent_server_channel(
         &self,
-        request: Request<Streaming<rfrp::AgentServerMessage>>,
+        request: Request<Streaming<oxiproxy::AgentServerMessage>>,
     ) -> Result<Response<Self::AgentServerChannelStream>, Status> {
         // 在消费 request 之前提取客户端 IP
         let client_ip = crate::geo_ip::extract_client_ip_from_request(&request);
 
         let mut in_stream = request.into_inner();
-        let (tx, rx) = mpsc::channel::<Result<rfrp::ControllerToAgentMessage, Status>>(256);
+        let (tx, rx) = mpsc::channel::<Result<oxiproxy::ControllerToAgentMessage, Status>>(256);
 
         let node_manager = self.node_manager.clone();
 
@@ -129,8 +129,8 @@ impl AgentServerService for AgentServerServiceImpl {
             info!("节点 #{} ({}) 已通过 gRPC 连接认证", node_id, node_name);
 
             // 发送认证响应（包含权威隧道协议）
-            let register_resp = rfrp::ControllerToAgentMessage {
-                payload: Some(ControllerPayload::RegisterResponse(rfrp::NodeRegisterResponse {
+            let register_resp = oxiproxy::ControllerToAgentMessage {
+                payload: Some(ControllerPayload::RegisterResponse(oxiproxy::NodeRegisterResponse {
                     node_id,
                     node_name: node_name.clone(),
                     tunnel_protocol: authoritative_protocol,
@@ -163,8 +163,8 @@ impl AgentServerService for AgentServerServiceImpl {
 
                 match payload {
                     AgentPayload::Heartbeat(hb) => {
-                        let resp = rfrp::ControllerToAgentMessage {
-                            payload: Some(ControllerPayload::HeartbeatResponse(rfrp::Heartbeat {
+                        let resp = oxiproxy::ControllerToAgentMessage {
+                            payload: Some(ControllerPayload::HeartbeatResponse(oxiproxy::Heartbeat {
                                 timestamp: hb.timestamp,
                             })),
                         };
@@ -174,14 +174,14 @@ impl AgentServerService for AgentServerServiceImpl {
                     AgentPayload::ValidateToken(req) => {
                         let result = auth_provider.validate_token(&req.token).await;
                         let resp = match result {
-                            Ok(r) => rfrp::ValidateTokenResponse {
+                            Ok(r) => oxiproxy::ValidateTokenResponse {
                                 request_id: req.request_id,
                                 client_id: r.client_id,
                                 client_name: r.client_name,
                                 allowed: r.allowed,
                                 reject_reason: r.reject_reason,
                             },
-                            Err(e) => rfrp::ValidateTokenResponse {
+                            Err(e) => oxiproxy::ValidateTokenResponse {
                                 request_id: req.request_id,
                                 client_id: 0,
                                 client_name: String::new(),
@@ -189,7 +189,7 @@ impl AgentServerService for AgentServerServiceImpl {
                                 reject_reason: Some(e.to_string()),
                             },
                         };
-                        let msg = rfrp::ControllerToAgentMessage {
+                        let msg = oxiproxy::ControllerToAgentMessage {
                             payload: Some(ControllerPayload::ValidateTokenResponse(resp)),
                         };
                         let _ = tx.send(Ok(msg)).await;
@@ -200,9 +200,9 @@ impl AgentServerService for AgentServerServiceImpl {
                             .set_client_online(req.client_id, req.online)
                             .await
                             .is_ok();
-                        let resp = rfrp::ControllerToAgentMessage {
+                        let resp = oxiproxy::ControllerToAgentMessage {
                             payload: Some(ControllerPayload::ClientOnlineResponse(
-                                rfrp::ClientOnlineResponse {
+                                oxiproxy::ClientOnlineResponse {
                                     request_id: req.request_id,
                                     success,
                                 },
@@ -214,18 +214,18 @@ impl AgentServerService for AgentServerServiceImpl {
                     AgentPayload::CheckTrafficLimit(req) => {
                         let result = auth_provider.check_traffic_limit(req.client_id).await;
                         let resp = match result {
-                            Ok(r) => rfrp::TrafficLimitResponse {
+                            Ok(r) => oxiproxy::TrafficLimitResponse {
                                 request_id: req.request_id,
                                 exceeded: r.exceeded,
                                 reason: r.reason,
                             },
-                            Err(_) => rfrp::TrafficLimitResponse {
+                            Err(_) => oxiproxy::TrafficLimitResponse {
                                 request_id: req.request_id,
                                 exceeded: false,
                                 reason: None,
                             },
                         };
-                        let msg = rfrp::ControllerToAgentMessage {
+                        let msg = oxiproxy::ControllerToAgentMessage {
                             payload: Some(ControllerPayload::TrafficLimitResponse(resp)),
                         };
                         let _ = tx.send(Ok(msg)).await;
@@ -236,11 +236,11 @@ impl AgentServerService for AgentServerServiceImpl {
                             req.client_id,
                             req.node_id,
                         ).await;
-                        let resp = rfrp::GetClientProxiesResponse {
+                        let resp = oxiproxy::GetClientProxiesResponse {
                             request_id: req.request_id,
                             proxies,
                         };
-                        let msg = rfrp::ControllerToAgentMessage {
+                        let msg = oxiproxy::ControllerToAgentMessage {
                             payload: Some(ControllerPayload::GetClientProxiesResponse(resp)),
                         };
                         let _ = tx.send(Ok(msg)).await;
@@ -261,9 +261,9 @@ impl AgentServerService for AgentServerServiceImpl {
                                 )
                                 .await;
                         }
-                        let resp = rfrp::ControllerToAgentMessage {
+                        let resp = oxiproxy::ControllerToAgentMessage {
                             payload: Some(ControllerPayload::TrafficReportResponse(
-                                rfrp::TrafficReportResponse { accepted: true },
+                                oxiproxy::TrafficReportResponse { accepted: true },
                             )),
                         };
                         let _ = tx.send(Ok(resp)).await;
@@ -299,7 +299,7 @@ impl AgentServerService for AgentServerServiceImpl {
 }
 
 /// 获取客户端代理配置（支持 node_id 过滤）
-async fn get_client_proxies_filtered(client_id: i64, filter_node_id: i64) -> Vec<rfrp::ProxyConfig> {
+async fn get_client_proxies_filtered(client_id: i64, filter_node_id: i64) -> Vec<oxiproxy::ProxyConfig> {
     let db = get_connection().await;
     let client_id_str = client_id.to_string();
 
@@ -317,7 +317,7 @@ async fn get_client_proxies_filtered(client_id: i64, filter_node_id: i64) -> Vec
     proxies
         .into_iter()
         .filter(|p| p.node_id == Some(filter_node_id))
-        .map(|p| rfrp::ProxyConfig {
+        .map(|p| oxiproxy::ProxyConfig {
             proxy_id: p.id,
             client_id: p.client_id,
             name: p.name,

@@ -35,7 +35,7 @@ impl MigrationTrait for Migration {
             ])
             .values_panic([
                 "db_path".into(),
-                "\"./data/rfrp.db\"".into(),
+                "\"./data/oxiproxy.db\"".into(),
                 "数据库路径".into(),
                 "string".into(),
             ])
