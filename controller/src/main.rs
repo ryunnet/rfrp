@@ -293,6 +293,7 @@ fn update_binary() -> Result<()> {
         .repo_owner("ryunnet")
         .repo_name("rfrp")
         .bin_name("controller")
+        .bin_path_in_archive("{{ bin }}{{ bin_ext }}")
         .show_download_progress(true)
         .current_version(env!("CARGO_PKG_VERSION"))
         .build()?

@@ -22,21 +22,21 @@ jobs:
             target: x86_64-unknown-linux-gnu
             archive: tar.gz
           # Linux ARM64 (原生 ARM64 runner)
-          # - os: ubuntu-24.04-arm
-          #   target: aarch64-unknown-linux-gnu
-          #   archive: tar.gz
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            archive: tar.gz
           # Windows x86_64
-          # - os: windows-latest
-          #   target: x86_64-pc-windows-msvc
-          #   archive: zip
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
           # macOS x86_64
-          # - os: macos-latest
-          #   target: x86_64-apple-darwin
-          #   archive: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar.gz
           # macOS ARM64
-          # - os: macos-latest
-          #   target: aarch64-apple-darwin
-          #   archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
 
     steps:
       - name: Checkout
@@ -75,7 +75,7 @@ jobs:
         run: |
           cargo build --release --target ${{ matrix.target }} -p controller -p node -p client
 
-      - name: Prepare artifacts (Unix)
+      - name: Prepare combined archive (Unix)
         if: matrix.archive == 'tar.gz'
         run: |
           mkdir -p rfrp
@@ -86,7 +86,15 @@ jobs:
           cp LICENSE rfrp/ || true
           tar czf rfrp-${{ github.ref_name }}-${{ matrix.target }}.tar.gz rfrp
 
-      - name: Prepare artifacts (Windows)
+      - name: Prepare individual archives (Unix)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          for bin in controller node client; do
+            tar czf ${bin}-${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
+              -C target/${{ matrix.target }}/release ${bin}
+          done
+
+      - name: Prepare combined archive (Windows)
         if: matrix.archive == 'zip'
         shell: pwsh
         run: |
@@ -98,6 +106,15 @@ jobs:
           if (Test-Path LICENSE) { Copy-Item LICENSE rfrp/ }
           Compress-Archive -Path rfrp -DestinationPath rfrp-${{ github.ref_name }}-${{ matrix.target }}.zip
 
+      - name: Prepare individual archives (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          foreach ($bin in @("controller", "node", "client")) {
+            Compress-Archive -Path "target/${{ matrix.target }}/release/${bin}.exe" `
+              -DestinationPath "${bin}-${{ github.ref_name }}-${{ matrix.target }}.zip"
+          }
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -105,6 +122,9 @@ jobs:
           path: |
             rfrp-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
             rfrp-${{ github.ref_name }}-${{ matrix.target }}.zip
+            controller-${{ github.ref_name }}-${{ matrix.target }}.*
+            node-${{ github.ref_name }}-${{ matrix.target }}.*
+            client-${{ github.ref_name }}-${{ matrix.target }}.*
           if-no-files-found: ignore
 
   release:
