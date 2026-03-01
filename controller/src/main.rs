@@ -294,7 +294,7 @@ fn update_binary() -> Result<()> {
         .repo_name("oxiproxy")
         .bin_name("controller")
         .identifier("controller")
-        .bin_path_in_archive("{{ bin }}{{ bin_ext }}")
+        .bin_path_in_archive("{bin}{bin_ext}")
         .show_download_progress(true)
         .current_version(env!("CARGO_PKG_VERSION"))
         .no_confirm(true)
